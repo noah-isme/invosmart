@@ -1,18 +1,16 @@
 import { InvoiceStatus, type Invoice, type PrismaClient } from "@prisma/client";
-import type { z } from "zod";
 
-import { InvoiceItem } from "@/lib/schemas";
+import { calculateTotals, type InvoiceItemInput } from "@/lib/invoice-utils";
 
-export type InvoiceItemInput = z.infer<typeof InvoiceItem>;
+export type { InvoiceItemInput } from "@/lib/invoice-utils";
 
 export type InvoiceForStatus = Pick<Invoice, "status" | "dueAt">;
 
-export const calculateInvoiceTotals = (items: InvoiceItemInput[], tax = 0) => {
-  const subtotal = items.reduce((acc, item) => acc + item.qty * item.price, 0);
-  const normalizedTax = Math.max(0, Math.trunc(tax));
-  const total = subtotal + normalizedTax;
-
-  return { subtotal, total, tax: normalizedTax };
+export const calculateInvoiceTotals = (
+  items: InvoiceItemInput[],
+  taxRate = 0.1,
+) => {
+  return calculateTotals(items, taxRate);
 };
 
 export const getStatusSideEffects = (

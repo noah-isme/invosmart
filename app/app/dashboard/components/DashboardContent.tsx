@@ -1,6 +1,5 @@
 "use client";
 
-import { InvoiceStatus } from "@prisma/client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
@@ -11,6 +10,7 @@ import type {
 import { DashboardStats } from "./DashboardStats";
 import { InvoiceFilter } from "./InvoiceFilter";
 import { InvoiceTable } from "./InvoiceTable";
+import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
 
 const DEFAULT_STATS: InvoiceDashboardStats = {
   revenue: 0,
@@ -18,12 +18,12 @@ const DEFAULT_STATS: InvoiceDashboardStats = {
   overdue: 0,
 };
 
-const statusToLabel: Record<InvoiceStatus, string> = {
-  [InvoiceStatus.DRAFT]: "Draft",
-  [InvoiceStatus.SENT]: "Sent",
-  [InvoiceStatus.PAID]: "Paid",
-  [InvoiceStatus.UNPAID]: "Unpaid",
-  [InvoiceStatus.OVERDUE]: "Overdue",
+const statusToLabel: Record<InvoiceStatusValue, string> = {
+  [InvoiceStatusEnum.enum.DRAFT]: "Draft",
+  [InvoiceStatusEnum.enum.SENT]: "Sent",
+  [InvoiceStatusEnum.enum.PAID]: "Paid",
+  [InvoiceStatusEnum.enum.UNPAID]: "Unpaid",
+  [InvoiceStatusEnum.enum.OVERDUE]: "Overdue",
 };
 
 const fetchErrorMessage = "Gagal memuat data invoice. Coba lagi.";
@@ -73,7 +73,7 @@ export const DashboardContent = () => {
   }, []);
 
   const handleUpdateStatus = useCallback(
-    async (invoiceId: string, status: InvoiceStatus) => {
+    async (invoiceId: string, status: InvoiceStatusValue) => {
       const target = invoices.find((invoice) => invoice.id === invoiceId);
       if (!target) {
         return;
@@ -97,6 +97,7 @@ export const DashboardContent = () => {
             issuedAt: target.issuedAt,
             dueAt: target.dueAt,
             notes: target.notes,
+            taxRate: 0.1,
           }),
         });
 
@@ -147,7 +148,7 @@ export const DashboardContent = () => {
       return "Pantau seluruh invoice milik Anda dalam satu tempat.";
     }
 
-    return `Menampilkan invoice dengan status ${statusToLabel[filter as InvoiceStatus]}.`;
+    return `Menampilkan invoice dengan status ${statusToLabel[filter as InvoiceStatusValue]}.`;
   }, [filter]);
 
   return (

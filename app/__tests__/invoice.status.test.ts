@@ -2,8 +2,8 @@ import { InvoiceStatus, PrismaClient } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
+import { calculateTotals } from "@/lib/invoice-utils";
 import {
-  calculateInvoiceTotals,
   getStatusSideEffects,
   isInvoiceOverdue,
   markUserOverdueInvoices,
@@ -11,16 +11,14 @@ import {
 
 describe("Invoice utilities", () => {
   it("menghitung subtotal dan total berdasarkan item", () => {
-    const totals = calculateInvoiceTotals(
-      [
-        { name: "Design", qty: 2, price: 400_000 },
-        { name: "Development", qty: 1, price: 1_200_000 },
-      ],
-      100_000,
-    );
+    const totals = calculateTotals([
+      { name: "Design", qty: 2, price: 400_000 },
+      { name: "Development", qty: 1, price: 1_200_000 },
+    ]);
 
     expect(totals.subtotal).toBe(2_000_000);
-    expect(totals.total).toBe(2_100_000);
+    expect(totals.tax).toBe(200_000);
+    expect(totals.total).toBe(2_200_000);
   });
 
   it("menetapkan issuedAt dan paidAt sesuai transisi status", () => {

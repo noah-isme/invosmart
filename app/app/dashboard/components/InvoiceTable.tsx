@@ -1,15 +1,14 @@
 "use client";
 
-import type { InvoiceStatus } from "@prisma/client";
-
 import { InvoiceRow } from "./InvoiceRow";
 import type { DashboardInvoice } from "./types";
+import type { InvoiceStatusValue } from "@/lib/schemas";
 
 type InvoiceTableProps = {
   invoices: DashboardInvoice[];
   loading: boolean;
   pendingId: string | null;
-  onUpdateStatus: (invoiceId: string, status: InvoiceStatus) => void;
+  onUpdateStatus: (invoiceId: string, status: InvoiceStatusValue) => void;
   onDelete: (invoiceId: string) => void;
 };
 

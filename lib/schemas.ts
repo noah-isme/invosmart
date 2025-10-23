@@ -25,11 +25,20 @@ export const RegisterSchema = LoginSchema.extend({
 export type LoginSchemaInput = z.infer<typeof LoginSchema>;
 export type RegisterSchemaInput = z.infer<typeof RegisterSchema>;
 
-export const InvoiceItem = z.object({
-  name: z.string().min(1),
-  qty: z.number().int().positive(),
-  price: z.number().int().nonnegative(),
+export const InvoiceItemSchema = z.object({
+  name: z.string().min(1, "Item name required"),
+  qty: z.number().int().positive("Quantity must be > 0"),
+  price: z.number().int().nonnegative("Price must be >= 0"),
 });
+
+export const InvoiceFormSchema = z.object({
+  client: z.string().min(1, "Client name required"),
+  items: z.array(InvoiceItemSchema).min(1, "At least one item"),
+  taxRate: z.number().default(0.1),
+  dueAt: z.string().datetime().nullable(),
+});
+
+export type InvoiceForm = z.infer<typeof InvoiceFormSchema>;
 
 export const InvoiceStatusEnum = z.enum([
   "DRAFT",
@@ -39,31 +48,29 @@ export const InvoiceStatusEnum = z.enum([
   "OVERDUE",
 ]);
 
-export const InvoiceCreate = z.object({
-  client: z.string().min(1),
-  items: z.array(InvoiceItem).min(1),
-  tax: z.number().int().nonnegative().default(0),
-  dueAt: z.string().datetime().nullable().optional(),
+export type InvoiceStatusValue = z.infer<typeof InvoiceStatusEnum>;
+export const invoiceStatusValues = InvoiceStatusEnum.options;
+
+export const InvoiceCreateSchema = InvoiceFormSchema.extend({
+  status: InvoiceStatusEnum.default("DRAFT"),
   notes: z.string().max(500).nullable().optional(),
-  issuedAt: z.string().datetime().optional(),
 });
 
-export type InvoiceCreateInput = z.infer<typeof InvoiceCreate>;
+export type InvoiceCreateInput = z.infer<typeof InvoiceCreateSchema>;
 
-export const InvoiceUpdateSchema = z.object({
+export const InvoiceUpdateSchema = InvoiceFormSchema.extend({
   id: z.string(),
-  client: z.string().min(1),
-  items: z.array(InvoiceItem).min(1),
   subtotal: z.number().int().nonnegative(),
   tax: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
   status: InvoiceStatusEnum,
   issuedAt: z.string(),
-  dueAt: z.string().nullable(),
   notes: z.string().max(500).nullable().optional(),
 });
 
 export type InvoiceUpdateInput = z.infer<typeof InvoiceUpdateSchema>;
+
+export const InvoiceItem = InvoiceItemSchema;
 
 export const generateInvoiceNumber = async (db: PrismaClient) => {
   const now = new Date();
