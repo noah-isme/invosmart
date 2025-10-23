@@ -3,8 +3,11 @@ import {
   ArrowRight,
   BellRing,
   BrainCircuit,
+  CheckCircle2,
+  Circle,
   CreditCard,
   FileText,
+  Flag,
   LineChart,
   MessageSquare,
   Printer,
@@ -32,6 +35,19 @@ type WorkflowStep = {
 type Insight = {
   title: string;
   description: string;
+};
+
+type SprintTask = {
+  title: string;
+  description: string;
+  status: "done" | "pending";
+};
+
+type Sprint = {
+  badge: string;
+  title: string;
+  objective: string;
+  tasks: SprintTask[];
 };
 
 const mvpFeatures: Feature[] = [
@@ -161,6 +177,263 @@ const futureHighlights: Feature[] = [
   },
 ];
 
+const sprintPhaseOne: {
+  title: string;
+  objective: string;
+  sprints: Sprint[];
+  deliverables: string[];
+} = {
+  title: "Phase 1 — MVP Development Sprint Plan",
+  objective:
+    "Tujuan: memastikan setiap dev environment, API, dan lint/test pipeline konsisten.",
+  sprints: [
+    {
+      badge: "🗂️",
+      title: "Sprint 0 — Persiapan & Fondasi Teknis",
+      objective:
+        "Tujuan: memastikan setiap dev environment, API, dan lint/test pipeline konsisten.",
+      tasks: [
+        {
+          title: "Setup .env lokal",
+          description:
+            "Variabel: NEXT_PUBLIC_API_URL, JWT_SECRET, OPENAI_API_KEY",
+          status: "pending",
+        },
+        {
+          title: "Konfigurasi API Routes",
+          description: "/api/auth, /api/invoices, /api/users",
+          status: "pending",
+        },
+        {
+          title: "Setup ORM (Prisma / Drizzle)",
+          description: "Skema awal: User, Invoice",
+          status: "pending",
+        },
+        {
+          title: "Tambahkan seed & mock data",
+          description: "Data dummy invoice untuk pengujian UI",
+          status: "pending",
+        },
+        {
+          title: "Perbarui CI lint/test/build",
+          description: "Pastikan pipeline masih hijau",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "🔐",
+      title: "Sprint 1 — Authentication & Authorization",
+      objective:
+        "Tujuan: user dapat login, register, dan mengakses dashboard dengan session aman.",
+      tasks: [
+        {
+          title: "Register & Login",
+          description: "Email–password (NextAuth/Supabase Auth)",
+          status: "pending",
+        },
+        {
+          title: "JWT & Refresh Token",
+          description: "Middleware auth di server routes",
+          status: "pending",
+        },
+        {
+          title: "Google OAuth",
+          description: "Integrasi via NextAuth Google provider",
+          status: "pending",
+        },
+        {
+          title: "Protected Routes",
+          description: "Redirect otomatis bila belum login",
+          status: "pending",
+        },
+        {
+          title: "Profile Page (optional)",
+          description: "Menampilkan nama & email user aktif",
+          status: "pending",
+        },
+        {
+          title: "Testing",
+          description: "Unit + integration (Vitest)",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "💼",
+      title: "Sprint 2 — Dashboard & Invoice CRUD",
+      objective:
+        "Tujuan: user bisa melihat, membuat, dan mengelola invoice manual.",
+      tasks: [
+        {
+          title: "Dashboard utama",
+          description: "Statistik: total pendapatan, unpaid, overdue",
+          status: "pending",
+        },
+        {
+          title: "Daftar invoice",
+          description: "Filter berdasarkan status: Paid / Unpaid / Draft",
+          status: "pending",
+        },
+        {
+          title: "Form manual invoice",
+          description: "Validasi Zod/Valibot, auto subtotal & pajak",
+          status: "pending",
+        },
+        {
+          title: "CRUD operasi",
+          description: "Buat, edit, hapus, ubah status invoice",
+          status: "pending",
+        },
+        {
+          title: "Invoice detail view",
+          description: "Halaman detail dengan metadata lengkap",
+          status: "pending",
+        },
+        {
+          title: "Testing",
+          description: "Unit test form & API routes",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "🤖",
+      title: "Sprint 3 — AI Invoice Generator",
+      objective:
+        "Tujuan: user bisa membuat invoice melalui natural language (GPT-4 integration).",
+      tasks: [
+        {
+          title: "Input prompt",
+          description: "Textarea input: “buat invoice 2 juta …”",
+          status: "pending",
+        },
+        {
+          title: "Parsing via GPT-4 API",
+          description: "Generate JSON draft (client, amount, desc)",
+          status: "pending",
+        },
+        {
+          title: "Review & edit hasil",
+          description: "Form preview editable sebelum submit",
+          status: "pending",
+        },
+        {
+          title: "Validasi hasil",
+          description: "Pastikan hasil GPT sesuai schema invoice",
+          status: "pending",
+        },
+        {
+          title: "Testing",
+          description: "Mock OpenAI responses di Vitest",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "🧾",
+      title: "Sprint 4 — Export & Branding",
+      objective:
+        "Tujuan: user bisa mengekspor invoice profesional.",
+      tasks: [
+        {
+          title: "Export ke PDF",
+          description: "Gunakan pdf-lib / jsPDF",
+          status: "pending",
+        },
+        {
+          title: "Custom branding",
+          description: "Logo, warna, font milik user",
+          status: "pending",
+        },
+        {
+          title: "Preview invoice",
+          description: "Modal preview sebelum download",
+          status: "pending",
+        },
+        {
+          title: "Nomor invoice otomatis",
+          description: "Format: INV-{tahun}{bulan}{seq}",
+          status: "pending",
+        },
+        {
+          title: "Testing",
+          description: "Snapshot PDF output",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "📊",
+      title: "Sprint 5 — Insight & Analytics",
+      objective:
+        "Tujuan: menampilkan statistik sederhana berbasis data invoice.",
+      tasks: [
+        {
+          title: "Pendapatan bulanan",
+          description: "Grafik bar/line (Recharts)",
+          status: "pending",
+        },
+        {
+          title: "Invoice overdue",
+          description: "Reminder & highlight warna",
+          status: "pending",
+        },
+        {
+          title: "Insight AI sederhana",
+          description: "Misal “klien ABC sering telat bayar”",
+          status: "pending",
+        },
+        {
+          title: "Testing",
+          description: "Mock dataset analytics",
+          status: "pending",
+        },
+      ],
+    },
+    {
+      badge: "🧹",
+      title: "Sprint 6 — QA & Hardening",
+      objective:
+        "Tujuan: memastikan performa & kualitas produksi siap.",
+      tasks: [
+        {
+          title: "Lint/Test/Build",
+          description: "Semua pipeline hijau",
+          status: "pending",
+        },
+        {
+          title: "Responsiveness",
+          description: "Uji di mobile/tablet/desktop",
+          status: "pending",
+        },
+        {
+          title: "Accessibility",
+          description: "Lighthouse > 90",
+          status: "pending",
+        },
+        {
+          title: "Performance",
+          description: "Page load < 2 detik",
+          status: "pending",
+        },
+        {
+          title: "Security",
+          description: "Rate limit, sanitize input, HTTPS only",
+          status: "pending",
+        },
+      ],
+    },
+  ],
+  deliverables: [
+    "Auth & Dashboard berfungsi penuh.",
+    "CRUD invoice + AI generator dasar.",
+    "Export PDF siap digunakan.",
+    "Insight sederhana tampil.",
+    "Pipeline CI stabil.",
+  ],
+};
+
 export default function Home() {
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -213,6 +486,87 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-24 px-6 py-20 md:px-10 lg:px-16">
+        <section id="plan" className="space-y-12">
+          <div className="flex flex-col gap-3">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
+              🧭 Phase 1
+            </span>
+            <h2 className="text-3xl font-semibold text-slate-50 md:text-4xl">
+              {sprintPhaseOne.title}
+            </h2>
+            <p className="max-w-3xl text-lg text-slate-300">{sprintPhaseOne.objective}</p>
+          </div>
+          <div className="flex flex-col gap-6">
+            {sprintPhaseOne.sprints.map((sprint) => (
+              <div
+                key={sprint.title}
+                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <span aria-hidden="true" className="text-2xl">
+                        {sprint.badge}
+                      </span>
+                      <h3 className="text-xl font-semibold text-slate-50 md:text-2xl">
+                        {sprint.title}
+                      </h3>
+                    </div>
+                    <p className="max-w-3xl text-sm text-slate-300 md:text-base">
+                      {sprint.objective}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-300 md:self-center">
+                    <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
+                    Backlog siap
+                  </span>
+                </div>
+                <ul className="mt-6 space-y-4">
+                  {sprint.tasks.map((task) => (
+                    <li key={task.title} className="flex items-start gap-3">
+                      <span className="mt-1 flex h-6 w-6 items-center justify-center">
+                        {task.status === "done" ? (
+                          <CheckCircle2 className="h-5 w-5 text-cyan-300" aria-hidden="true" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-slate-600" aria-hidden="true" />
+                        )}
+                        <span className="sr-only">
+                          {task.status === "done" ? "Selesai" : "Belum selesai"}
+                        </span>
+                      </span>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-100 md:text-base">
+                          {task.title}
+                        </p>
+                        <p className="text-xs text-slate-400 md:text-sm">{task.description}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-3xl border border-cyan-500/40 bg-cyan-500/10 p-6">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-900">
+                <Flag className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-slate-50 md:text-xl">
+                  🚀 Deliverables Akhir Phase 1
+                </h3>
+                <ul className="space-y-2 text-sm text-slate-100 md:text-base">
+                  {sprintPhaseOne.deliverables.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-cyan-300" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
         <section id="mvp" className="space-y-10">
           <div className="flex flex-col gap-4">
             <h2 className="text-3xl font-semibold text-slate-50">Fitur MVP InvoSmart</h2>
