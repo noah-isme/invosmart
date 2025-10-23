@@ -59,4 +59,44 @@ describe("Home page", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("menampilkan rencana sprint phase 1 lengkap", () => {
+    render(<Home />);
+
+    const planHeading = screen.getByRole("heading", {
+      level: 2,
+      name: /phase 1 — mvp development sprint plan/i,
+    });
+
+    const planSection = planHeading.closest("section");
+
+    expect(planSection).toBeInTheDocument();
+
+    const sprintTitles = [
+      "Sprint 0 — Persiapan & Fondasi Teknis",
+      "Sprint 1 — Authentication & Authorization",
+      "Sprint 2 — Dashboard & Invoice CRUD",
+      "Sprint 3 — AI Invoice Generator",
+      "Sprint 4 — Export & Branding",
+      "Sprint 5 — Insight & Analytics",
+      "Sprint 6 — QA & Hardening",
+    ];
+
+    sprintTitles.forEach((title) => {
+      expect(
+        within(planSection as HTMLElement).getByRole("heading", {
+          level: 3,
+          name: new RegExp(title, "i"),
+        }),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      within(planSection as HTMLElement).getByText(/setup \.env lokal/i),
+    ).toBeInTheDocument();
+
+    expect(
+      within(planSection as HTMLElement).getByText(/export pdf siap digunakan\./i),
+    ).toBeInTheDocument();
+  });
 });
