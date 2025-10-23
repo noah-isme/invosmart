@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String?
+  email     String    @unique
+  password  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  invoices  Invoice[]
+}
+
+model Invoice {
+  id        String         @id @default(cuid())
+  number    String         @unique
+  client    String
+  items     Json
+  subtotal  Int
+  tax       Int
+  total     Int
+  status    InvoiceStatus  @default(DRAFT)
+  issuedAt  DateTime
+  dueAt     DateTime?
+  paidAt    DateTime?
+  notes     String?
+
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  UNPAID
+  OVERDUE
+}

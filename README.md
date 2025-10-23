@@ -15,18 +15,28 @@
    ```bash
    npm install
    ```
-2. **Jalankan pemeriksaan kualitas**
+2. **Siapkan environment**
+   Salin berkas contoh dan isi kredensial Anda:
+   ```bash
+   cp .env.example .env
+   ```
+   Nilai yang wajib diisi minimal:
+   - `NEXTAUTH_SECRET` → gunakan string acak yang kuat.
+   - `DATABASE_URL` → `file:./dev.db` sudah cukup untuk pengembangan lokal (SQLite). Ganti ke URL Postgres saat deploy.
+   - `NEXTAUTH_URL` → alamat dasar aplikasi (default `http://localhost:3000`).
+   Google OAuth bersifat opsional; cukup tambahkan `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET` ketika ingin mengaktifkan login Google.
+3. **Jalankan pemeriksaan kualitas**
    ```bash
    npm run lint
    npm run test
    npm run build
    ```
    Ketiga perintah di atas mencerminkan pipeline CI utama (_lint → test → build_) yang harus lulus sebelum fitur dianggap siap.
-3. **Mulai server pengembangan**
+4. **Mulai server pengembangan**
    ```bash
    npm run dev
    ```
-4. Buka `http://localhost:3000` untuk melihat antarmuka awal InvoSmart.
+5. Buka `http://localhost:3000` untuk melihat antarmuka awal InvoSmart.
 
 ### Scripts
 - `npm run dev` – Menjalankan Next.js dalam mode pengembangan dengan HMR.
@@ -41,7 +51,7 @@
 
 | Layer | Teknologi | Highlight |
 | --- | --- | --- |
-| Front-end | [Next.js 16 (App Router)](https://nextjs.org/) | SSR & SSG siap, integrasi API Routes untuk MVP. |
+| Front-end | [Next.js 15 (App Router)](https://nextjs.org/) | SSR & SSG siap, integrasi API Routes untuk MVP. |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com/) | Utility-first dengan konfigurasi minimal dan desain gelap modern. |
 | Bahasa | TypeScript | Type-safety untuk komponen UI & utilitas. |
 | Testing | [Vitest](https://vitest.dev/) + Testing Library | Pengujian React Server Component dengan environment JSDOM. |
