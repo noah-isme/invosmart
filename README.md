@@ -47,6 +47,29 @@
 
 ---
 
+## 🔑 Authentication
+
+### Alur Register & Login
+1. Buka `/auth/register` untuk membuat akun baru. Masukkan nama lengkap, email, dan password minimal 6 karakter.
+2. Setelah registrasi berhasil Anda akan diarahkan ke halaman login (`/auth/login`) dengan pesan sukses.
+3. Login menggunakan kredensial yang baru dibuat atau klik **“Lanjutkan dengan Google”** jika sudah mengaktifkan OAuth.
+4. Setelah login sukses pengguna akan diarahkan ke dashboard utama di `/app`.
+5. Semua halaman di bawah `/app/**` diproteksi oleh middleware NextAuth. Gunakan tombol **Keluar** pada dashboard atau profil untuk mengakhiri sesi dengan aman.
+
+### Konfigurasi Google OAuth
+1. Buka [Google Cloud Console](https://console.cloud.google.com/) dan buat project baru (atau gunakan yang sudah ada).
+2. Aktifkan **OAuth consent screen** dan tambahkan domain `http://localhost:3000` (atau domain produksi) sebagai authorized domain.
+3. Buat kredensial **OAuth Client ID** dengan tipe **Web application**.
+4. Tambahkan `http://localhost:3000/api/auth/callback/google` sebagai **Authorized redirect URI** (ganti domain sesuai nilai `NEXTAUTH_URL` saat deploy).
+5. Salin `Client ID` dan `Client Secret` lalu isi ke variabel `.env`:
+   ```bash
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   ```
+6. Simpan berkas `.env` dan restart server pengembangan agar NextAuth memuat konfigurasi baru.
+
+---
+
 ## 🧱 Arsitektur & Stack
 
 | Layer | Teknologi | Highlight |
