@@ -45,6 +45,15 @@
 - `npm run build` – Membuat build produksi Next.js.
 - `npm start` – Menjalankan server produksi setelah build.
 
+### API Reference – Invoice CRUD
+| Method | Endpoint | Deskripsi |
+| --- | --- | --- |
+| GET | `/api/invoices` | Mengambil 20 invoice terbaru milik pengguna. Gunakan query `?status=PAID` untuk filter. |
+| POST | `/api/invoices` | Membuat invoice baru dengan nomor otomatis (format `INV-YYYYMM-SEQ`). |
+| GET | `/api/invoices/:id` | Mendapatkan detail invoice tertentu dan memperbarui status overdue secara otomatis. |
+| PUT | `/api/invoices/:id` | Memperbarui data invoice (client, item, status). Status PAID menambahkan `paidAt`, status SENT mengubah `issuedAt`. |
+| DELETE | `/api/invoices/:id` | Menghapus invoice milik pengguna aktif. |
+
 ---
 
 ## 🔑 Authentication
@@ -67,6 +76,48 @@
    GOOGLE_CLIENT_SECRET=your_client_secret
    ```
 6. Simpan berkas `.env` dan restart server pengembangan agar NextAuth memuat konfigurasi baru.
+
+## 📊 Invoice Dashboard & API
+
+Dashboard baru tersedia di `/app/dashboard` setelah login. Modul ini mencakup:
+
+- **Tabel Invoice** – daftar 20 invoice terbaru lengkap dengan nomor, klien, nilai, status, dan jatuh tempo.
+- **Filter Status** – tombol All/Draft/Sent/Paid/Unpaid/Overdue yang melakukan fetch ulang ke `/api/invoices` dengan query `status`.
+- **Aksi Cepat** – ubah status langsung dari tabel (update ke API) dan hapus invoice.
+- **Widget Statistik** – ringkasan total pendapatan (status PAID), jumlah invoice unpaid, serta overdue.
+- **Auto status** – nomor invoice otomatis `INV-{YYYY}{MM}-{SEQ}`, status berubah ke OVERDUE bila melewati `dueAt`, perubahan ke SENT mengisi `issuedAt`, dan PAID mencatat `paidAt`.
+
+Contoh payload `POST /api/invoices`:
+
+```json
+{
+  "client": "PT Kreatif Nusantara",
+  "items": [
+    { "name": "UI Design", "qty": 2, "price": 750000 },
+    { "name": "UX Research", "qty": 1, "price": 500000 }
+  ],
+  "tax": 200000,
+  "dueAt": "2024-11-30T00:00:00.000Z"
+}
+```
+
+Respons berisi detail lengkap invoice dengan nomor otomatis, subtotal, total, dan metadata status.
+
+Contoh payload `PUT /api/invoices/:id` (update status):
+
+```json
+{
+  "id": "inv-1",
+  "client": "PT Kreatif Nusantara",
+  "items": [{ "name": "UI Design", "qty": 2, "price": 750000 }],
+  "subtotal": 1500000,
+  "tax": 150000,
+  "total": 1650000,
+  "status": "PAID",
+  "issuedAt": "2024-11-01T00:00:00.000Z",
+  "dueAt": "2024-11-15T00:00:00.000Z"
+}
+```
 
 ---
 

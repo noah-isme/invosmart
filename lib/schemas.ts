@@ -1,3 +1,4 @@
+import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 const emailField = z
@@ -30,10 +31,43 @@ export const InvoiceItem = z.object({
   price: z.number().int().nonnegative(),
 });
 
+export const InvoiceStatusEnum = z.enum([
+  "DRAFT",
+  "SENT",
+  "PAID",
+  "UNPAID",
+  "OVERDUE",
+]);
+
 export const InvoiceCreate = z.object({
   client: z.string().min(1),
   items: z.array(InvoiceItem).min(1),
+  tax: z.number().int().nonnegative().default(0),
+  dueAt: z.string().datetime().nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
   issuedAt: z.string().datetime().optional(),
 });
 
-export type InvoiceCreate = z.infer<typeof InvoiceCreate>;
+export type InvoiceCreateInput = z.infer<typeof InvoiceCreate>;
+
+export const InvoiceUpdateSchema = z.object({
+  id: z.string(),
+  client: z.string().min(1),
+  items: z.array(InvoiceItem).min(1),
+  subtotal: z.number().int().nonnegative(),
+  tax: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  status: InvoiceStatusEnum,
+  issuedAt: z.string(),
+  dueAt: z.string().nullable(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export type InvoiceUpdateInput = z.infer<typeof InvoiceUpdateSchema>;
+
+export const generateInvoiceNumber = async (db: PrismaClient) => {
+  const now = new Date();
+  const prefix = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const count = await db.invoice.count({ where: { number: { startsWith: prefix } } });
+  return `${prefix}-${String(count + 1).padStart(3, "0")}`;
+};
