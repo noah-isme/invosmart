@@ -1,8 +1,7 @@
 "use client";
 
-import { InvoiceStatus } from "@prisma/client";
-
 import type { InvoiceFilterValue } from "./types";
+import { InvoiceStatusEnum } from "@/lib/schemas";
 
 type InvoiceFilterProps = {
   value: InvoiceFilterValue;
@@ -11,11 +10,11 @@ type InvoiceFilterProps = {
 
 const options: { label: string; value: InvoiceFilterValue }[] = [
   { label: "All", value: "ALL" },
-  { label: "Draft", value: InvoiceStatus.DRAFT },
-  { label: "Sent", value: InvoiceStatus.SENT },
-  { label: "Paid", value: InvoiceStatus.PAID },
-  { label: "Unpaid", value: InvoiceStatus.UNPAID },
-  { label: "Overdue", value: InvoiceStatus.OVERDUE },
+  { label: "Draft", value: InvoiceStatusEnum.enum.DRAFT },
+  { label: "Sent", value: InvoiceStatusEnum.enum.SENT },
+  { label: "Paid", value: InvoiceStatusEnum.enum.PAID },
+  { label: "Unpaid", value: InvoiceStatusEnum.enum.UNPAID },
+  { label: "Overdue", value: InvoiceStatusEnum.enum.OVERDUE },
 ];
 
 export const InvoiceFilter = ({ value, onChange }: InvoiceFilterProps) => {

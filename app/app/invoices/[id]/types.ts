@@ -1,7 +1,7 @@
 import type { InvoiceStatusValue } from "@/lib/schemas";
-import type { InvoiceItemInput } from "@/lib/invoices";
+import type { InvoiceItemInput } from "@/lib/invoice-utils";
 
-export type DashboardInvoice = {
+export type InvoiceDetail = {
   id: string;
   number: string;
   client: string;
@@ -17,11 +17,3 @@ export type DashboardInvoice = {
   createdAt?: string;
   updatedAt?: string;
 };
-
-export type InvoiceDashboardStats = {
-  revenue: number;
-  unpaid: number;
-  overdue: number;
-};
-
-export type InvoiceFilterValue = InvoiceStatusValue | "ALL";

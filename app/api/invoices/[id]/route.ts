@@ -7,11 +7,8 @@ import {
   InvoiceUpdateSchema,
   type InvoiceUpdateInput,
 } from "@/lib/schemas";
-import {
-  calculateInvoiceTotals,
-  getStatusSideEffects,
-  isInvoiceOverdue,
-} from "@/lib/invoices";
+import { calculateTotals } from "@/lib/invoice-utils";
+import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
 import { authOptions } from "@/server/auth";
 
 type RouteContext = {
@@ -76,9 +73,13 @@ const validateUpdateBody = async (request: NextRequest) => {
 };
 
 const ensureTotals = (payload: InvoiceUpdateInput) => {
-  const totals = calculateInvoiceTotals(payload.items, payload.tax);
+  const totals = calculateTotals(payload.items, payload.taxRate);
 
   if (totals.subtotal !== payload.subtotal || totals.total !== payload.total) {
+    return { success: false as const };
+  }
+
+  if (totals.tax !== payload.tax) {
     return { success: false as const };
   }
 

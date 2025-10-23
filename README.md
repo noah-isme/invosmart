@@ -96,7 +96,7 @@ Contoh payload `POST /api/invoices`:
     { "name": "UI Design", "qty": 2, "price": 750000 },
     { "name": "UX Research", "qty": 1, "price": 500000 }
   ],
-  "tax": 200000,
+  "taxRate": 0.1,
   "dueAt": "2024-11-30T00:00:00.000Z"
 }
 ```
@@ -115,7 +115,49 @@ Contoh payload `PUT /api/invoices/:id` (update status):
   "total": 1650000,
   "status": "PAID",
   "issuedAt": "2024-11-01T00:00:00.000Z",
-  "dueAt": "2024-11-15T00:00:00.000Z"
+  "dueAt": "2024-11-15T00:00:00.000Z",
+  "taxRate": 0.1
+}
+```
+
+---
+
+## 💼 Invoice Form & Detail Workflow
+
+- `/app/invoices/new` → formulir invoice manual dengan perhitungan subtotal, pajak 10%, dan total secara real-time.
+- `/app/invoices/[id]` → halaman detail lengkap untuk melihat metadata invoice, mengirim, menandai lunas, atau menghapus.
+- Validasi Zod berjalan di klien & server. Nilai subtotal/tax/total dihitung ulang di server agar aman dari manipulasi.
+- Aksi status dilindungi dialog konfirmasi dan otomatis memperbarui `issuedAt`/`paidAt` sesuai transisi.
+
+Contoh payload form yang lolos validasi:
+
+```json
+{
+  "client": "PT Kreatif Nusantara",
+  "items": [
+    { "name": "UI Design", "qty": 2, "price": 750000 },
+    { "name": "UX Research", "qty": 1, "price": 500000 }
+  ],
+  "taxRate": 0.1,
+  "dueAt": "2024-11-30T00:00:00.000Z",
+  "status": "SENT"
+}
+```
+
+Contoh payload update status yang valid:
+
+```json
+{
+  "id": "inv-1",
+  "client": "PT Kreatif Nusantara",
+  "items": [{ "name": "UI Design", "qty": 2, "price": 750000 }],
+  "subtotal": 1500000,
+  "tax": 150000,
+  "total": 1650000,
+  "status": "PAID",
+  "issuedAt": "2024-11-01T00:00:00.000Z",
+  "dueAt": "2024-11-15T00:00:00.000Z",
+  "taxRate": 0.1
 }
 ```
 

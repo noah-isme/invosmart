@@ -1,31 +1,35 @@
 "use client";
 
-import { InvoiceStatus } from "@prisma/client";
 import { useMemo, useState } from "react";
 
 import type { DashboardInvoice } from "./types";
+import {
+  InvoiceStatusEnum,
+  invoiceStatusValues,
+  type InvoiceStatusValue,
+} from "@/lib/schemas";
 
 type InvoiceRowProps = {
   invoice: DashboardInvoice;
   disabled?: boolean;
-  onUpdateStatus: (invoiceId: string, status: InvoiceStatus) => void;
+  onUpdateStatus: (invoiceId: string, status: InvoiceStatusValue) => void;
   onDelete: (invoiceId: string) => void;
 };
 
-const statusLabels: Record<InvoiceStatus, string> = {
-  [InvoiceStatus.DRAFT]: "Draft",
-  [InvoiceStatus.SENT]: "Sent",
-  [InvoiceStatus.PAID]: "Paid",
-  [InvoiceStatus.UNPAID]: "Unpaid",
-  [InvoiceStatus.OVERDUE]: "Overdue",
+const statusLabels: Record<InvoiceStatusValue, string> = {
+  [InvoiceStatusEnum.enum.DRAFT]: "Draft",
+  [InvoiceStatusEnum.enum.SENT]: "Sent",
+  [InvoiceStatusEnum.enum.PAID]: "Paid",
+  [InvoiceStatusEnum.enum.UNPAID]: "Unpaid",
+  [InvoiceStatusEnum.enum.OVERDUE]: "Overdue",
 };
 
-const statusStyles: Record<InvoiceStatus, string> = {
-  [InvoiceStatus.DRAFT]: "bg-muted text-muted-foreground",
-  [InvoiceStatus.SENT]: "bg-blue-500/10 text-blue-400",
-  [InvoiceStatus.PAID]: "bg-emerald-500/10 text-emerald-400",
-  [InvoiceStatus.UNPAID]: "bg-amber-500/10 text-amber-400",
-  [InvoiceStatus.OVERDUE]: "bg-red-500/10 text-red-400",
+const statusStyles: Record<InvoiceStatusValue, string> = {
+  [InvoiceStatusEnum.enum.DRAFT]: "bg-muted text-muted-foreground",
+  [InvoiceStatusEnum.enum.SENT]: "bg-blue-500/10 text-blue-400",
+  [InvoiceStatusEnum.enum.PAID]: "bg-emerald-500/10 text-emerald-400",
+  [InvoiceStatusEnum.enum.UNPAID]: "bg-amber-500/10 text-amber-400",
+  [InvoiceStatusEnum.enum.OVERDUE]: "bg-red-500/10 text-red-400",
 };
 
 const formatCurrency = (value: number) =>
@@ -53,7 +57,7 @@ const formatDate = (value: string | null) => {
 };
 
 export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: InvoiceRowProps) => {
-  const [selectedStatus, setSelectedStatus] = useState<InvoiceStatus>(invoice.status);
+  const [selectedStatus, setSelectedStatus] = useState<InvoiceStatusValue>(invoice.status);
 
   const updateDisabled = useMemo(
     () => disabled || selectedStatus === invoice.status,
@@ -98,12 +102,14 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
             id={`invoice-status-${invoice.id}`}
             value={selectedStatus}
             disabled={disabled}
-            onChange={(event) => setSelectedStatus(event.target.value as InvoiceStatus)}
+            onChange={(event) =>
+              setSelectedStatus(event.target.value as InvoiceStatusValue)
+            }
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
-            {Object.values(InvoiceStatus).map((status) => (
+            {invoiceStatusValues.map((status) => (
               <option key={status} value={status}>
-                {statusLabels[status as InvoiceStatus]}
+                {statusLabels[status]}
               </option>
             ))}
           </select>

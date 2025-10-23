@@ -4,14 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import {
-  InvoiceCreate,
+  InvoiceCreateSchema,
   InvoiceStatusEnum,
   generateInvoiceNumber,
 } from "@/lib/schemas";
-import {
-  calculateInvoiceTotals,
-  markUserOverdueInvoices,
-} from "@/lib/invoices";
+import { calculateTotals } from "@/lib/invoice-utils";
+import { markUserOverdueInvoices } from "@/lib/invoices";
 import { authOptions } from "@/server/auth";
 
 const unauthorized = () =>
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest) {
   const userId = session.user.id;
 
   const json = await request.json();
-  const parsed = InvoiceCreate.safeParse(json);
+  const parsed = InvoiceCreateSchema.safeParse(json);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -96,14 +94,7 @@ export async function POST(request: NextRequest) {
   }
 
   const items = parsed.data.items;
-  const { subtotal, total, tax } = calculateInvoiceTotals(items, parsed.data.tax);
-
-  const issuedAt = parsed.data.issuedAt
-    ? new Date(parsed.data.issuedAt)
-    : new Date();
-  if (Number.isNaN(issuedAt.getTime())) {
-    return invalidRequest("Invalid issuedAt value");
-  }
+  const { subtotal, total, tax } = calculateTotals(items, parsed.data.taxRate);
 
   const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
   if (dueAt && Number.isNaN(dueAt.getTime())) {
@@ -111,6 +102,19 @@ export async function POST(request: NextRequest) {
   }
 
   const invoiceNumber = await generateInvoiceNumber(db);
+
+  const now = new Date();
+  const status =
+    parsed.data.status === InvoiceStatus.SENT
+      ? InvoiceStatus.SENT
+      : InvoiceStatus.DRAFT;
+  if (
+    parsed.data.status &&
+    parsed.data.status !== InvoiceStatus.DRAFT &&
+    parsed.data.status !== InvoiceStatus.SENT
+  ) {
+    return invalidRequest("Invalid initial invoice status");
+  }
 
   const invoice = await db.invoice.create({
     data: {
@@ -120,8 +124,8 @@ export async function POST(request: NextRequest) {
       subtotal,
       tax,
       total,
-      status: InvoiceStatus.DRAFT,
-      issuedAt,
+      status,
+      issuedAt: now,
       dueAt,
       paidAt: null,
       notes: parsed.data.notes ?? null,
