@@ -19,6 +19,7 @@ export default defineConfig({
       "next-auth": path.resolve(__dirname, "test/mocks/next-auth.ts"),
       "@prisma/client": path.resolve(__dirname, "test/mocks/prisma-client.ts"),
       bcrypt: path.resolve(__dirname, "test/mocks/bcrypt.ts"),
+      openai: path.resolve(__dirname, "test/mocks/openai.ts"),
     },
   },
   test: {

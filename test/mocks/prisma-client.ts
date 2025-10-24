@@ -4,6 +4,7 @@ class UserDelegate {
   findUnique = vi.fn();
   create = vi.fn();
   upsert = vi.fn();
+  update = vi.fn();
 }
 
 class InvoiceDelegate {

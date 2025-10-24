@@ -92,3 +92,28 @@ export const generateInvoiceNumber = async (db: PrismaClient) => {
   const count = await db.invoice.count({ where: { number: { startsWith: prefix } } });
   return `${prefix}-${String(count + 1).padStart(3, "0")}`;
 };
+
+export const BrandingSchema = z.object({
+  logoUrl: z
+    .union([
+      z
+        .string()
+        .trim()
+        .url("Logo URL harus berupa tautan valid.")
+        .max(2048, "Logo URL maksimal 2048 karakter."),
+      z.null(),
+    ])
+    .optional(),
+  primaryColor: z
+    .union([
+      z
+        .string()
+        .trim()
+        .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Warna utama harus dalam format hex, misal #1E3A8A."),
+      z.null(),
+    ])
+    .optional(),
+  fontFamily: z.union([z.literal("sans"), z.literal("serif"), z.literal("mono"), z.null()]).optional(),
+});
+
+export type BrandingInput = z.infer<typeof BrandingSchema>;

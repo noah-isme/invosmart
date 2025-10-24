@@ -24,6 +24,11 @@ const navItems = [
     label: "Profil",
     description: "Kelola informasi akun",
   },
+  {
+    href: "/app/settings/branding",
+    label: "Branding",
+    description: "Sesuaikan logo, warna, dan font invoice",
+  },
 ];
 
 const isActivePath = (pathname: string, target: string) => {

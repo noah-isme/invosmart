@@ -53,6 +53,9 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   const [dialog, setDialog] = useState<DialogType>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadPending, setDownloadPending] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
 
   const dialogConfig = useMemo(() => (dialog ? dialogConfigs[dialog] : null), [dialog]);
 
@@ -66,6 +69,41 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   const openDialog = (type: Exclude<DialogType, null>) => {
     setError(null);
     setDialog(type);
+  };
+
+  const handleDownload = async () => {
+    setDownloadPending(true);
+    setDownloadError(null);
+    setDownloadMessage(null);
+
+    let blobUrl: string | null = null;
+
+    try {
+      const response = await fetch(`/api/invoices/${invoice.id}/pdf`);
+
+      if (!response.ok) {
+        throw new Error("Gagal mengunduh PDF. Silakan coba lagi.");
+      }
+
+      const blob = await response.blob();
+      blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `invoice-${invoice.number}.pdf`;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setDownloadMessage("PDF berhasil diunduh.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gagal mengunduh PDF.";
+      setDownloadError(message);
+    } finally {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+      setDownloadPending(false);
+    }
   };
 
   const updateInvoice = async (status: InvoiceStatusValue) => {
@@ -142,6 +180,15 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={handleDownload}
+            className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={downloadPending}
+            aria-busy={downloadPending}
+          >
+            {downloadPending ? "Menyiapkan PDF..." : "Download PDF"}
+          </button>
+          <button
+            type="button"
             onClick={() => openDialog("send")}
             className="inline-flex items-center rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!canSend || pending}
@@ -167,11 +214,23 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
         </div>
       </div>
 
-      {error ? (
-        <p className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <div className="space-y-3" aria-live="polite" role="status">
+        {downloadError ? (
+          <p className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+            {downloadError}
+          </p>
+        ) : null}
+        {downloadMessage ? (
+          <p className="rounded-md border border-emerald-600/40 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+            {downloadMessage}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
 
       <InvoiceSummary invoice={invoice} />
       <InvoiceItemsTable
