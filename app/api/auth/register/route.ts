@@ -1,10 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { hash } from "@/lib/hash";
 import { RegisterSchema } from "@/lib/schemas";
+import { enforceHttps } from "@/lib/security";
+import { rateLimit } from "@/lib/rate-limit";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "auth");
+  if (limited) {
+    return limited;
+  }
+
   let json: unknown;
 
   try {

@@ -44,6 +44,13 @@
 - `npm run test` – Menjalankan Vitest + Testing Library untuk menguji komponen App Router.
 - `npm run build` – Membuat build produksi Next.js.
 - `npm start` – Menjalankan server produksi setelah build.
+- `npm run qa:lighthouse` – Menjalankan Lighthouse CI lokal untuk memverifikasi performa, aksesibilitas, dan SEO.
+
+## 📊 Insight & QA Finalization
+- New endpoint: `/api/insight/revenue`
+- Dashboard charts: Monthly Revenue & Paid/Overdue distribution
+- Performance target: Lighthouse ≥90
+- Security: Rate limiting + headers + input sanitization
 
 ### API Reference – Invoice CRUD
 | Method | Endpoint | Deskripsi |

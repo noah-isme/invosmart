@@ -9,6 +9,8 @@ import {
 } from "@/lib/schemas";
 import { calculateTotals } from "@/lib/invoice-utils";
 import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
+import { enforceHttps } from "@/lib/security";
+import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 
 type RouteContext = {
@@ -31,7 +33,17 @@ const resolveId = async (context: RouteContext) => {
   return id ?? null;
 };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -87,6 +99,16 @@ const ensureTotals = (payload: InvoiceUpdateInput) => {
 };
 
 export async function PUT(request: NextRequest, context: RouteContext) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -170,7 +192,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   return NextResponse.json({ data: updated });
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {

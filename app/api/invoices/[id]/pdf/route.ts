@@ -1,8 +1,10 @@
 import { getServerSession } from "next-auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { generateInvoicePDF } from "@/lib/pdf-generator";
+import { enforceHttps } from "@/lib/security";
+import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 
 type RouteContext = {
@@ -22,7 +24,17 @@ const resolveParams = async (
   return Array.isArray(value) ? value[0] ?? null : value;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
