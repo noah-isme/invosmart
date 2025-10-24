@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { AppSidebar } from "./AppSidebar";
+import Sidebar from "@/components/layout/Sidebar";
+import Topbar from "@/components/layout/Topbar";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -15,11 +16,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </div>
         <div className="absolute inset-0 bg-diagonal-grid opacity-40" aria-hidden />
       </div>
-      <div className="relative mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pt-16 lg:flex-row lg:gap-12">
-        <AppSidebar />
+
+      <Topbar title="Dashboard" />
+
+      <div className="relative mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-16 lg:flex-row lg:gap-12">
+        <Sidebar />
         <main className="relative z-[1] flex-1 pb-16 lg:pb-24">{children}</main>
       </div>
     </div>
   );
 }
-
