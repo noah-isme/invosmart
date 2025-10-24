@@ -47,7 +47,7 @@ export default function RootLayout({
       <body
         className={`${plusJakarta.variable} ${geistMono.variable} bg-[#0E1016] text-[#F3F4F6] antialiased`}
       >
-        {children}
+        <div className="relative min-h-screen">{children}</div>
       </body>
     </html>
   );
