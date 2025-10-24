@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "qa:lighthouse": "npx @lhci/cli autorun",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts"
@@ -22,6 +23,7 @@
     "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "recharts": "^2.12.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {

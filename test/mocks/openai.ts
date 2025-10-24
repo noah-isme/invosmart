@@ -10,7 +10,6 @@ class MockChat {
 
 class MockOpenAI {
   chat = new MockChat();
-  constructor(_config?: unknown) {}
 }
 
 export default MockOpenAI;

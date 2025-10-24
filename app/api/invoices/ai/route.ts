@@ -4,6 +4,8 @@ import OpenAI from "openai";
 import { z } from "zod";
 
 import { AIInvoiceSchema } from "@/lib/schemas";
+import { enforceHttps } from "@/lib/security";
+import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 
 const systemPrompt = `
@@ -48,6 +50,16 @@ const createClient = () => {
 };
 
 export async function POST(request: NextRequest) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {

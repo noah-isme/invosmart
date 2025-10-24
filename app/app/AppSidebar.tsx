@@ -10,6 +10,11 @@ const navItems = [
     description: "Pantau performa invoice Anda",
   },
   {
+    href: "/app/dashboard/insight",
+    label: "Insight Analytics",
+    description: "Analitik pendapatan dan performa pembayaran",
+  },
+  {
     href: "/app/invoices/new",
     label: "Invoice Manual",
     description: "Buat invoice secara manual",

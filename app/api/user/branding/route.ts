@@ -1,8 +1,9 @@
 import { getServerSession } from "next-auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { BrandingSchema } from "@/lib/schemas";
+import { enforceHttps } from "@/lib/security";
 import { authOptions } from "@/server/auth";
 
 type BrandingPayload = Partial<Record<"logoUrl" | "primaryColor" | "fontFamily", string | null>>;
@@ -36,7 +37,12 @@ const normalizePayload = (input: unknown): BrandingPayload => {
   return normalized;
 };
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {

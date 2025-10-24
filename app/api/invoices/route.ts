@@ -8,6 +8,8 @@ import {
   InvoiceStatusEnum,
   generateInvoiceNumber,
 } from "@/lib/schemas";
+import { enforceHttps } from "@/lib/security";
+import { rateLimit } from "@/lib/rate-limit";
 import { calculateTotals } from "@/lib/invoice-utils";
 import { markUserOverdueInvoices } from "@/lib/invoices";
 import { authOptions } from "@/server/auth";
@@ -19,6 +21,16 @@ const invalidRequest = (message: string) =>
   NextResponse.json({ error: message }, { status: 400 });
 
 export async function GET(request: NextRequest) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -75,6 +87,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const httpsCheck = enforceHttps(request);
+  if (httpsCheck) {
+    return httpsCheck;
+  }
+
+  const limited = rateLimit(request, "invoices");
+  if (limited) {
+    return limited;
+  }
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
