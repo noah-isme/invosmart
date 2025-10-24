@@ -54,6 +54,12 @@
 | PUT | `/api/invoices/:id` | Memperbarui data invoice (client, item, status). Status PAID menambahkan `paidAt`, status SENT mengubah `issuedAt`. |
 | DELETE | `/api/invoices/:id` | Menghapus invoice milik pengguna aktif. |
 
+## 📄 Export & Branding
+- Unduh invoice sebagai PDF melalui endpoint `GET /api/invoices/[id]/pdf` atau tombol **Download PDF** di halaman detail invoice.
+- Setiap file PDF memuat logo, warna utama, dan font sesuai pengaturan branding pengguna serta menyertakan watermark "InvoSmart".
+- Kelola preferensi branding di `/app/settings/branding` untuk mengunggah URL logo, memilih warna utama, dan font (sans/serif/mono).
+- Preferensi tersimpan per pengguna di database dan otomatis diterapkan pada generator PDF berikutnya.
+
 ---
 
 ## 🔑 Authentication
