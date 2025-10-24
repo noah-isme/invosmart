@@ -1,4 +1,3 @@
-import { InvoiceStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -6,6 +5,7 @@ import { db } from "@/lib/db";
 import {
   InvoiceUpdateSchema,
   type InvoiceUpdateInput,
+  InvoiceStatusEnum,
 } from "@/lib/schemas";
 import { calculateTotals } from "@/lib/invoice-utils";
 import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
@@ -64,10 +64,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return notFound();
   }
 
-  if (invoice.status !== InvoiceStatus.OVERDUE && isInvoiceOverdue(invoice)) {
+  if (invoice.status !== InvoiceStatusEnum.enum.OVERDUE && isInvoiceOverdue(invoice)) {
     const updated = await db.invoice.update({
       where: { id },
-      data: { status: InvoiceStatus.OVERDUE },
+      data: { status: InvoiceStatusEnum.enum.OVERDUE },
     });
     return NextResponse.json({ data: updated });
   }
@@ -169,7 +169,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     dueAt,
     notes: parsed.data.notes ?? null,
     ...("paidAt" in sideEffects ? { paidAt: sideEffects.paidAt ?? null } : {}),
-  } satisfies Parameters<typeof db.invoice.update>[0]["data"];
+  };
 
   if (sideEffects.issuedAt) {
     data.issuedAt = sideEffects.issuedAt;
@@ -178,10 +178,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (
     dueAt &&
     dueAt.getTime() < now.getTime() &&
-    parsed.data.status !== InvoiceStatus.PAID &&
-    (parsed.data.status === InvoiceStatus.SENT || parsed.data.status === InvoiceStatus.UNPAID)
+    parsed.data.status !== InvoiceStatusEnum.enum.PAID &&
+    (parsed.data.status === InvoiceStatusEnum.enum.SENT || parsed.data.status === InvoiceStatusEnum.enum.UNPAID)
   ) {
-    data.status = InvoiceStatus.OVERDUE;
+    data.status = InvoiceStatusEnum.enum.OVERDUE;
   }
 
   const updated = await db.invoice.update({

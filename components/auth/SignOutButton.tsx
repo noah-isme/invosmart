@@ -18,7 +18,7 @@ export function SignOutButton({
   const [pending, startTransition] = useTransition();
 
   const baseClassName =
-    "inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-80";
+    "gradient-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#6366F1]/40 transition duration-200 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#6366F1]/80 focus-visible:ring-offset-[#0E1016] disabled:cursor-not-allowed disabled:opacity-60";
 
   const mergedClassName = className ? `${baseClassName} ${className}` : baseClassName;
 

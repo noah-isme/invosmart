@@ -1,32 +1,135 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #f8fafc;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  color-scheme: dark;
+  --background: #0e1016;
+  --surface: #181b22;
+  --surface-soft: rgba(24, 27, 34, 0.8);
+  --surface-glow: rgba(99, 102, 241, 0.18);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --foreground: #f3f4f6;
+  --muted: #9ca3af;
+  --accent-primary: #6366f1;
+  --accent-secondary: #22d3ee;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: #ffffff;
-    --foreground: #0f172a;
-  }
+body {
+  background: radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.15), transparent 45%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Inter", system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  margin: 0;
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(120deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(300deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 120px 120px;
+  background-position: 0 0, 60px 60px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+* {
+  letter-spacing: -0.015em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+}
+
+p,
+label,
+span,
+input,
+textarea,
+select,
+button {
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.45);
-  color: #0f172a;
+  background: rgba(99, 102, 241, 0.35);
+  color: var(--foreground);
+}
+
+.glass-surface {
+  background: var(--surface-soft);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 45px rgba(8, 10, 14, 0.55);
+}
+
+.gradient-button {
+  background-image: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.35);
+}
+
+.gradient-button:hover {
+  box-shadow: 0 12px 32px rgba(34, 211, 238, 0.4);
+}
+
+.gradient-border {
+  position: relative;
+  border-radius: 20px;
+  background: rgba(14, 16, 22, 0.9);
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(99, 102, 241, 0.6), rgba(34, 211, 238, 0.6));
+  z-index: -1;
+  opacity: 0.7;
+}
+
+.bg-diagonal-grid {
+  background-image: linear-gradient(125deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px),
+    linear-gradient(305deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: 140px 140px;
+  background-position: 0 0, 70px 70px;
+}
+
+.glow-border {
+  position: relative;
+  display: block;
+  border-radius: 1.75rem;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.65), rgba(34, 211, 238, 0.45));
+  box-shadow: 0 25px 70px rgba(8, 10, 16, 0.55);
+}
+
+.glow-border::after {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(34, 211, 238, 0.25));
+  filter: blur(48px);
+  opacity: 0.45;
+  z-index: -1;
+}
+
+.glow-border-inner {
+  position: relative;
+  border-radius: inherit;
+  background: rgba(24, 27, 34, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
 }

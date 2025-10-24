@@ -19,12 +19,13 @@ export default async function InsightDashboardPage() {
   const insight = await getRevenueInsight(session.user.id);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-foreground">Revenue Analytics</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Analitik pendapatan membantu Anda memantau tren pembayaran, mengidentifikasi klien tercepat, dan fokus pada
-          invoice yang perlu perhatian khusus.
+    <main className="relative mx-auto w-full max-w-6xl px-4 pb-24 pt-10">
+      <div className="mb-10 space-y-4">
+        <p className="text-xs uppercase tracking-[0.42em] text-white/50">Analitik pendapatan</p>
+        <h1 className="text-4xl font-semibold text-white">Insight pembayaran real-time</h1>
+        <p className="max-w-2xl text-base text-white/70">
+          Pelajari tren revenue, distribusi status invoice, serta perilaku pembayaran klien untuk menentukan langkah strategis
+          berikutnya.
         </p>
       </div>
       <RevenueInsightView insight={insight} />

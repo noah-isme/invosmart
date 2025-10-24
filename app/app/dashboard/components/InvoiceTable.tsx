@@ -20,28 +20,18 @@ export const InvoiceTable = ({
   onDelete,
 }: InvoiceTableProps) => {
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="min-w-full divide-y divide-border">
-        <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+    <div className="glass-surface overflow-hidden rounded-[28px] border border-white/8 bg-white/[0.03] shadow-[0_24px_70px_rgba(8,10,16,0.55)]">
+      <table className="min-w-full divide-y divide-white/5">
+        <thead className="bg-white/[0.04] text-left text-[0.68rem] uppercase tracking-[0.32em] text-white/45">
           <tr>
-            <th scope="col" className="px-4 py-3 font-medium">
-              Invoice
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium">
-              Nilai
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium">
-              Status
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium">
-              Jatuh Tempo
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium">
-              Aksi
-            </th>
+            <th scope="col" className="px-6 py-3 font-medium">Invoice</th>
+            <th scope="col" className="px-6 py-3 font-medium">Nilai</th>
+            <th scope="col" className="px-6 py-3 font-medium">Status</th>
+            <th scope="col" className="px-6 py-3 font-medium">Jatuh Tempo</th>
+            <th scope="col" className="px-6 py-3 font-medium">Aksi</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border bg-background text-sm">
+        <tbody className="divide-y divide-white/5 bg-transparent text-sm text-white/85">
           {invoices.map((invoice) => (
             <InvoiceRow
               key={`${invoice.id}-${invoice.status}`}
@@ -55,13 +45,11 @@ export const InvoiceTable = ({
       </table>
 
       {loading ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-          Memuat data invoice...
-        </p>
+        <p className="px-6 py-10 text-center text-sm text-white/60">Memuat data invoice...</p>
       ) : null}
 
       {!loading && invoices.length === 0 ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+        <p className="px-6 py-10 text-center text-sm text-white/60">
           Belum ada invoice pada filter ini.
         </p>
       ) : null}

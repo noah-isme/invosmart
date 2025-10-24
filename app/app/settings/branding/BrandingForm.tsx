@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { type FormEvent, useMemo, useState } from "react";
 
 type BrandingFormState = {
@@ -33,6 +34,12 @@ type BrandingFormProps = {
   initialBranding: BrandingFormState;
 };
 
+const labelClass =
+  "text-[0.7rem] font-medium uppercase tracking-[0.32em] text-white/55";
+const inputClass =
+  "w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016]";
+const subtleText = "text-xs text-white/55";
+
 export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
   const [state, setState] = useState<BrandingFormState>(initialBranding);
   const [saving, setSaving] = useState(false);
@@ -47,6 +54,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
       borderColor: color,
       fontFamily,
       accentColor: color,
+      gradient: `linear-gradient(135deg, ${color}, rgba(34, 211, 238, 0.85))`,
     } as const;
   }, [state.primaryColor, state.fontFamily]);
 
@@ -101,12 +109,15 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 rounded-2xl border border-border bg-background/80 p-6 shadow-lg shadow-black/20"
+      className="glass-surface relative overflow-hidden rounded-[30px] border border-white/5 p-8 shadow-[0_28px_70px_rgba(8,10,16,0.55)]"
     >
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="logo-url" className="block text-sm font-medium text-foreground">
+      <div className="absolute -left-12 top-10 h-40 w-40 rounded-full bg-[#22D3EE]/20 blur-3xl" aria-hidden />
+      <div className="absolute -right-16 bottom-24 h-48 w-48 rounded-full bg-[#6366F1]/25 blur-[120px]" aria-hidden />
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr),minmax(0,0.9fr)]">
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <label htmlFor="logo-url" className={labelClass}>
               Logo URL
             </label>
             <input
@@ -119,20 +130,20 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
                 setState((previous) => ({ ...previous, logoUrl: event.target.value }))
               }
               placeholder="https://asset.brandmu/logo.png"
-              className="w-full rounded-md border border-border bg-card/60 px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className={inputClass}
               aria-describedby="logo-url-help"
             />
-            <p id="logo-url-help" className="text-xs text-muted-foreground">
-              Gunakan tautan gambar yang di-host di layanan eksternal seperti Cloudinary atau CDN brand Anda.
-              Aplikasi tidak menyimpan file biner secara langsung.
+            <p id="logo-url-help" className={subtleText}>
+              Gunakan tautan gambar yang di-host di layanan eksternal seperti Cloudinary atau CDN brand Anda. Aplikasi tidak
+              menyimpan file biner secara langsung.
             </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground" htmlFor="primary-color">
+          <div className="space-y-3">
+            <label className={labelClass} htmlFor="primary-color">
               Warna utama
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 id="primary-color"
                 type="color"
@@ -140,7 +151,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
                 onChange={(event) =>
                   setState((previous) => ({ ...previous, primaryColor: event.target.value }))
                 }
-                className="h-10 w-12 cursor-pointer rounded-md border border-border bg-transparent"
+                className="h-12 w-16 cursor-pointer rounded-2xl border border-white/10 bg-transparent shadow-[0_8px_30px_rgba(8,10,16,0.4)]"
                 aria-label="Pilih warna utama"
               />
               <input
@@ -150,15 +161,15 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
                   setState((previous) => ({ ...previous, primaryColor: event.target.value }))
                 }
                 placeholder="#6366F1"
-                className="flex-1 rounded-md border border-border bg-card/60 px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className={inputClass}
               />
             </div>
-            <p className="text-xs text-muted-foreground">Format warna hex, misal #1E3A8A.</p>
+            <p className={subtleText}>Format warna hex, misalnya #1E3A8A.</p>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="font-family" className="block text-sm font-medium text-foreground">
-              Font
+          <div className="space-y-3">
+            <label htmlFor="font-family" className={labelClass}>
+              Font utama PDF
             </label>
             <select
               id="font-family"
@@ -169,7 +180,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
                   fontFamily: event.target.value as BrandingFormState["fontFamily"],
                 }))
               }
-              className="w-full rounded-md border border-border bg-card/60 px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className={inputClass}
             >
               {Object.entries(FONT_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -180,63 +191,87 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
           </div>
         </div>
 
-        <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-card/50 p-5">
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-muted-foreground">Preview PDF</p>
-            <div
-              className="relative overflow-hidden rounded-lg border-2 bg-background/80 p-5 shadow-inner"
-              style={{ borderColor: previewStyle.borderColor, fontFamily: previewStyle.fontFamily }}
+        <div className="flex flex-col justify-between gap-6">
+          <div className="space-y-4">
+            <p className="text-[0.7rem] uppercase tracking-[0.32em] text-white/50">Preview PDF real-time</p>
+            <motion.div
+              key={`${previewStyle.borderColor}-${previewStyle.fontFamily}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="relative overflow-hidden rounded-[22px] p-[1px]"
+              style={{ background: previewStyle.gradient }}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-semibold" style={{ color: previewStyle.borderColor }}>
-                    {state.logoUrl ? "Brand Anda" : "InvoSmart"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Invoice profesional siap kirim</p>
+              <div
+                className="relative rounded-[20px] border border-white/10 bg-[rgba(14,16,22,0.92)] p-6 shadow-[0_18px_50px_rgba(8,10,16,0.6)]"
+                style={{ fontFamily: previewStyle.fontFamily }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xl font-semibold" style={{ color: previewStyle.borderColor }}>
+                      {state.logoUrl ? "Brand Anda" : "InvoSmart"}
+                    </p>
+                    <p className="text-xs text-white/50">Invoice profesional siap kirim</p>
+                  </div>
+                  <span
+                    className="rounded-full px-3 py-1 text-xs font-semibold"
+                    style={{
+                      backgroundColor: `${previewStyle.borderColor}1a`,
+                      color: previewStyle.borderColor,
+                    }}
+                  >
+                    INV-2024-001
+                  </span>
                 </div>
-                <span
-                  className="rounded-md px-2 py-1 text-xs"
-                  style={{ backgroundColor: `${previewStyle.borderColor}20`, color: previewStyle.borderColor }}
+
+                <div className="mt-6 space-y-2 text-sm text-white/80">
+                  <p>Klien: PT Kreatif</p>
+                  <p>Total: Rp 12.500.000</p>
+                  <p className="text-white/50">Ditandatangani digital melalui InvoSmart</p>
+                </div>
+
+                <motion.span
+                  layout
+                  className="absolute inset-x-0 bottom-0 flex h-12 items-center justify-end px-6 text-[10px] uppercase tracking-[0.4em] text-white/30"
+                  style={{ color: previewStyle.borderColor, opacity: 0.35 }}
                 >
-                  INV-2024-001
-                </span>
-              </div>
+                  Watermark · InvoSmart
+                </motion.span>
 
-              <div className="mt-4 space-y-1 text-xs text-foreground/80">
-                <p>Klien: PT Kreatif</p>
-                <p>Total: Rp 12.500.000</p>
-                <p className="text-muted-foreground">Ditandatangani digital melalui InvoSmart</p>
+                <motion.div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.6 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                />
               </div>
-
-              <span className="absolute bottom-3 right-4 text-[10px] uppercase tracking-wider text-foreground/30">
-                Watermark: InvoSmart
-              </span>
-            </div>
+            </motion.div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Preview hanya indikatif. Logo asli dan detail invoice Anda akan dirender otomatis saat export PDF.
+          <p className={subtleText}>
+            Preview bersifat ilustratif. Logo asli, skema warna, dan detail invoice akan dirender otomatis saat Anda mengunduh PDF.
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3" aria-live="polite" role="status">
-        <button
+      <div className="mt-10 flex flex-wrap items-center gap-3" aria-live="polite" role="status">
+        <motion.button
           type="submit"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-70"
+          whileTap={{ scale: 0.96 }}
+          className="gradient-button inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={saving}
         >
-          {saving ? "Menyimpan..." : "Simpan"}
-        </button>
+          {saving ? "Menyimpan preferensi..." : "Simpan perubahan"}
+        </motion.button>
 
         {success ? (
-          <span className="rounded-md border border-emerald-600/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+          <span className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-300 shadow-[0_10px_25px_rgba(16,185,129,0.15)]">
             {success}
           </span>
         ) : null}
 
         {error ? (
-          <span className="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <span className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300 shadow-[0_10px_25px_rgba(239,68,68,0.2)]">
             {error}
           </span>
         ) : null}

@@ -16,29 +16,29 @@ export default async function ProfilePage() {
   const email = session.user?.email ?? "Email tidak tersedia";
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-16">
-      <section className="space-y-2">
-        <p className="text-sm text-muted-foreground">Profil pengguna</p>
-        <h1 className="text-3xl font-semibold">{name}</h1>
-        <p className="text-sm text-muted-foreground">{email}</p>
+    <main className="relative mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 pb-20 pt-12">
+      <section className="space-y-3">
+        <p className="text-xs uppercase tracking-[0.42em] text-white/50">Profil pengguna</p>
+        <h1 className="text-4xl font-semibold text-white">{name}</h1>
+        <p className="text-sm text-white/60">{email}</p>
       </section>
 
-      <section className="space-y-4 rounded-xl border border-border bg-background/80 p-6 shadow-sm">
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold">Detail akun</h2>
-          <p className="text-sm text-muted-foreground">
-            Informasi dasar akun Anda. Gunakan tombol di bawah untuk keluar secara aman.
+      <section className="glass-surface space-y-6 rounded-[30px] border border-white/5 bg-white/[0.04] p-8 shadow-[0_28px_70px_rgba(8,10,16,0.55)]">
+        <div className="space-y-3">
+          <h2 className="text-xl font-semibold text-white">Detail akun</h2>
+          <p className="text-sm text-white/65">
+            Informasi dasar akun Anda. Gunakan tombol di bawah untuk keluar secara aman atau kembali ke dashboard.
           </p>
         </div>
 
-        <dl className="grid gap-3 text-sm">
-          <div className="flex flex-col gap-1 rounded-md border border-border/60 bg-background/60 p-3">
-            <dt className="text-xs uppercase text-muted-foreground">Nama</dt>
-            <dd className="font-medium">{name}</dd>
+        <dl className="grid gap-4 text-sm text-white/70 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <dt className="text-[0.65rem] uppercase tracking-[0.32em] text-white/45">Nama</dt>
+            <dd className="mt-2 text-base font-semibold text-white">{name}</dd>
           </div>
-          <div className="flex flex-col gap-1 rounded-md border border-border/60 bg-background/60 p-3">
-            <dt className="text-xs uppercase text-muted-foreground">Email</dt>
-            <dd className="font-medium">{email}</dd>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <dt className="text-[0.65rem] uppercase tracking-[0.32em] text-white/45">Email</dt>
+            <dd className="mt-2 text-base font-semibold text-white">{email}</dd>
           </div>
         </dl>
 
@@ -46,7 +46,7 @@ export default async function ProfilePage() {
           <SignOutButton />
           <Link
             href="/app"
-            className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:text-white"
           >
             Kembali ke dashboard
           </Link>
