@@ -4,6 +4,16 @@
 
 ---
 
+## 🎨 Tampilan Baru 2025
+
+Antarmuka InvoSmart kini hadir dengan gaya high-end SaaS: sidebar glassmorphism, kartu statistik bercahaya, dan form minimalis yang mendukung fokus pengguna. Lihat pratinjau dashboard terbaru berikut ini:
+
+![Pratinjau UI InvoSmart bergaya modern](https://dummyimage.com/1600x900/0e1016/ffffff&text=InvoSmart+Modern+Dashboard)
+
+> **Catatan:** Gunakan screenshot aktual dari lingkungan produksi saat melakukan dokumentasi resmi.
+
+---
+
 ## 🚀 Getting Started
 
 ### Prasyarat

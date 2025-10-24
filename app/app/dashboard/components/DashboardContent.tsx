@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
@@ -27,6 +28,11 @@ const statusToLabel: Record<InvoiceStatusValue, string> = {
 };
 
 const fetchErrorMessage = "Gagal memuat data invoice. Coba lagi.";
+
+const sectionFade = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0 },
+};
 
 export const DashboardContent = () => {
   const [filter, setFilter] = useState<InvoiceFilterValue>("ALL");
@@ -152,33 +158,50 @@ export const DashboardContent = () => {
   }, [filter]);
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-2">
-        <div>
-          <h1 className="text-3xl font-semibold">Dashboard Invoice</h1>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+    <motion.section
+      initial="hidden"
+      animate="visible"
+      variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="space-y-10"
+    >
+      <motion.header
+        variants={sectionFade}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="space-y-4"
+      >
+        <div className="space-y-3">
+          <p className="text-xs uppercase tracking-[0.42em] text-white/50">Ringkasan operasional</p>
+          <h1 className="text-4xl font-semibold text-white">Dashboard invoice</h1>
+          <p className="max-w-2xl text-base text-white/65">{subtitle}</p>
         </div>
         {error ? (
           <div
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            className="glass-surface rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4 text-sm text-red-200 shadow-[0_18px_45px_rgba(239,68,68,0.12)]"
           >
             {error}
           </div>
         ) : null}
-      </header>
+      </motion.header>
 
-      <DashboardStats stats={stats} />
+      <motion.div variants={sectionFade} transition={{ delay: 0.05, duration: 0.35, ease: "easeOut" }}>
+        <DashboardStats stats={stats} />
+      </motion.div>
 
-      <InvoiceFilter value={filter} onChange={handleFilterChange} />
+      <motion.div variants={sectionFade} transition={{ delay: 0.1, duration: 0.35, ease: "easeOut" }}>
+        <InvoiceFilter value={filter} onChange={handleFilterChange} />
+      </motion.div>
 
-      <InvoiceTable
-        invoices={invoices}
-        loading={loading}
-        pendingId={pendingId}
-        onUpdateStatus={handleUpdateStatus}
-        onDelete={handleDelete}
-      />
-    </section>
+      <motion.div variants={sectionFade} transition={{ delay: 0.15, duration: 0.35, ease: "easeOut" }}>
+        <InvoiceTable
+          invoices={invoices}
+          loading={loading}
+          pendingId={pendingId}
+          onUpdateStatus={handleUpdateStatus}
+          onDelete={handleDelete}
+        />
+      </motion.div>
+    </motion.section>
   );
 };

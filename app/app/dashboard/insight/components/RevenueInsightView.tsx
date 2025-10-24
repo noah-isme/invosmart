@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import {
   Bar,
   BarChart,
@@ -47,90 +48,141 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
   const statusData = aggregateStatus(insight);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <section className="grid gap-6 lg:grid-cols-3">
-        <article className="rounded-2xl border border-border bg-card/80 p-6 shadow-lg shadow-black/10 lg:col-span-2">
-          <header className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">
-                Monthly Revenue (Last 6 Months)
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Total pendapatan untuk setiap bulan berdasarkan invoice yang telah dibayar.
-              </p>
-            </div>
+        <motion.article
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="glass-surface relative overflow-hidden rounded-[28px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_70px_rgba(8,10,16,0.55)] lg:col-span-2"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.18),_transparent_55%)]" />
+          <header className="relative mb-6 space-y-2">
+            <h2 className="text-xl font-semibold text-white">Monthly Revenue (Last 6 Months)</h2>
+            <p className="text-sm text-white/60">
+              Tren revenue 6 bulan terakhir dan perbandingan status pembayaran untuk pengambilan keputusan lebih cepat.
+            </p>
           </header>
-          <div className="h-80" role="img" aria-label="Line chart showing revenue trends for the last six months">
+          <div className="relative h-80" role="img" aria-label="Line chart showing revenue trends for the last six months">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="4 4" stroke="#E5E7EB" />
-                <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
+                <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.15)" />
+                <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis
-                  stroke="#6B7280"
+                  stroke="#9CA3AF"
                   fontSize={12}
                   tickFormatter={(value) => formatCurrency(value as number)}
+                  tickLine={false}
+                  axisLine={false}
                 />
                 <Tooltip
                   formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(label) => `Month: ${label}`}
+                  labelFormatter={(label) => `Periode: ${label}`}
+                  contentStyle={{
+                    background: "rgba(24,27,34,0.9)",
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#F3F4F6",
+                    backdropFilter: "blur(12px)",
+                  }}
                 />
-                <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#2563EB" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="paid" stroke="#16A34A" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="overdue" stroke="#DC2626" strokeWidth={2} dot={false} />
+                <Legend
+                  wrapperStyle={{ color: "#E5E7EB" }}
+                  iconType="circle"
+                  verticalAlign="bottom"
+                  height={32}
+                />
+                <Line type="monotone" dataKey="revenue" stroke="#6366F1" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="paid" stroke="#22D3EE" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="overdue" stroke="#F87171" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </article>
-        <article className="rounded-2xl border border-border bg-card/80 p-6 shadow-lg shadow-black/10">
-          <header className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Paid vs Overdue invoices</h2>
-            <p className="text-sm text-muted-foreground">
-              Distribusi invoice yang telah dibayar dibandingkan dengan yang terlambat.
-            </p>
+        </motion.article>
+
+        <motion.article
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
+          className="glass-surface relative overflow-hidden rounded-[28px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_70px_rgba(8,10,16,0.55)]"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.16),_transparent_60%)]" />
+          <header className="relative mb-6">
+            <h2 className="text-xl font-semibold text-white">Paid vs Overdue invoices</h2>
+            <p className="text-sm text-white/60">Jumlah invoice yang dibayar dibandingkan dengan yang terlambat.</p>
           </header>
-          <div className="h-80" role="img" aria-label="Bar chart comparing paid and overdue invoices">
+          <div className="relative h-80" role="img" aria-label="Bar chart comparing paid and overdue invoices">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData}>
-                <CartesianGrid strokeDasharray="4 4" stroke="#E5E7EB" />
-                <XAxis dataKey="status" stroke="#6B7280" fontSize={12} />
-                <YAxis stroke="#6B7280" fontSize={12} allowDecimals={false} />
-                <Tooltip formatter={(value: number) => `${value} invoices`} />
-                <Bar dataKey="value" fill="#7C3AED" radius={[8, 8, 0, 0]} />
+                <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.12)" />
+                <XAxis dataKey="status" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#9CA3AF" fontSize={12} allowDecimals={false} tickLine={false} axisLine={false} />
+                <Tooltip
+                  formatter={(value: number) => `${value} invoice`}
+                  contentStyle={{
+                    background: "rgba(14,16,22,0.92)",
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#F3F4F6",
+                    backdropFilter: "blur(12px)",
+                  }}
+                />
+                <Bar dataKey="value" radius={[14, 14, 0, 0]} fill="url(#statusGradient)" />
+                <defs>
+                  <linearGradient id="statusGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#22D3EE" />
+                  </linearGradient>
+                </defs>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </article>
+        </motion.article>
       </section>
 
       <section className="grid gap-6 md:grid-cols-2">
-        <article className="rounded-2xl border border-border bg-card/80 p-6 shadow-lg shadow-black/10">
-          <h3 className="text-base font-semibold text-foreground">🏆 Top client by payment speed</h3>
+        <motion.article
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15, duration: 0.4, ease: "easeOut" }}
+          className="glass-surface rounded-[26px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_60px_rgba(8,10,16,0.45)]"
+        >
+          <h3 className="text-lg font-semibold text-white">🏆 Klien paling cepat membayar</h3>
           {insight.topClient ? (
-            <p className="mt-3 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{insight.topClient.client}</span> membayar rata-rata dalam
-              <span className="font-semibold text-foreground"> {insight.topClient.averageDays} hari</span> setelah invoice diterbitkan.
+            <p className="mt-4 text-sm text-white/70">
+              <span className="font-semibold text-white">{insight.topClient.client}</span> menyelesaikan pembayaran dalam
+              rata-rata <span className="text-white">{insight.topClient.averageDays} hari</span> setelah invoice diterbitkan.
             </p>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm text-white/60">
               Belum ada data pembayaran untuk menentukan klien tercepat.
             </p>
           )}
-        </article>
-        <article className="rounded-2xl border border-border bg-card/80 p-6 shadow-lg shadow-black/10">
-          <h3 className="text-base font-semibold text-foreground">⚠️ Clients with overdue invoices</h3>
+        </motion.article>
+
+        <motion.article
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
+          className="glass-surface rounded-[26px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_60px_rgba(8,10,16,0.45)]"
+        >
+          <h3 className="text-lg font-semibold text-white">⚠️ Klien dengan invoice overdue</h3>
           {insight.overdueClients.length ? (
-            <ul className="mt-3 list-disc pl-5 text-sm text-muted-foreground">
+            <ul className="mt-4 space-y-2 text-sm text-white/70">
               {insight.overdueClients.map((client) => (
-                <li key={client} className="text-foreground">
-                  {client}
+                <li
+                  key={client}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
+                >
+                  <span>{client}</span>
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/40">Overdue</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Tidak ada klien yang terlambat membayar saat ini.</p>
+            <p className="mt-4 text-sm text-white/60">Tidak ada klien yang terlambat membayar saat ini.</p>
           )}
-        </article>
+        </motion.article>
       </section>
     </div>
   );
