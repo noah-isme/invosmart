@@ -163,6 +163,45 @@ Contoh payload update status yang valid:
 
 ---
 
+## 🤖 AI Invoice Generator
+
+- **Endpoint**: `POST /api/invoices/ai`
+- **Input**: `{ "prompt": string }`
+- **Output**: `{ "data": { client, items[], dueAt?, notes? } }` – seluruh payload sudah divalidasi Zod sebelum dikirim ke frontend.
+- **Frontend**: `/app/ai-invoice` menampilkan textarea prompt, preview hasil AI, serta form edit penuh.
+- **Kegunaan**: Mengubah instruksi natural language menjadi draft invoice yang siap disimpan sebagai draft maupun dikirim.
+
+Contoh request:
+
+```http
+POST /api/invoices/ai
+Content-Type: application/json
+
+{
+  "prompt": "Buat invoice 2.5 juta untuk desain logo dan brand guide klien PT Alpha due 14 hari"
+}
+```
+
+Contoh respons sukses:
+
+```json
+{
+  "data": {
+    "client": "PT Alpha",
+    "items": [
+      { "name": "Desain Logo", "qty": 1, "price": 1500000 },
+      { "name": "Brand Guidelines", "qty": 1, "price": 1000000 }
+    ],
+    "dueAt": "2024-06-15T00:00:00.000Z",
+    "notes": "Pembayaran maksimal 14 hari setelah invoice diterima."
+  }
+}
+```
+
+Jika AI gagal mengembalikan struktur valid, endpoint merespons `400` dengan pesan ramah pengguna dan payload `fallback` berisi draft kosong agar pengguna dapat melanjutkan secara manual.
+
+---
+
 ## 🧱 Arsitektur & Stack
 
 | Layer | Teknologi | Highlight |

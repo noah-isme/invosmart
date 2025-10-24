@@ -36,6 +36,7 @@ export const InvoiceFormSchema = z.object({
   items: z.array(InvoiceItemSchema).min(1, "At least one item"),
   taxRate: z.number().default(0.1),
   dueAt: z.string().datetime().nullable(),
+  notes: z.string().max(500).nullable().optional(),
 });
 
 export type InvoiceForm = z.infer<typeof InvoiceFormSchema>;
@@ -53,7 +54,6 @@ export const invoiceStatusValues = InvoiceStatusEnum.options;
 
 export const InvoiceCreateSchema = InvoiceFormSchema.extend({
   status: InvoiceStatusEnum.default("DRAFT"),
-  notes: z.string().max(500).nullable().optional(),
 });
 
 export type InvoiceCreateInput = z.infer<typeof InvoiceCreateSchema>;
@@ -65,12 +65,26 @@ export const InvoiceUpdateSchema = InvoiceFormSchema.extend({
   total: z.number().int().nonnegative(),
   status: InvoiceStatusEnum,
   issuedAt: z.string(),
-  notes: z.string().max(500).nullable().optional(),
 });
 
 export type InvoiceUpdateInput = z.infer<typeof InvoiceUpdateSchema>;
 
 export const InvoiceItem = InvoiceItemSchema;
+
+export const AIInvoiceSchema = z.object({
+  client: z.string().min(1),
+  items: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        qty: z.number().positive(),
+        price: z.number().nonnegative(),
+      }),
+    )
+    .min(1),
+  dueAt: z.string().datetime().nullable().optional(),
+  notes: z.string().optional(),
+});
 
 export const generateInvoiceNumber = async (db: PrismaClient) => {
   const now = new Date();
