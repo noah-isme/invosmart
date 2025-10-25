@@ -27,6 +27,7 @@ export default async function ThemeSettingsPage() {
       themePrimary: true,
       themeAccent: true,
       themeMode: true,
+      brandingSyncWithTheme: true,
     },
   });
 
@@ -35,6 +36,8 @@ export default async function ThemeSettingsPage() {
     accent: user?.themeAccent?.toLowerCase() ?? FALLBACK_THEME.accent,
     mode: (user?.themeMode === "light" ? "light" : "dark") as "light" | "dark",
   };
+
+  const isBrandingSynced = Boolean(user?.brandingSyncWithTheme);
 
   const headline = session.user.name ?? session.user.email ?? "Pengguna";
 
@@ -55,7 +58,7 @@ export default async function ThemeSettingsPage() {
         </div>
       </header>
 
-      <ThemeSettingsPanel />
+      <ThemeSettingsPanel initialBrandingSync={isBrandingSynced} />
     </main>
   );
 }

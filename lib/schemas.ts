@@ -136,6 +136,7 @@ export const BrandingSchema = z.object({
     ])
     .optional(),
   fontFamily: z.union([z.literal("sans"), z.literal("serif"), z.literal("mono"), z.null()]).optional(),
+  syncWithTheme: z.boolean().optional(),
 });
 
 export type BrandingInput = z.infer<typeof BrandingSchema>;

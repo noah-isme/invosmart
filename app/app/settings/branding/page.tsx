@@ -25,6 +25,7 @@ export default async function BrandingSettingsPage() {
     logoUrl: user.logoUrl ?? "",
     primaryColor: user.primaryColor ?? FALLBACK_COLOR,
     fontFamily: (user.fontFamily as "sans" | "serif" | "mono" | null) ?? "sans",
+    syncWithTheme: Boolean(user.brandingSyncWithTheme),
   } as const;
 
   return (

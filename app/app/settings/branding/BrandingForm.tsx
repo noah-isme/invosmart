@@ -3,11 +3,13 @@
 import { type FormEvent, type MouseEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
+import { useTheme } from "@/context/ThemeContext";
 
 type BrandingFormState = {
   logoUrl: string;
   primaryColor: string;
   fontFamily: "sans" | "serif" | "mono";
+  syncWithTheme: boolean;
 };
 
 const DEFAULT_COLOR = "#6366f1";
@@ -56,6 +58,8 @@ const getAccessibleTextColor = (hex: string) => {
   return luminance > 0.5 ? "#111827" : "#F9FAFB";
 };
 
+const formatHexLabel = (value: string) => normaliseColor(value).toUpperCase();
+
 type BrandingFormProps = {
   initialBranding: BrandingFormState;
 };
@@ -66,19 +70,17 @@ const inputClass =
 const subtleText = "text-xs text-text/55";
 
 export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
+  const { primary: themePrimary } = useTheme();
   const [state, setState] = useState<BrandingFormState>(initialBranding);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [previewAnimating, setPreviewAnimating] = useState(false);
 
-  const accentColor = useMemo(() => normaliseColor(state.primaryColor), [state.primaryColor]);
+  const effectivePrimary = state.syncWithTheme ? themePrimary : state.primaryColor;
+  const accentColor = useMemo(() => normaliseColor(effectivePrimary), [effectivePrimary]);
   const fontFamily = useMemo(() => FONT_FAMILIES[state.fontFamily], [state.fontFamily]);
   const accentTextColor = useMemo(() => getAccessibleTextColor(accentColor), [accentColor]);
-  const accentTint = useMemo(() => {
-    const { r, g, b } = hexToRgb(accentColor);
-    return `rgba(${r}, ${g}, ${b}, 0.12)`;
-  }, [accentColor]);
   const accentLuminance = useMemo(() => relativeLuminance(hexToRgb(accentColor)), [accentColor]);
   const headingColor = accentLuminance < 0.25 ? "#F9FAFB" : accentColor;
   const statusTextColor = accentLuminance < 0.35 ? "#F9FAFB" : accentColor;
@@ -105,8 +107,9 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
 
     const payload = {
       logoUrl: state.logoUrl.trim() || null,
-      primaryColor: state.primaryColor.trim() || null,
+      primaryColor: (state.syncWithTheme ? themePrimary : state.primaryColor).trim() || null,
       fontFamily: state.fontFamily,
+      syncWithTheme: state.syncWithTheme,
     } as const;
 
     try {
@@ -123,7 +126,14 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
       }
 
       const body = (await response.json().catch(() => null)) as
-        | { data?: BrandingFormState }
+        | {
+            data?: {
+              logoUrl: string | null;
+              primaryColor: string | null;
+              fontFamily: string | null;
+              brandingSyncWithTheme?: boolean | null;
+            };
+          }
         | null;
 
       if (body?.data) {
@@ -131,6 +141,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
           logoUrl: body.data.logoUrl ?? "",
           primaryColor: body.data.primaryColor ?? DEFAULT_COLOR,
           fontFamily: (body.data.fontFamily ?? "sans") as BrandingFormState["fontFamily"],
+          syncWithTheme: Boolean(body.data.brandingSyncWithTheme),
         });
       }
 
@@ -143,7 +154,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
     }
   };
 
-  const pickerColor = normaliseColor(state.primaryColor);
+  const pickerColor = normaliseColor(effectivePrimary);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
@@ -178,6 +189,45 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
           </div>
 
           <div className="space-y-3">
+            <p className={labelClass}>Sinkronisasi warna</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={state.syncWithTheme}
+              onClick={() =>
+                setState((previous) => ({
+                  ...previous,
+                  syncWithTheme: !previous.syncWithTheme,
+                }))
+              }
+              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                state.syncWithTheme
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-white/10 bg-white/0 text-text"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg`}
+            >
+              <span className="max-w-[80%] font-medium">
+                Gunakan warna tema sebagai warna branding
+              </span>
+              <span
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+                  state.syncWithTheme ? "bg-primary/80" : "bg-white/20"
+                }`}
+                aria-hidden
+              >
+                <span
+                  className={`size-5 rounded-full bg-white shadow transition ${
+                    state.syncWithTheme ? "translate-x-5" : "translate-x-1"
+                  }`}
+                />
+              </span>
+            </button>
+            <p className={subtleText}>
+              Saat aktif, warna branding akan mengikuti tema aplikasi (saat ini {formatHexLabel(themePrimary)}).
+            </p>
+          </div>
+
+          <div className="space-y-3">
             <label className={labelClass} htmlFor="primary-color">
               Warna utama
             </label>
@@ -191,18 +241,24 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
                 }
                 className="h-12 w-16 cursor-pointer rounded-2xl border border-white/10 bg-transparent shadow-[0_8px_30px_rgba(8,10,16,0.4)]"
                 aria-label="Pilih warna utama"
+                disabled={state.syncWithTheme}
               />
               <input
                 type="text"
-                value={state.primaryColor}
+                value={state.syncWithTheme ? formatHexLabel(themePrimary) : state.primaryColor}
                 onChange={(event) =>
                   setState((previous) => ({ ...previous, primaryColor: event.target.value }))
                 }
                 placeholder="#6366F1"
                 className={inputClass}
+                disabled={state.syncWithTheme}
               />
             </div>
-            <p className={subtleText}>Format warna hex, misalnya #1E3A8A.</p>
+            <p className={subtleText}>
+              {state.syncWithTheme
+                ? "Warna mengikuti tema Anda dan akan diperbarui otomatis ketika tema berubah."
+                : "Format warna hex, misalnya #1E3A8A."}
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -227,73 +283,102 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
               ))}
             </select>
           </div>
+
+          <div className="space-y-3">
+            {error ? (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+                {error}
+              </div>
+            ) : null}
+            {success ? (
+              <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+                {success}
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3" aria-live="polite" role="status">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button
             type="submit"
-            onClick={(event) => handleSubmit(event)}
+            onClick={(event) => {
+              void handleSubmit(event);
+            }}
             disabled={saving}
-            className="px-6"
           >
-            {saving ? "Menyimpan preferensi..." : "Simpan perubahan"}
+            Simpan perubahan
           </Button>
-
-          {success ? (
-            <span className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200 shadow-[0_10px_25px_rgba(16,185,129,0.18)]">
-              {success}
-            </span>
-          ) : null}
-
-          {error ? (
-            <span className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-200 shadow-[0_10px_25px_rgba(239,68,68,0.22)]">
-              {error}
-            </span>
-          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={(event) => {
+              void handleSubmit(event);
+            }}
+            disabled={saving}
+          >
+            Simpan & tetap di halaman
+          </Button>
         </div>
       </form>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-[0_0_24px_rgba(0,0,0,0.25)] backdrop-blur-md">
-        <div
-          className={`transform rounded-xl border border-indigo-400/30 bg-bg/80 p-5 shadow-[0_0_24px_rgba(var(--color-primary)_/_0.25)] transition-all duration-300 ease-out ${
-            previewAnimating ? "scale-[0.98] opacity-90" : "scale-100 opacity-100"
-          }`}
-          style={{ borderColor: accentColor, fontFamily }}
-        >
-          <div className="flex items-start justify-between gap-4">
+      <aside
+        className={`rounded-2xl border border-white/10 bg-white/5 p-6 shadow-[0_0_24px_rgba(0,0,0,0.18)] backdrop-blur-md ${
+          previewAnimating ? "scale-[1.01] transition-transform duration-300" : ""
+        }`}
+        style={{ fontFamily }}
+      >
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex size-12 items-center justify-center rounded-2xl text-base font-semibold"
+              style={{ backgroundColor: accentColor, color: accentTextColor }}
+            >
+              {state.logoUrl ? "BR" : "IV"}
+            </div>
             <div>
-              <p className="text-xl font-semibold" style={{ color: headingColor }}>
+              <p className="text-xs uppercase tracking-[0.32em] text-text/55">Invoice Preview</p>
+              <p className="text-base font-semibold" style={{ color: headingColor }}>
                 {state.logoUrl ? "Brand Anda" : "InvoSmart"}
               </p>
-              <p className="text-xs text-text/60">Invoice profesional siap kirim</p>
             </div>
-            <span
-              className="rounded-full px-3 py-1 text-xs font-semibold"
-              style={{ backgroundColor: accentTint, color: accentTextColor }}
-            >
-              INV-2024-001
-            </span>
           </div>
 
-          <div className="mt-6 space-y-2 text-sm text-text/80">
-            <p>Klien: PT Kreatif</p>
-            <p>Total: Rp 12.500.000</p>
-            <p className="text-text/50">Ditandatangani digital melalui InvoSmart</p>
+          <div className="rounded-2xl border border-white/10 bg-white/0 p-4">
+            <p className="text-xs uppercase tracking-[0.32em] text-text/45">Primary Color</p>
+            <div className="mt-2 flex items-center gap-3">
+              <span
+                className="inline-flex size-10 items-center justify-center rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: accentColor, color: accentTextColor }}
+              >
+                {formatHexLabel(accentColor)}
+              </span>
+              <div>
+                <p className="text-sm text-text/70">Digunakan untuk heading dan tombol utama.</p>
+                <p className="text-xs text-text/55">
+                  {state.syncWithTheme
+                    ? "Mengikuti tema aplikasi untuk konsistensi visual."
+                    : "Dapat diubah sesuai warna brand Anda."}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div
-            className="mt-8 flex items-center justify-between rounded-xl bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.32em] text-text/35"
-            style={{ border: `1px solid ${accentTint}` }}
-          >
-            <span>Watermark · InvoSmart</span>
-            <span style={{ color: statusTextColor }}>Paid</span>
+          <div className="space-y-2 rounded-2xl border border-white/10 bg-white/0 p-4">
+            <p className="text-xs uppercase tracking-[0.32em] text-text/45">Tipografi</p>
+            <p className="text-base font-semibold" style={{ color: headingColor }}>
+              {FONT_LABELS[state.fontFamily]}
+            </p>
+            <p className="text-sm text-text/60">
+              Menyentuh tone {state.fontFamily === "serif" ? "elegan" : state.fontFamily === "mono" ? "teknologi" : "modern"}.
+            </p>
+            <p className="text-xs text-text/55" style={{ color: statusTextColor }}>
+              {state.syncWithTheme
+                ? "Mode sinkronisasi aktif — branding mengikuti warna tema."
+                : "Anda dapat menyesuaikan warna dan font secara manual."}
+            </p>
           </div>
         </div>
-
-        <p className="mt-4 text-sm text-text/60">
-          Preview indikatif. Detail aktual dirender saat export PDF.
-        </p>
-      </section>
+      </aside>
     </div>
   );
 };

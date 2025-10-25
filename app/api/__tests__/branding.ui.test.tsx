@@ -2,14 +2,20 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BrandingForm } from "@/app/app/settings/branding/BrandingForm";
+import { DEFAULT_THEME, ThemeContext, type ThemeContextValue } from "@/context/ThemeContext";
 
 describe("BrandingForm", () => {
   const fetchMock = vi.fn();
+  const originalFetch = global.fetch;
 
   beforeEach(() => {
     fetchMock.mockReset();
     // @ts-expect-error jsdom override
     global.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   it("mengirimkan perubahan branding dan menampilkan pesan sukses", async () => {
@@ -20,14 +26,26 @@ describe("BrandingForm", () => {
           logoUrl: "https://cdn.brand/logo.png",
           primaryColor: "#334155",
           fontFamily: "serif",
+          brandingSyncWithTheme: false,
         },
       }),
     });
 
+    const themeValue: ThemeContextValue = {
+      ...DEFAULT_THEME,
+      updateTheme: vi.fn(),
+      saveTheme: vi.fn(),
+      resetTheme: vi.fn(),
+      isLoading: false,
+      isSaving: false,
+    };
+
     render(
-      <BrandingForm
-        initialBranding={{ logoUrl: "", primaryColor: "#6366f1", fontFamily: "sans" }}
-      />,
+      <ThemeContext.Provider value={themeValue}>
+        <BrandingForm
+          initialBranding={{ logoUrl: "", primaryColor: "#6366f1", fontFamily: "sans", syncWithTheme: false }}
+        />
+      </ThemeContext.Provider>,
     );
 
     fireEvent.change(screen.getByLabelText(/logo url/i), {
@@ -42,7 +60,7 @@ describe("BrandingForm", () => {
       target: { value: "serif" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /simpan/i }));
+    fireEvent.click(screen.getByRole("button", { name: /simpan perubahan/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -59,6 +77,7 @@ describe("BrandingForm", () => {
       logoUrl: "https://cdn.brand/logo.png",
       primaryColor: "#334155",
       fontFamily: "serif",
+      syncWithTheme: false,
     });
 
     expect(

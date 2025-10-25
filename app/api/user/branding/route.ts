@@ -2,14 +2,36 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { BrandingSchema } from "@/lib/schemas";
+import { BrandingSchema, type BrandingInput } from "@/lib/schemas";
 import { enforceHttps } from "@/lib/security";
 import { authOptions } from "@/server/auth";
 
-type BrandingPayload = Partial<Record<"logoUrl" | "primaryColor" | "fontFamily", string | null>>;
+type BrandingPayload = {
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  fontFamily?: string | null;
+  syncWithTheme?: boolean;
+};
 
-const hasOwn = (object: object, key: string) =>
-  Object.prototype.hasOwnProperty.call(object, key);
+const hasOwn = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
+
+const normalizeBoolean = (value: unknown) => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  return Boolean(value);
+};
 
 const normalizePayload = (input: unknown): BrandingPayload => {
   if (!input || typeof input !== "object") {
@@ -34,10 +56,38 @@ const normalizePayload = (input: unknown): BrandingPayload => {
     normalized.fontFamily = value.length ? value : null;
   }
 
+  if (hasOwn(payload, "syncWithTheme")) {
+    normalized.syncWithTheme = normalizeBoolean(payload.syncWithTheme);
+  }
+
   return normalized;
 };
 
-export async function PUT(request: NextRequest) {
+const buildUpdateData = (data: BrandingInput) => {
+  const updateData: Parameters<typeof db.user.update>[0]["data"] = {};
+
+  if (hasOwn(data, "logoUrl")) {
+    updateData.logoUrl = data.logoUrl ?? null;
+  }
+
+  if (hasOwn(data, "primaryColor")) {
+    updateData.primaryColor = data.primaryColor ? data.primaryColor.toLowerCase() : null;
+  }
+
+  if (hasOwn(data, "fontFamily")) {
+    updateData.fontFamily = data.fontFamily ?? null;
+  }
+
+  if (hasOwn(data, "syncWithTheme")) {
+    updateData.brandingSyncWithTheme = Boolean(data.syncWithTheme);
+  }
+
+  return updateData;
+};
+
+const respondUnauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const handleUpdate = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -46,7 +96,7 @@ export async function PUT(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return respondUnauthorized();
   }
 
   let json: unknown;
@@ -70,21 +120,7 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const updateData: Parameters<typeof db.user.update>[0]["data"] = {};
-
-  if (hasOwn(parsed.data, "logoUrl")) {
-    updateData.logoUrl = parsed.data.logoUrl ?? null;
-  }
-
-  if (hasOwn(parsed.data, "primaryColor")) {
-    updateData.primaryColor = parsed.data.primaryColor
-      ? parsed.data.primaryColor.toLowerCase()
-      : null;
-  }
-
-  if (hasOwn(parsed.data, "fontFamily")) {
-    updateData.fontFamily = parsed.data.fontFamily ?? null;
-  }
+  const updateData = buildUpdateData(parsed.data);
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json(
@@ -101,6 +137,7 @@ export async function PUT(request: NextRequest) {
         logoUrl: true,
         primaryColor: true,
         fontFamily: true,
+        brandingSyncWithTheme: true,
       },
     });
 
@@ -111,4 +148,12 @@ export async function PUT(request: NextRequest) {
       { status: 500 },
     );
   }
+};
+
+export async function PUT(request: NextRequest) {
+  return handleUpdate(request);
+}
+
+export async function PATCH(request: NextRequest) {
+  return handleUpdate(request);
 }

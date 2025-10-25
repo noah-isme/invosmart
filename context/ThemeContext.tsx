@@ -13,13 +13,14 @@ type ThemeShape = {
 export interface ThemeContextValue extends ThemeShape {
   updateTheme: (next: Partial<ThemeShape>, options?: { persist?: boolean }) => Promise<void> | void;
   saveTheme: () => Promise<void>;
+  resetTheme: () => Promise<void>;
   isLoading: boolean;
   isSaving: boolean;
 }
 
 const STORAGE_KEY = "invosmart.theme";
 
-const DEFAULT_THEME: ThemeShape = {
+export const DEFAULT_THEME: ThemeShape = {
   primary: "#6366f1",
   accent: "#22d3ee",
   mode: "dark",
@@ -36,7 +37,7 @@ const MODE_TOKEN = {
   },
 } satisfies Record<ThemeMode, { bg: string; text: string }>;
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 const isHexColor = (value: string) => /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
 
@@ -274,15 +275,27 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     await handlePersist(stateRef.current);
   }, [handlePersist]);
 
+  const resetTheme = useCallback(async () => {
+    const normalizedDefault = {
+      primary: DEFAULT_THEME.primary,
+      accent: DEFAULT_THEME.accent,
+      mode: DEFAULT_THEME.mode,
+    } as const;
+
+    setAndApplyTheme(normalizedDefault);
+    await handlePersist(normalizedDefault);
+  }, [handlePersist, setAndApplyTheme]);
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       ...theme,
       updateTheme,
       saveTheme,
+      resetTheme,
       isLoading,
       isSaving,
     }),
-    [isLoading, isSaving, saveTheme, theme, updateTheme],
+    [isLoading, isSaving, resetTheme, saveTheme, theme, updateTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
