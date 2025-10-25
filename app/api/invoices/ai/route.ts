@@ -7,6 +7,8 @@ import { AIInvoiceSchema } from "@/lib/schemas";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
+import { withTiming } from "@/middleware/withTiming";
+import { captureServerEvent } from "@/lib/server-telemetry";
 
 const systemPrompt = `
 You are an invoice generation assistant.
@@ -49,7 +51,7 @@ const createClient = () => {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 };
 
-export async function POST(request: NextRequest) {
+const generateInvoiceDraft = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -103,6 +105,11 @@ export async function POST(request: NextRequest) {
     const jsonPayload = JSON.parse(extractJson(cleaned));
     const validated = AIInvoiceSchema.parse(jsonPayload);
 
+    void captureServerEvent("ai_invoice_draft_generated", {
+      userId: session.user.id,
+      itemCount: validated.items.length,
+    });
+
     return NextResponse.json({ data: validated });
   } catch {
     return NextResponse.json(
@@ -110,5 +117,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-}
+};
+
+export const POST = withTiming(generateInvoiceDraft);
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { AIInvoiceSchema } from "@/lib/schemas";
+import { trackEvent } from "@/lib/telemetry";
 import type { InvoiceFormInitialValues } from "@/components/invoices/InvoiceFormClient";
 
 import { AIInvoicePreview } from "./AIInvoicePreview";
@@ -75,12 +76,20 @@ export const AIInvoiceGeneratorClient = () => {
 
       setDraft(toFormValues(parsed.data));
       setReady(true);
+      trackEvent("ai_invoice_draft_ready", {
+        fallback: false,
+        itemCount: parsed.data.items.length,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal menghasilkan invoice.";
       setError(message);
 
       setDraft(fallbackValues ?? defaultDraft);
       setReady(true);
+      trackEvent("ai_invoice_draft_ready", {
+        fallback: Boolean(fallbackValues),
+        error: message,
+      });
     } finally {
       setLoading(false);
     }

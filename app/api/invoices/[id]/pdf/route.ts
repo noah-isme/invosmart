@@ -6,6 +6,8 @@ import { generateInvoicePDF } from "@/lib/pdf-generator";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
+import { withTiming } from "@/middleware/withTiming";
+import { captureServerEvent } from "@/lib/server-telemetry";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -24,7 +26,7 @@ const resolveParams = async (
   return Array.isArray(value) ? value[0] ?? null : value;
 };
 
-export async function GET(request: NextRequest, context: RouteContext) {
+const getInvoicePdf = async (request: NextRequest, context: RouteContext) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -67,6 +69,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     pdfBytes.byteOffset + pdfBytes.byteLength,
   ) as ArrayBuffer;
 
+  void captureServerEvent("invoice_pdf_generated", {
+    invoiceId: id,
+    userId: session.user.id,
+  });
+
   return new Response(arrayBuffer, {
     status: 200,
     headers: {
@@ -75,4 +82,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
       "Cache-Control": "private, max-age=0, must-revalidate",
     },
   });
-}
+};
+
+export const GET = withTiming(getInvoicePdf);

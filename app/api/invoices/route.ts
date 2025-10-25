@@ -13,6 +13,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { calculateTotals } from "@/lib/invoice-utils";
 import { markUserOverdueInvoices } from "@/lib/invoices";
 import { authOptions } from "@/server/auth";
+import { withTiming } from "@/middleware/withTiming";
+import { captureServerEvent } from "@/lib/server-telemetry";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,7 +22,7 @@ const unauthorized = () =>
 const invalidRequest = (message: string) =>
   NextResponse.json({ error: message }, { status: 400 });
 
-export async function GET(request: NextRequest) {
+const getInvoices = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -84,9 +86,9 @@ export async function GET(request: NextRequest) {
       overdue: overdueCount,
     },
   });
-}
+};
 
-export async function POST(request: NextRequest) {
+const createInvoice = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -155,5 +157,14 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  void captureServerEvent("invoice_created", {
+    invoiceId: invoice.id,
+    status,
+    amount: Number(invoice.total ?? 0),
+  });
+
   return NextResponse.json({ data: invoice }, { status: 201 });
-}
+};
+
+export const GET = withTiming(getInvoices);
+export const POST = withTiming(createInvoice);
