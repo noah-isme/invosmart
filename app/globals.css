@@ -2,25 +2,31 @@
 
 :root {
   color-scheme: dark;
-  --background: #0e1016;
-  --surface: #181b22;
-  --surface-soft: rgba(24, 27, 34, 0.8);
-  --surface-glow: rgba(99, 102, 241, 0.18);
-  --surface-border: rgba(255, 255, 255, 0.08);
-  --foreground: #f3f4f6;
-  --muted: #9ca3af;
-  --accent-primary: #6366f1;
-  --accent-secondary: #22d3ee;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: 99 102 241;
+  --color-accent: 34 211 238;
+  --color-bg: 14 16 22;
+  --color-text: 243 244 246;
+  --surface-base: 24 27 34;
+  --surface-elevated: 31 35 45;
+  --surface-border: 255 255 255;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: 255 255 255;
+  --color-text: 15 23 42;
+  --surface-base: 255 255 255;
+  --surface-elevated: 241 245 249;
+  --surface-border: 148 163 184;
 }
 
 body {
-  background: radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
-    radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.15), transparent 45%),
-    var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), "Inter", system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(var(--color-primary) / 0.18), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(var(--color-accent) / 0.15), transparent 45%),
+    rgb(var(--color-bg));
+  color: rgb(var(--color-text));
+  font-family: var(--font-geist-sans), "Inter", system-ui, sans-serif;
   margin: 0;
   min-height: 100vh;
 }
@@ -29,7 +35,8 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background-image: linear-gradient(120deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+  background-image:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(300deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 120px 120px;
   background-position: 0 0, 60px 60px;
@@ -63,30 +70,35 @@ button {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.35);
-  color: var(--foreground);
+  background: rgba(var(--color-primary) / 0.35);
+  color: rgb(var(--color-text));
 }
 
 .glass-surface {
-  background: var(--surface-soft);
-  border: 1px solid var(--surface-border);
+  background: rgba(var(--surface-base) / 0.8);
+  border: 1px solid rgba(var(--surface-border) / 0.08);
   backdrop-filter: blur(12px);
   box-shadow: 0 20px 45px rgba(8, 10, 14, 0.55);
 }
 
 .gradient-button {
-  background-image: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.35);
+  background-image: linear-gradient(
+    135deg,
+    rgba(var(--color-primary) / 0.95),
+    rgba(var(--color-accent) / 0.95)
+  );
+  box-shadow: 0 10px 25px rgba(var(--color-primary) / 0.35);
+  color: rgb(var(--color-text));
 }
 
 .gradient-button:hover {
-  box-shadow: 0 12px 32px rgba(34, 211, 238, 0.4);
+  box-shadow: 0 12px 32px rgba(var(--color-accent) / 0.4);
 }
 
 .gradient-border {
   position: relative;
   border-radius: 20px;
-  background: rgba(14, 16, 22, 0.9);
+  background: rgba(var(--surface-base) / 0.92);
 }
 
 .gradient-border::before {
@@ -94,14 +106,15 @@ button {
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(120deg, rgba(99, 102, 241, 0.6), rgba(34, 211, 238, 0.6));
+  background: linear-gradient(120deg, rgba(var(--color-primary) / 0.6), rgba(var(--color-accent) / 0.6));
   z-index: -1;
   opacity: 0.7;
 }
 
 .bg-diagonal-grid {
-  background-image: linear-gradient(125deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px),
-    linear-gradient(305deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-image:
+    linear-gradient(125deg, rgba(var(--color-primary) / 0.06) 1px, transparent 1px),
+    linear-gradient(305deg, rgba(var(--color-accent) / 0.05) 1px, transparent 1px);
   background-size: 140px 140px;
   background-position: 0 0, 70px 70px;
 }
@@ -111,7 +124,7 @@ button {
   display: block;
   border-radius: 1.75rem;
   padding: 2px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.65), rgba(34, 211, 238, 0.45));
+  background: linear-gradient(135deg, rgba(var(--color-primary) / 0.65), rgba(var(--color-accent) / 0.45));
   box-shadow: 0 25px 70px rgba(8, 10, 16, 0.55);
 }
 
@@ -120,7 +133,7 @@ button {
   position: absolute;
   inset: -35%;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(34, 211, 238, 0.25));
+  background: linear-gradient(135deg, rgba(var(--color-primary) / 0.35), rgba(var(--color-accent) / 0.25));
   filter: blur(48px);
   opacity: 0.45;
   z-index: -1;
@@ -129,8 +142,8 @@ button {
 .glow-border-inner {
   position: relative;
   border-radius: inherit;
-  background: rgba(24, 27, 34, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(var(--surface-base) / 0.82);
+  border: 1px solid rgba(var(--surface-border) / 0.08);
   backdrop-filter: blur(18px);
 }
 
@@ -146,9 +159,9 @@ a[data-tooltip]::after {
   transform: translate(8px, -50%);
   white-space: nowrap;
   font-size: 12px;
-  color: #e5e7eb;
+  color: rgb(var(--color-text) / 0.88);
   background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--surface-border) / 0.12);
   padding: 4px 8px;
   border-radius: 8px;
   opacity: 0;
@@ -158,4 +171,22 @@ a[data-tooltip]::after {
 
 .group:hover [data-tooltip]::after {
   opacity: 1;
+}
+
+@layer utilities {
+  .shadow-primary-glow {
+    box-shadow: 0 12px 32px rgba(var(--color-primary) / 0.35);
+  }
+
+  .shadow-accent-glow {
+    box-shadow: 0 16px 40px rgba(var(--color-accent) / 0.35);
+  }
+
+  .ring-primary {
+    --tw-ring-color: rgba(var(--color-primary) / 0.7);
+  }
+
+  .ring-accent {
+    --tw-ring-color: rgba(var(--color-accent) / 0.7);
+  }
 }

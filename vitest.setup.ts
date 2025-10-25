@@ -49,3 +49,29 @@ vi.mock("next/link", () => ({
     return React.createElement("a", { ...rest, href: resolvedHref }, children);
   },
 }));
+
+vi.mock("framer-motion", () => {
+  const createComponent = (tag: keyof HTMLElementTagNameMap) => {
+    const MockComponent = ({ children, ...rest }: PropsWithChildren<Record<string, unknown>>) =>
+      React.createElement(tag, rest, children);
+    MockComponent.displayName = `MockFramerMotion_${tag}`;
+    return MockComponent;
+  };
+
+  const AnimatePresence = ({ children }: PropsWithChildren) =>
+    React.createElement(React.Fragment, null, children);
+  AnimatePresence.displayName = "MockAnimatePresence";
+
+  const motion = new Proxy(
+    {},
+    {
+      get: (_target, key: string) => createComponent(key as keyof HTMLElementTagNameMap),
+    },
+  );
+
+  return {
+    __esModule: true,
+    AnimatePresence,
+    motion,
+  };
+});

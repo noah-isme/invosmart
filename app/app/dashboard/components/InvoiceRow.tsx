@@ -26,9 +26,9 @@ const statusLabels: Record<InvoiceStatusValue, string> = {
 
 const statusStyles: Record<InvoiceStatusValue, string> = {
   [InvoiceStatusEnum.enum.DRAFT]:
-    "border border-white/10 bg-white/[0.05] text-white/60",
+    "border border-white/10 bg-white/[0.05] text-text/60",
   [InvoiceStatusEnum.enum.SENT]:
-    "border border-[#6366F1]/40 bg-[#6366F1]/15 text-[#A5B4FC]",
+    "border border-primary/40 bg-primary/15 text-primary/80",
   [InvoiceStatusEnum.enum.PAID]:
     "border border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
   [InvoiceStatusEnum.enum.UNPAID]:
@@ -73,14 +73,14 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
     <tr className="transition hover:bg-white/[0.02]">
       <td className="px-6 py-5 align-top">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-white">{invoice.number}</p>
-          <p className="text-xs text-white/55">{invoice.client}</p>
+          <p className="text-sm font-semibold text-text">{invoice.number}</p>
+          <p className="text-xs text-text/55">{invoice.client}</p>
         </div>
       </td>
       <td className="px-6 py-5 align-top">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-white">{formatCurrency(invoice.total)}</p>
-          <p className="text-xs text-white/45">
+          <p className="text-sm font-semibold text-text">{formatCurrency(invoice.total)}</p>
+          <p className="text-xs text-text/45">
             Subtotal {formatCurrency(invoice.subtotal)} · Pajak {formatCurrency(invoice.tax)}
           </p>
         </div>
@@ -93,9 +93,9 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
         </span>
       </td>
       <td className="px-6 py-5 align-top">
-        <div className="space-y-1 text-xs text-white/60">
-          <p className="uppercase tracking-[0.24em] text-white/40">Due</p>
-          <p className="text-sm text-white/70">{formatDate(invoice.dueAt)}</p>
+        <div className="space-y-1 text-xs text-text/60">
+          <p className="uppercase tracking-[0.24em] text-text/40">Due</p>
+          <p className="text-sm text-text/70">{formatDate(invoice.dueAt)}</p>
         </div>
       </td>
       <td className="px-6 py-5 align-top">
@@ -110,7 +110,7 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
             onChange={(event) =>
               setSelectedStatus(event.target.value as InvoiceStatusValue)
             }
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016]"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             {invoiceStatusValues.map((status) => (
               <option key={status} value={status}>
@@ -123,7 +123,7 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
             type="button"
             onClick={() => onUpdateStatus(invoice.id, selectedStatus)}
             disabled={updateDisabled}
-            className="gradient-button w-full rounded-2xl px-3 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+            className="gradient-button w-full rounded-2xl px-3 py-2 text-sm font-semibold text-text transition disabled:cursor-not-allowed disabled:opacity-60"
           >
             Update
           </button>

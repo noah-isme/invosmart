@@ -9,10 +9,10 @@ type AppLayoutProps = {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0E1016] pb-12 text-[#F3F4F6]">
+    <div className="relative min-h-screen overflow-hidden bg-bg pb-12 text-text transition-colors duration-200">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-70 mix-blend-screen">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.22),_transparent_58%),_radial-gradient(circle_at_bottom,_rgba(34,211,238,0.15),_transparent_52%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(var(--color-primary)_/_0.22),_transparent_58%),_radial-gradient(circle_at_bottom,_rgba(var(--color-accent)_/_0.15),_transparent_52%)]" />
         </div>
         <div className="absolute inset-0 bg-diagonal-grid opacity-40" aria-hidden />
       </div>

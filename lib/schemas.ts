@@ -139,3 +139,19 @@ export const BrandingSchema = z.object({
 });
 
 export type BrandingInput = z.infer<typeof BrandingSchema>;
+
+export const ThemeUpdateSchema = z.object({
+  themePrimary: z
+    .string()
+    .trim()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Warna utama harus berupa kode hex, misal #6366F1.")
+    .optional(),
+  themeAccent: z
+    .string()
+    .trim()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Warna aksen harus berupa kode hex, misal #22D3EE.")
+    .optional(),
+  themeMode: z.enum(["light", "dark"]).optional(),
+});
+
+export type ThemeUpdateInput = z.infer<typeof ThemeUpdateSchema>;

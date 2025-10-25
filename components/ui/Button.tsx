@@ -65,12 +65,12 @@ export function Button({
     : undefined;
 
   const baseClasses =
-    "relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016]";
+    "relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 
   const variantClasses =
     variant === "primary"
-      ? "bg-indigo-500/90 text-white hover:bg-indigo-500"
-      : "bg-white/10 text-gray-100 hover:bg-white/20";
+      ? "bg-primary/90 text-text hover:bg-primary"
+      : "bg-white/10 text-text hover:bg-white/20";
 
   return (
     <button
@@ -81,14 +81,14 @@ export function Button({
       data-state={state}
       className={cn(
         baseClasses,
-        "hover:-translate-y-px hover:shadow-[0_0_12px_rgba(99,102,241,0.45)]",
+        "hover:-translate-y-px hover:shadow-[0_0_12px_rgba(var(--color-primary)_/_0.45)]",
         state === "loading" ? "cursor-progress" : "",
-        state === "success" ? "shadow-[0_0_18px_rgba(99,102,241,0.45)]" : "",
+        state === "success" ? "shadow-[0_0_18px_rgba(var(--color-primary)_/_0.45)]" : "",
         variantClasses,
         className,
       )}
     >
-      <span className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500/60 via-indigo-400/40 to-cyan-400/50 opacity-0 blur-lg transition-opacity duration-300 ease-out hover:opacity-40" />
+      <span className="absolute inset-0 -z-10 rounded-xl bg-[radial-gradient(circle_at_top,_rgba(var(--color-primary)_/_0.4),_transparent_60%),radial-gradient(circle_at_bottom,_rgba(var(--color-accent)_/_0.35),_transparent_55%)] opacity-0 blur-lg transition-opacity duration-300 ease-out hover:opacity-40" />
       {state === "loading" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
       {state === "success" ? <Check className="size-4" aria-hidden /> : null}
       <span className="transition-transform duration-200" aria-live="polite">

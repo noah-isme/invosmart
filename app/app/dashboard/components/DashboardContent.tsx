@@ -171,9 +171,9 @@ export const DashboardContent = () => {
         className="space-y-4"
       >
         <div className="space-y-3">
-          <p className="text-xs uppercase tracking-[0.42em] text-white/50">Ringkasan operasional</p>
-          <h1 className="text-4xl font-semibold text-white">Dashboard invoice</h1>
-          <p className="max-w-2xl text-base text-white/65">{subtitle}</p>
+          <p className="text-xs uppercase tracking-[0.42em] text-text/50">Ringkasan operasional</p>
+          <h1 className="text-4xl font-semibold text-text">Dashboard invoice</h1>
+          <p className="max-w-2xl text-base text-text/65">{subtitle}</p>
         </div>
         {error ? (
           <div

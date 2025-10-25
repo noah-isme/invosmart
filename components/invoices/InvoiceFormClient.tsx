@@ -166,10 +166,10 @@ const defaultSubmitLabels = {
 type SubmitAction = "DRAFT" | "SEND";
 
 const labelClass =
-  "text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-white/55";
+  "text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-text/55";
 const inputClass =
-  "w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016]";
-const subtleTextClass = "text-xs text-white/55";
+  "w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
+const subtleTextClass = "text-xs text-text/55";
 
 export const InvoiceFormClient = ({
   heading,
@@ -354,9 +354,9 @@ export const InvoiceFormClient = ({
   return (
     <main className="relative mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-20">
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.42em] text-white/50">Workspace invoice</p>
-        <h1 className="text-4xl font-semibold text-white">{heading}</h1>
-        <p className="max-w-2xl text-base text-white/70">{description}</p>
+        <p className="text-xs uppercase tracking-[0.42em] text-text/50">Workspace invoice</p>
+        <h1 className="text-4xl font-semibold text-text">{heading}</h1>
+        <p className="max-w-2xl text-base text-text/70">{description}</p>
       </header>
 
       <section className="glass-surface space-y-8 rounded-[30px] border border-white/5 bg-white/[0.04] p-8 shadow-[0_28px_70px_rgba(8,10,16,0.55)]">
@@ -417,14 +417,14 @@ export const InvoiceFormClient = ({
         <div className="space-y-6">
           <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Item invoice</h2>
+              <h2 className="text-lg font-semibold text-text">Item invoice</h2>
               <p className={subtleTextClass}>Susun detail layanan atau produk yang ditagihkan.</p>
             </div>
             <motion.button
               type="button"
               whileTap={{ scale: 0.95 }}
               onClick={handleAddItem}
-              className="gradient-button inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold text-white"
+              className="gradient-button inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold text-text"
             >
               Tambah item
             </motion.button>
@@ -508,18 +508,18 @@ export const InvoiceFormClient = ({
             })}
           </div>
 
-          <dl className="grid gap-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-6 text-sm text-white/70">
+          <dl className="grid gap-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-6 text-sm text-text/70">
             <div className="flex items-center justify-between">
               <dt>Subtotal</dt>
-              <dd className="font-semibold text-white">{currencyFormatter.format(totals.subtotal)}</dd>
+              <dd className="font-semibold text-text">{currencyFormatter.format(totals.subtotal)}</dd>
             </div>
             <div className="flex items-center justify-between">
               <dt>Pajak (10%)</dt>
-              <dd className="font-semibold text-white">{currencyFormatter.format(totals.tax)}</dd>
+              <dd className="font-semibold text-text">{currencyFormatter.format(totals.tax)}</dd>
             </div>
             <div className="flex items-center justify-between text-base">
-              <dt className="font-semibold text-white">Total</dt>
-              <dd className="text-lg font-semibold text-white">{currencyFormatter.format(totals.total)}</dd>
+              <dt className="font-semibold text-text">Total</dt>
+              <dd className="text-lg font-semibold text-text">{currencyFormatter.format(totals.total)}</dd>
             </div>
           </dl>
         </div>
@@ -535,7 +535,7 @@ export const InvoiceFormClient = ({
             type="button"
             whileTap={{ scale: 0.95 }}
             onClick={() => handleSubmit("DRAFT")}
-            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 font-semibold text-white/80 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 font-semibold text-text/80 transition hover:border-white/20 hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
             disabled={submitting}
           >
             {submitting ? submitLabels.draftLoading : submitLabels.draft}
@@ -544,7 +544,7 @@ export const InvoiceFormClient = ({
             type="button"
             whileTap={{ scale: 0.95 }}
             onClick={() => handleSubmit("SEND")}
-            className="gradient-button inline-flex items-center justify-center rounded-2xl px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="gradient-button inline-flex items-center justify-center rounded-2xl px-5 py-2 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-60"
             disabled={submitting}
           >
             {submitting ? submitLabels.sendLoading : submitLabels.send}

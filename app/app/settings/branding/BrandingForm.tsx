@@ -60,10 +60,10 @@ type BrandingFormProps = {
   initialBranding: BrandingFormState;
 };
 
-const labelClass = "text-[0.7rem] font-medium uppercase tracking-[0.32em] text-white/55";
+const labelClass = "text-[0.7rem] font-medium uppercase tracking-[0.32em] text-text/55";
 const inputClass =
-  "w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1016]";
-const subtleText = "text-xs text-white/55";
+  "w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
+const subtleText = "text-xs text-text/55";
 
 export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
   const [state, setState] = useState<BrandingFormState>(initialBranding);
@@ -255,7 +255,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-[0_0_24px_rgba(0,0,0,0.25)] backdrop-blur-md">
         <div
-          className={`transform rounded-xl border border-indigo-400/30 bg-[#0E1016]/80 p-5 shadow-[0_0_24px_rgba(99,102,241,0.25)] transition-all duration-300 ease-out ${
+          className={`transform rounded-xl border border-indigo-400/30 bg-bg/80 p-5 shadow-[0_0_24px_rgba(var(--color-primary)_/_0.25)] transition-all duration-300 ease-out ${
             previewAnimating ? "scale-[0.98] opacity-90" : "scale-100 opacity-100"
           }`}
           style={{ borderColor: accentColor, fontFamily }}
@@ -265,7 +265,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
               <p className="text-xl font-semibold" style={{ color: headingColor }}>
                 {state.logoUrl ? "Brand Anda" : "InvoSmart"}
               </p>
-              <p className="text-xs text-white/60">Invoice profesional siap kirim</p>
+              <p className="text-xs text-text/60">Invoice profesional siap kirim</p>
             </div>
             <span
               className="rounded-full px-3 py-1 text-xs font-semibold"
@@ -275,14 +275,14 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
             </span>
           </div>
 
-          <div className="mt-6 space-y-2 text-sm text-white/80">
+          <div className="mt-6 space-y-2 text-sm text-text/80">
             <p>Klien: PT Kreatif</p>
             <p>Total: Rp 12.500.000</p>
-            <p className="text-white/50">Ditandatangani digital melalui InvoSmart</p>
+            <p className="text-text/50">Ditandatangani digital melalui InvoSmart</p>
           </div>
 
           <div
-            className="mt-8 flex items-center justify-between rounded-xl bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.32em] text-white/35"
+            className="mt-8 flex items-center justify-between rounded-xl bg-white/[0.02] px-4 py-3 text-[11px] uppercase tracking-[0.32em] text-text/35"
             style={{ border: `1px solid ${accentTint}` }}
           >
             <span>Watermark · InvoSmart</span>
@@ -290,7 +290,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
           </div>
         </div>
 
-        <p className="mt-4 text-sm text-gray-400">
+        <p className="mt-4 text-sm text-text/60">
           Preview indikatif. Detail aktual dirender saat export PDF.
         </p>
       </section>
