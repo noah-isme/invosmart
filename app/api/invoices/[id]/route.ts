@@ -13,6 +13,8 @@ import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
+import { withTiming } from "@/middleware/withTiming";
+import { captureServerEvent } from "@/lib/server-telemetry";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -34,7 +36,7 @@ const resolveId = async (context: RouteContext) => {
   return id ?? null;
 };
 
-export async function GET(request: NextRequest, context: RouteContext) {
+const getInvoiceHandler = async (request: NextRequest, context: RouteContext) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -70,11 +72,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       where: { id },
       data: { status: InvoiceStatusEnum.enum.OVERDUE },
     });
+    void captureServerEvent("invoice_status_auto_overdue", {
+      invoiceId: id,
+    });
     return NextResponse.json({ data: updated });
   }
 
   return NextResponse.json({ data: invoice });
-}
+};
 
 const validateUpdateBody = async (request: NextRequest) => {
   try {
@@ -99,7 +104,7 @@ const ensureTotals = (payload: InvoiceUpdateInput) => {
   return { success: true as const, totals };
 };
 
-export async function PUT(request: NextRequest, context: RouteContext) {
+const updateInvoiceHandler = async (request: NextRequest, context: RouteContext) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -192,10 +197,23 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     data,
   });
 
-  return NextResponse.json({ data: updated });
-}
+  void captureServerEvent("invoice_updated", {
+    invoiceId: id,
+    status: updated.status,
+    total: Number(updated.total ?? 0),
+  });
 
-export async function DELETE(request: NextRequest, context: RouteContext) {
+  if (updated.status === InvoiceStatusEnum.enum.PAID) {
+    void captureServerEvent("invoice_paid", {
+      invoiceId: id,
+      total: Number(updated.total ?? 0),
+    });
+  }
+
+  return NextResponse.json({ data: updated });
+};
+
+const deleteInvoiceHandler = async (request: NextRequest, context: RouteContext) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -228,5 +246,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   await db.invoice.delete({ where: { id } });
 
+  void captureServerEvent("invoice_deleted", {
+    invoiceId: id,
+  });
+
   return new NextResponse(null, { status: 204 });
-}
+};
+
+export const GET = withTiming(getInvoiceHandler);
+export const PUT = withTiming(updateInvoiceHandler);
+export const DELETE = withTiming(deleteInvoiceHandler);

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { InvoiceFormSchema, InvoiceStatusEnum } from "@/lib/schemas";
 import { calculateTotals, type InvoiceItemInput } from "@/lib/invoice-utils";
+import { trackEvent } from "@/lib/telemetry";
 
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   style: "currency",
@@ -326,6 +327,18 @@ export const InvoiceFormClient = ({
       const result = (await response.json()) as {
         data?: { id: string };
       };
+
+      const status =
+        action === "SEND" ? InvoiceStatusEnum.enum.SENT : InvoiceStatusEnum.enum.DRAFT;
+      const totals = calculateTotals(payload.items, DEFAULT_TAX_RATE);
+
+      trackEvent(action === "SEND" ? "invoice_sent" : "invoice_created", {
+        invoiceId: result?.data?.id,
+        status,
+        subtotal: totals.subtotal,
+        total: totals.total,
+        itemCount: payload.items.length,
+      });
 
       if (result?.data?.id) {
         router.push(`/app/invoices/${result.data.id}`);

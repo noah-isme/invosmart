@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { trackEvent } from "@/lib/telemetry";
+
 type ThemeMode = "light" | "dark";
 
 type ThemeShape = {
@@ -264,6 +266,11 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       } catch {
         // Ignore network errors to avoid breaking the UI while offline.
       } finally {
+        trackEvent("theme_saved", {
+          primary: current.primary,
+          accent: current.accent,
+          mode: current.mode,
+        });
         setIsSaving(false);
       }
     },
@@ -300,6 +307,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
     setAndApplyTheme(normalizedDefault);
     await handlePersist(normalizedDefault);
+    trackEvent("theme_reset", normalizedDefault);
   }, [handlePersist, setAndApplyTheme]);
 
   const applyAiTheme = useCallback<ThemeContextValue["applyAiTheme"]>(
@@ -311,6 +319,12 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       };
 
       setAndApplyTheme(merged);
+      trackEvent("theme_ai_applied", {
+        primary: merged.primary,
+        accent: merged.accent,
+        mode: merged.mode,
+        persisted: Boolean(options?.persist),
+      });
 
       if (options?.persist) {
         await handlePersist(merged);

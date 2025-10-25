@@ -20,6 +20,7 @@ import { InsightCard } from "@/components/ui/InsightCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { SkeletonText } from "@/components/ui/Skeleton";
 import { useToast } from "@/context/ToastContext";
+import { trackEvent } from "@/lib/telemetry";
 import type { RevenueInsight } from "@/lib/analytics";
 import type { AiInvoiceInsight, InvoiceInsightSummary } from "@/lib/schemas";
 
@@ -108,6 +109,10 @@ export function InsightClient({ summary, revenueInsight }: InsightClientProps) {
       setAiInsight(payload.data);
       setIsFallback(Boolean(payload.fallback));
 
+      trackEvent("ai_insight_generated", {
+        fallback: Boolean(payload.fallback),
+      });
+
       if (payload.fallback) {
         notify({
           title: "Insight AI menggunakan fallback",
@@ -119,6 +124,7 @@ export function InsightClient({ summary, revenueInsight }: InsightClientProps) {
       const fallbackInsight = buildLocalFallback(summary);
       setAiInsight(fallbackInsight);
       setIsFallback(true);
+      trackEvent("ai_insight_fallback", {});
       notify({
         title: "Insight AI tidak tersedia",
         description: error instanceof Error ? error.message : "Silakan coba lagi beberapa saat lagi.",

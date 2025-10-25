@@ -9,6 +9,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { FormError } from "@/components/auth/FormError";
 import { FormSuccess } from "@/components/auth/FormSuccess";
 import { LoginSchema, type LoginSchemaInput } from "@/lib/schemas";
+import { trackEvent } from "@/lib/telemetry";
 
 const errorMap: Record<string, string> = {
   CredentialsSignin: "Email atau password salah.",
@@ -94,6 +95,10 @@ export default function LoginForm() {
         setIsSubmitting(false);
         return;
       }
+
+      trackEvent("login_success", {
+        method: "credentials",
+      });
 
       setIsSubmitting(false);
       router.push(result.url ?? safeCallbackUrl);

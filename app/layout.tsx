@@ -3,8 +3,11 @@ import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
 import Footer from "@/components/layout/Footer";
+import { Banner } from "@/components/layout/Banner";
+import { TelemetryProvider } from "@/components/telemetry/TelemetryProvider";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { APP_VERSION } from "@/lib/release";
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
@@ -57,14 +60,17 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider>
-          <ToastProvider>
-            <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
-              <div className="flex-1 pb-24">{children}</div>
-              <Footer version="v1.0.0" />
-            </div>
-          </ToastProvider>
-        </ThemeProvider>
+        <TelemetryProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
+                <Banner text={`🎉 InvoSmart ${APP_VERSION} is live! Thanks for supporting our launch.`} />
+                <div className="flex-1 pb-24">{children}</div>
+                <Footer version={APP_VERSION} />
+              </div>
+            </ToastProvider>
+          </ThemeProvider>
+        </TelemetryProvider>
       </body>
     </html>
   );

@@ -20,6 +20,9 @@ export default defineConfig({
       "@prisma/client": path.resolve(__dirname, "test/mocks/prisma-client.ts"),
       bcrypt: path.resolve(__dirname, "test/mocks/bcrypt.ts"),
       openai: path.resolve(__dirname, "test/mocks/openai.ts"),
+      "posthog-js": path.resolve(__dirname, "test/mocks/posthog-js.ts"),
+      "posthog-node": path.resolve(__dirname, "test/mocks/posthog-node.ts"),
+      "@sentry/nextjs": path.resolve(__dirname, "test/mocks/sentry-nextjs.ts"),
     },
   },
   test: {
@@ -27,6 +30,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: true,
+    exclude: ["test/e2e/**", "**/node_modules/**", "**/dist/**"],
     sequence: {
       concurrent: false,
     },

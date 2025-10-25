@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
+import { trackEvent } from "@/lib/telemetry";
 
 import { InvoiceItemsTable } from "./InvoiceItemsTable";
 import { InvoiceSummary } from "./InvoiceSummary";
@@ -95,6 +96,10 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
       link.click();
       document.body.removeChild(link);
       setDownloadMessage("PDF berhasil diunduh.");
+      trackEvent("invoice_pdf_exported", {
+        invoiceId: invoice.id,
+        number: invoice.number,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal mengunduh PDF.";
       setDownloadError(message);
@@ -132,6 +137,16 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
 
     const payload = (await response.json()) as { data: InvoiceDetail };
     setInvoice(payload.data);
+    trackEvent("invoice_status_updated", {
+      invoiceId: invoice.id,
+      status: payload.data.status,
+    });
+    if (payload.data.status === InvoiceStatusEnum.enum.PAID) {
+      trackEvent("invoice_paid", {
+        invoiceId: invoice.id,
+        total: payload.data.total,
+      });
+    }
     router.refresh();
   };
 
@@ -147,6 +162,9 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
 
     router.push("/app/dashboard");
     router.refresh();
+    trackEvent("invoice_deleted", {
+      invoiceId: invoice.id,
+    });
   };
 
   const handleConfirm = async () => {

@@ -11,6 +11,8 @@ import {
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
+import { withTiming } from "@/middleware/withTiming";
+import { captureServerEvent } from "@/lib/server-telemetry";
 
 const MODEL = "gpt-4o-mini";
 
@@ -104,7 +106,7 @@ const parseAiResponse = (content: string) => {
   return AiInvoiceInsightSchema.parse(payload);
 };
 
-export async function POST(request: NextRequest) {
+const generateInsight = async (request: NextRequest) => {
   const httpsResult = enforceHttps(request);
   if (httpsResult) {
     return httpsResult;
@@ -161,8 +163,17 @@ export async function POST(request: NextRequest) {
 
     const insight = parseAiResponse(content);
 
+    void captureServerEvent("ai_invoice_insight_generated", {
+      userId: session.user.id,
+      topClient: insight.topClient,
+    });
+
     return NextResponse.json({ data: insight, fallback: false });
   } catch (error) {
+    void captureServerEvent("ai_invoice_insight_fallback", {
+      userId: session.user.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
       {
         data: fallback,
@@ -173,4 +184,6 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     );
   }
-}
+};
+
+export const POST = withTiming(generateInsight);
