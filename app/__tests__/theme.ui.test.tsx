@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 import { db } from "@/lib/db";
 import ThemeSettingsPage from "@/app/app/settings/theme/page";
 import { ThemeSettingsPanel } from "@/app/app/settings/theme/ThemeSettingsPanel";
@@ -27,7 +28,9 @@ describe("Theme settings UI", () => {
   it("menyesuaikan warna preview saat picker diubah", async () => {
     render(
       <ThemeProvider>
-        <ThemeSettingsPanel />
+        <ToastProvider>
+          <ThemeSettingsPanel initialBrandingSync={false} brandName="Tester" brandLogoUrl={null} />
+        </ToastProvider>
       </ThemeProvider>,
     );
 

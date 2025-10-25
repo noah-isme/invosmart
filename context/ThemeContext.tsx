@@ -14,6 +14,10 @@ export interface ThemeContextValue extends ThemeShape {
   updateTheme: (next: Partial<ThemeShape>, options?: { persist?: boolean }) => Promise<void> | void;
   saveTheme: () => Promise<void>;
   resetTheme: () => Promise<void>;
+  applyAiTheme: (
+    suggestion: { primary: string; accent: string; mode?: ThemeMode | null | undefined },
+    options?: { persist?: boolean },
+  ) => Promise<void>;
   isLoading: boolean;
   isSaving: boolean;
 }
@@ -286,16 +290,34 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     await handlePersist(normalizedDefault);
   }, [handlePersist, setAndApplyTheme]);
 
+  const applyAiTheme = useCallback<ThemeContextValue["applyAiTheme"]>(
+    async (suggestion, options) => {
+      const merged: ThemeShape = {
+        primary: normalizeHex(suggestion.primary, stateRef.current.primary),
+        accent: normalizeHex(suggestion.accent, stateRef.current.accent),
+        mode: suggestion.mode ? normalizeMode(suggestion.mode) : stateRef.current.mode,
+      };
+
+      setAndApplyTheme(merged);
+
+      if (options?.persist) {
+        await handlePersist(merged);
+      }
+    },
+    [handlePersist, setAndApplyTheme],
+  );
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       ...theme,
       updateTheme,
       saveTheme,
       resetTheme,
+      applyAiTheme,
       isLoading,
       isSaving,
     }),
-    [isLoading, isSaving, resetTheme, saveTheme, theme, updateTheme],
+    [applyAiTheme, isLoading, isSaving, resetTheme, saveTheme, theme, updateTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

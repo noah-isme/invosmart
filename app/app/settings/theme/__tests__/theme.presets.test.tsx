@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ThemeSettingsPanel } from "@/app/app/settings/theme/ThemeSettingsPanel";
 import { DEFAULT_THEME, ThemeContext, type ThemeContextValue } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 describe("Theme presets", () => {
   it("menerapkan warna preset ke konteks tema", () => {
@@ -10,6 +11,7 @@ describe("Theme presets", () => {
     const themeValue: ThemeContextValue = {
       ...DEFAULT_THEME,
       updateTheme,
+      applyAiTheme: vi.fn(),
       saveTheme: vi.fn(),
       resetTheme: vi.fn(),
       isLoading: false,
@@ -18,7 +20,9 @@ describe("Theme presets", () => {
 
     render(
       <ThemeContext.Provider value={themeValue}>
-        <ThemeSettingsPanel initialBrandingSync={false} />
+        <ToastProvider>
+          <ThemeSettingsPanel initialBrandingSync={false} brandName="Acme" brandLogoUrl={null} />
+        </ToastProvider>
       </ThemeContext.Provider>,
     );
 

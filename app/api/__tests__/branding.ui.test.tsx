@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BrandingForm } from "@/app/app/settings/branding/BrandingForm";
 import { DEFAULT_THEME, ThemeContext, type ThemeContextValue } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 describe("BrandingForm", () => {
   const fetchMock = vi.fn();
@@ -36,15 +37,24 @@ describe("BrandingForm", () => {
       updateTheme: vi.fn(),
       saveTheme: vi.fn(),
       resetTheme: vi.fn(),
+      applyAiTheme: vi.fn(),
       isLoading: false,
       isSaving: false,
     };
 
     render(
       <ThemeContext.Provider value={themeValue}>
-        <BrandingForm
-          initialBranding={{ logoUrl: "", primaryColor: "#6366f1", fontFamily: "sans", syncWithTheme: false }}
-        />
+        <ToastProvider>
+          <BrandingForm
+            initialBranding={{
+              logoUrl: "",
+              primaryColor: "#6366f1",
+              fontFamily: "sans",
+              syncWithTheme: false,
+              useThemeForPdf: false,
+            }}
+          />
+        </ToastProvider>
       </ThemeContext.Provider>,
     );
 
@@ -78,6 +88,7 @@ describe("BrandingForm", () => {
       primaryColor: "#334155",
       fontFamily: "serif",
       syncWithTheme: false,
+      useThemeForPdf: false,
     });
 
     expect(

@@ -1,15 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME, useTheme } from "@/context/ThemeContext";
+import { useToast } from "@/context/ToastContext";
 
 type ThemeMode = "light" | "dark";
 
 type ThemeSettingsPanelProps = {
   initialBrandingSync: boolean;
+  brandName: string;
+  brandLogoUrl?: string | null;
 };
 
 const PRESET_THEMES = [
@@ -17,6 +21,11 @@ const PRESET_THEMES = [
   { name: "Amethyst", primary: "#8B5CF6", accent: "#EC4899" },
   { name: "Sunset", primary: "#F59E0B", accent: "#EF4444" },
   { name: "Emerald", primary: "#10B981", accent: "#14B8A6" },
+] as const;
+
+const AI_BASE_PRESETS = [
+  { name: "Nordic Calm", primary: "#5E81AC", accent: "#88C0D0" },
+  { name: "Solar Burst", primary: "#FBBF24", accent: "#EF4444" },
 ] as const;
 
 const formatHexLabel = (value: string) => value.toUpperCase();
@@ -111,12 +120,16 @@ export const PreviewCard = ({ primary, accent, mode }: { primary: string; accent
   );
 };
 
-export const ThemeSettingsPanel = ({ initialBrandingSync }: ThemeSettingsPanelProps) => {
+export const ThemeSettingsPanel = ({ initialBrandingSync, brandName, brandLogoUrl }: ThemeSettingsPanelProps) => {
   const brandingSyncRef = useRef(initialBrandingSync);
-  const { primary, accent, mode, updateTheme, saveTheme, resetTheme, isLoading, isSaving } = useTheme();
+  const { primary, accent, mode, updateTheme, saveTheme, resetTheme, applyAiTheme, isLoading, isSaving } = useTheme();
+  const { notify } = useToast();
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiDescription, setAiDescription] = useState<string | null>(null);
+  const [aiLabel, setAiLabel] = useState<string | null>(null);
+  const [aiDynamicPresets, setAiDynamicPresets] = useState<Array<{ name: string; primary: string; accent: string }>>([]);
 
   const syncBrandingWithTheme = useCallback(
     async (color: string) => {
@@ -160,11 +173,78 @@ export const ThemeSettingsPanel = ({ initialBrandingSync }: ThemeSettingsPanelPr
     void updateTheme({ mode: value });
   };
 
-  const handlePresetSelect = (preset: (typeof PRESET_THEMES)[number]) => {
+  const handlePresetSelect = (preset: { primary: string; accent: string }) => {
     clearMessages();
     setHasPendingChanges(true);
     void updateTheme({ primary: preset.primary, accent: preset.accent });
   };
+
+  const aiPresets = useMemo(
+    () => [...aiDynamicPresets, ...AI_BASE_PRESETS],
+    [aiDynamicPresets],
+  );
+
+  const handleAiSuggestion = useCallback(async () => {
+    clearMessages();
+
+    try {
+      const response = await fetch("/api/ai/theme-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandName,
+          logoUrl: brandLogoUrl ?? undefined,
+          preferredMode: mode,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message = body?.error ?? "Gagal mendapatkan rekomendasi AI.";
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as {
+        data?: { primary: string; accent: string; label: string; description: string; mode?: ThemeMode };
+      };
+
+      const suggestion = payload?.data;
+
+      if (!suggestion) {
+        throw new Error("Respons AI tidak dikenali.");
+      }
+
+      await applyAiTheme({
+        primary: suggestion.primary,
+        accent: suggestion.accent,
+        mode: suggestion.mode ?? mode,
+      });
+
+      setHasPendingChanges(true);
+      setAiDescription(suggestion.description);
+      setAiLabel(suggestion.label);
+      setAiDynamicPresets((previous) => {
+        const filtered = previous.filter(
+          (preset) => preset.name.toLowerCase() !== suggestion.label.toLowerCase(),
+        );
+        const nextPreset = {
+          name: suggestion.label,
+          primary: suggestion.primary,
+          accent: suggestion.accent,
+        };
+        return [nextPreset, ...filtered].slice(0, 5);
+      });
+
+      notify({
+        title: "🎨 Tema AI berhasil diterapkan!",
+        description: suggestion.label,
+        variant: "success",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Tidak dapat memproses saran AI saat ini.";
+      setError(message);
+    }
+  }, [applyAiTheme, brandLogoUrl, brandName, mode, notify]);
 
   const handleSave = async () => {
     clearMessages();
@@ -226,6 +306,35 @@ export const ThemeSettingsPanel = ({ initialBrandingSync }: ThemeSettingsPanelPr
                     background: `linear-gradient(45deg, ${preset.primary}, ${preset.accent})`,
                   }}
                   className="h-12 rounded-xl shadow-[0_0_16px_rgba(0,0,0,0.35)] transition-transform duration-200 ease-out hover:scale-[1.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:ring-primary/60"
+                  aria-label={`Apply ${preset.name} theme`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-medium uppercase tracking-[0.32em] text-text/45">AI Suggested</p>
+              <Button
+                onClick={async () => {
+                  await handleAiSuggestion();
+                }}
+                variant="accent"
+              >
+                <Sparkles className="size-4" aria-hidden />
+                Dapatkan Saran AI
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-4">
+              {aiPresets.map((preset) => (
+                <button
+                  key={`${preset.name}-${preset.primary}-${preset.accent}`}
+                  type="button"
+                  onClick={() => handlePresetSelect(preset)}
+                  style={{
+                    background: `linear-gradient(60deg, ${preset.primary}, ${preset.accent})`,
+                  }}
+                  className="h-12 rounded-xl border border-white/10 shadow-[0_0_16px_rgba(0,0,0,0.32)] transition-transform duration-200 ease-out hover:scale-[1.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:ring-accent/60"
                   aria-label={`Apply ${preset.name} theme`}
                 />
               ))}
@@ -299,6 +408,14 @@ export const ThemeSettingsPanel = ({ initialBrandingSync }: ThemeSettingsPanelPr
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md">
         <PreviewCard primary={primary} accent={accent} mode={mode} />
+        {aiDescription ? (
+          <div className="mt-6 space-y-1 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent/80">
+              {aiLabel ?? "AI Recommendation"}
+            </p>
+            <p>{aiDescription}</p>
+          </div>
+        ) : null}
       </section>
     </div>
   );

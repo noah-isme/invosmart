@@ -6,7 +6,7 @@ import { Check, Loader2 } from "lucide-react";
 type ButtonState = "idle" | "loading" | "success";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "accent";
   successLabel?: string;
 };
 
@@ -74,6 +74,10 @@ export function Button({
 
     if (variant === "secondary") {
       return "bg-white/10 text-text hover:bg-white/20";
+    }
+
+    if (variant === "accent") {
+      return "bg-accent/90 text-slate-900 hover:bg-accent";
     }
 
     return "border border-white/15 bg-transparent text-text hover:border-white/25 hover:bg-white/5";

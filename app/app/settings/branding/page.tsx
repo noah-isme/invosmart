@@ -26,6 +26,7 @@ export default async function BrandingSettingsPage() {
     primaryColor: user.primaryColor ?? FALLBACK_COLOR,
     fontFamily: (user.fontFamily as "sans" | "serif" | "mono" | null) ?? "sans",
     syncWithTheme: Boolean(user.brandingSyncWithTheme),
+    useThemeForPdf: Boolean(user.useThemeForPdf),
   } as const;
 
   return (

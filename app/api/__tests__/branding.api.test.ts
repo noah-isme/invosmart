@@ -9,6 +9,7 @@ type BrandingSelection = {
   primaryColor: string | null;
   fontFamily: string | null;
   brandingSyncWithTheme: boolean;
+  useThemeForPdf: boolean;
 };
 
 describe("PUT /api/user/branding", () => {
@@ -31,6 +32,7 @@ describe("PUT /api/user/branding", () => {
       primaryColor: "#123abc",
       fontFamily: "mono",
       brandingSyncWithTheme: true,
+      useThemeForPdf: true,
     } satisfies BrandingSelection);
 
     const request = new Request("http://localhost/api/user/branding", {
@@ -41,6 +43,7 @@ describe("PUT /api/user/branding", () => {
         primaryColor: "#123ABC",
         fontFamily: "mono",
         syncWithTheme: true,
+        useThemeForPdf: true,
       }),
     });
 
@@ -54,8 +57,15 @@ describe("PUT /api/user/branding", () => {
         primaryColor: "#123abc",
         fontFamily: "mono",
         brandingSyncWithTheme: true,
+        useThemeForPdf: true,
       },
-      select: { logoUrl: true, primaryColor: true, fontFamily: true, brandingSyncWithTheme: true },
+      select: {
+        logoUrl: true,
+        primaryColor: true,
+        fontFamily: true,
+        brandingSyncWithTheme: true,
+        useThemeForPdf: true,
+      },
     });
 
     const payload = await response.json();
@@ -65,6 +75,7 @@ describe("PUT /api/user/branding", () => {
         primaryColor: "#123abc",
         fontFamily: "mono",
         brandingSyncWithTheme: true,
+        useThemeForPdf: true,
       },
     });
   });

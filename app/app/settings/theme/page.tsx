@@ -28,6 +28,7 @@ export default async function ThemeSettingsPage() {
       themeAccent: true,
       themeMode: true,
       brandingSyncWithTheme: true,
+      logoUrl: true,
     },
   });
 
@@ -58,7 +59,11 @@ export default async function ThemeSettingsPage() {
         </div>
       </header>
 
-      <ThemeSettingsPanel initialBrandingSync={isBrandingSynced} />
+      <ThemeSettingsPanel
+        initialBrandingSync={isBrandingSynced}
+        brandName={headline}
+        brandLogoUrl={user?.logoUrl}
+      />
     </main>
   );
 }

@@ -11,6 +11,7 @@ type BrandingPayload = {
   primaryColor?: string | null;
   fontFamily?: string | null;
   syncWithTheme?: boolean;
+  useThemeForPdf?: boolean;
 };
 
 const hasOwn = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
@@ -60,6 +61,10 @@ const normalizePayload = (input: unknown): BrandingPayload => {
     normalized.syncWithTheme = normalizeBoolean(payload.syncWithTheme);
   }
 
+  if (hasOwn(payload, "useThemeForPdf")) {
+    normalized.useThemeForPdf = normalizeBoolean(payload.useThemeForPdf);
+  }
+
   return normalized;
 };
 
@@ -80,6 +85,10 @@ const buildUpdateData = (data: BrandingInput) => {
 
   if (hasOwn(data, "syncWithTheme")) {
     updateData.brandingSyncWithTheme = Boolean(data.syncWithTheme);
+  }
+
+  if (hasOwn(data, "useThemeForPdf")) {
+    updateData.useThemeForPdf = Boolean(data.useThemeForPdf);
   }
 
   return updateData;
@@ -138,6 +147,7 @@ const handleUpdate = async (request: NextRequest) => {
         primaryColor: true,
         fontFamily: true,
         brandingSyncWithTheme: true,
+        useThemeForPdf: true,
       },
     });
 

@@ -36,6 +36,11 @@ const createUser = (): UserRecord => ({
   logoUrl: null,
   primaryColor: "#0ea5e9",
   fontFamily: "serif",
+  brandingSyncWithTheme: false,
+  useThemeForPdf: false,
+  themePrimary: "#6366f1",
+  themeAccent: "#22d3ee",
+  themeMode: "dark",
   createdAt: new Date("2024-09-01T00:00:00.000Z"),
   updatedAt: new Date("2024-10-01T00:00:00.000Z"),
 });

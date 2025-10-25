@@ -3,6 +3,7 @@ import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
@@ -48,7 +49,9 @@ export default function RootLayout({
     <html lang="id" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
-          <div className="relative min-h-screen bg-bg text-text transition-colors duration-200">{children}</div>
+          <ToastProvider>
+            <div className="relative min-h-screen bg-bg text-text transition-colors duration-200">{children}</div>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>
