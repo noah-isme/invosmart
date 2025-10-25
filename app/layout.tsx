@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
+import { ThemeProvider } from "@/context/ThemeContext";
+
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -43,11 +45,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
-      <body
-        className={`${plusJakarta.variable} ${geistMono.variable} bg-[#0E1016] text-[#F3F4F6] antialiased`}
-      >
-        <div className="relative min-h-screen">{children}</div>
+    <html lang="id" suppressHydrationWarning>
+      <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider>
+          <div className="relative min-h-screen bg-bg text-text transition-colors duration-200">{children}</div>
+        </ThemeProvider>
       </body>
     </html>
   );

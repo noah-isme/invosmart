@@ -30,10 +30,10 @@ export default async function BrandingSettingsPage() {
   return (
     <main className="relative mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-24 pt-10">
       <header className="space-y-4">
-        <p className="text-xs uppercase tracking-[0.42em] text-white/50">Pengaturan brand</p>
+        <p className="text-xs uppercase tracking-[0.42em] text-text/50">Pengaturan brand</p>
         <div className="max-w-2xl">
-          <h1 className="text-4xl font-semibold text-white">Branding dokumen PDF</h1>
-          <p className="mt-3 text-base text-white/70">
+          <h1 className="text-4xl font-semibold text-text">Branding dokumen PDF</h1>
+          <p className="mt-3 text-base text-text/70">
             Bangun pengalaman profesional dengan mengatur logo, warna utama, dan tipografi invoice. Setiap perubahan
             diterapkan secara real-time pada preview dan unduhan PDF Anda.
           </p>

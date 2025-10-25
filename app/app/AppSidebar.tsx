@@ -2,14 +2,8 @@
 
 import { type ComponentType, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Palette, Sparkles, UserCircle2 } from "lucide-react";
-import {
-  BarChart3,
-  FilePenLine,
-  LayoutDashboard,
-  PanelLeftClose,
-  PanelRightOpen,
-} from "lucide-react";
+import { LogOut, Palette, Sparkles, SunMoon, UserCircle2 } from "lucide-react";
+import { BarChart3, FilePenLine, LayoutDashboard, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -53,6 +47,12 @@ const navItems: NavItem[] = [
     label: "Profil",
     description: "Kelola identitas dan keamanan akun",
     icon: UserCircle2,
+  },
+  {
+    href: "/app/settings/theme",
+    label: "Tema",
+    description: "Personalisasi warna aplikasi",
+    icon: SunMoon,
   },
   {
     href: "/app/settings/branding",
@@ -113,12 +113,12 @@ export const AppSidebar = () => {
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
           <Link
             href="/app/dashboard"
-            className={`flex items-center gap-2 text-base font-semibold tracking-tight text-white transition-transform ${
+            className={`flex items-center gap-2 text-base font-semibold tracking-tight text-text transition-transform ${
               collapsed ? "scale-105" : "text-lg"
             }`}
             aria-label="Kembali ke dashboard"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(99,102,241,0.18)] text-sm font-bold text-white shadow-[0_10px_30px_rgba(99,102,241,0.32)]">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[rgba(var(--color-primary)_/_0.18)] text-sm font-bold text-text shadow-[0_10px_30px_rgba(var(--color-primary)_/_0.32)]">
               IS
             </span>
             {!collapsed ? <span>InvoSmart</span> : null}
@@ -129,7 +129,7 @@ export const AppSidebar = () => {
             whileTap={{ scale: 0.92 }}
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? "Perluas navigasi" : "Ciutkan navigasi"}
-            className="hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white/70 transition hover:bg-white/10 hover:text-white lg:inline-flex"
+            className="hidden rounded-xl border border-white/10 bg-white/5 p-2 text-text/70 transition hover:bg-white/10 hover:text-text lg:inline-flex"
           >
             {collapsed ? (
               <PanelRightOpen className="h-4 w-4" />
@@ -140,7 +140,7 @@ export const AppSidebar = () => {
         </div>
 
         {!collapsed ? (
-          <p className="mt-4 text-xs uppercase tracking-[0.32em] text-white/50">
+          <p className="mt-4 text-xs uppercase tracking-[0.32em] text-text/50">
             Navigasi utama
           </p>
         ) : null}
@@ -164,27 +164,27 @@ export const AppSidebar = () => {
                     aria-current={active ? "page" : undefined}
                     className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/5 px-4 py-3 text-sm font-medium transition-all duration-300 hover:border-white/20 hover:bg-white/[0.08] ${
                       active
-                        ? "bg-white/[0.08] text-white shadow-[0_15px_50px_rgba(99,102,241,0.35)]"
-                        : "text-white/80"
+                        ? "bg-white/[0.08] text-text shadow-[0_15px_50px_rgba(var(--color-primary)_/_0.35)]"
+                        : "text-text/80"
                     } ${collapsed ? "justify-center px-3" : ""}`}
                   >
                     {active ? (
                       <motion.span
                         layoutId="sidebar-active"
-                        className="absolute inset-y-2 left-2 w-[3px] rounded-full bg-gradient-to-b from-[#6366F1] to-[#22D3EE]"
+                        className="absolute inset-y-2 left-2 w-[3px] rounded-full bg-gradient-to-b from-primary to-accent"
                       />
                     ) : null}
                     <span
-                      className={`relative inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04] text-white/80 shadow-[0_10px_40px_rgba(8,10,16,0.45)] ${
-                        active ? "text-white" : ""
+                      className={`relative inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04] text-text/80 shadow-[0_10px_40px_rgba(8,10,16,0.45)] ${
+                        active ? "text-text" : ""
                       }`}
                     >
                       <Icon className="h-4 w-4" />
                     </span>
                     {!collapsed ? (
                       <span className="relative flex-1 text-left">
-                        <span className="block text-sm font-medium text-white">{item.label}</span>
-                        <span className="mt-1 block text-xs text-white/60">{item.description}</span>
+                        <span className="block text-sm font-medium text-text">{item.label}</span>
+                        <span className="mt-1 block text-xs text-text/60">{item.description}</span>
                       </span>
                     ) : null}
                   </Link>
@@ -194,28 +194,28 @@ export const AppSidebar = () => {
           </ul>
         </nav>
 
-        <div className={`mt-6 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.04] p-4 text-white/80 ${collapsed ? "flex-col" : ""}`}>
-          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-[#6366F1] to-[#22D3EE] text-sm font-semibold text-white shadow-[0_12px_30px_rgba(99,102,241,0.4)]">
+        <div className={`mt-6 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.04] p-4 text-text/80 ${collapsed ? "flex-col" : ""}`}>
+          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-semibold text-text shadow-[0_12px_30px_rgba(var(--color-primary)_/_0.4)]">
             {initials || "IS"}
           </span>
           {!collapsed ? (
             <div className="flex-1">
-              <p className="text-sm font-semibold text-white">{userName}</p>
+              <p className="text-sm font-semibold text-text">{userName}</p>
               {session?.user?.email ? (
-                <p className="text-xs text-white/60">{session.user.email}</p>
+                <p className="text-xs text-text/60">{session.user.email}</p>
               ) : null}
-              <p className="mt-2 text-[10px] uppercase tracking-[0.42em] text-white/40">
+              <p className="mt-2 text-[10px] uppercase tracking-[0.42em] text-text/40">
                 InvoSmart v0.5
               </p>
             </div>
           ) : null}
           {!collapsed ? (
-            <SignOutButton className="gradient-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#6366F1]/40 transition duration-200 hover:scale-[1.01]">
+            <SignOutButton className="gradient-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-text shadow-lg shadow-primary-glow transition duration-200 hover:scale-[1.01]">
               <LogOut className="h-4 w-4" />
               Keluar
             </SignOutButton>
           ) : (
-            <SignOutButton className="gradient-button inline-flex h-10 w-10 items-center justify-center rounded-2xl p-0 text-white shadow-lg">
+            <SignOutButton className="gradient-button inline-flex h-10 w-10 items-center justify-center rounded-2xl p-0 text-text shadow-lg">
               <LogOut className="h-4 w-4" />
             </SignOutButton>
           )}

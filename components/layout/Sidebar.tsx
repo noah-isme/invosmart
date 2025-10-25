@@ -9,6 +9,7 @@ import {
   LogOut,
   Palette,
   Sparkles,
+  SunMoon,
   UserCircle2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -59,6 +60,12 @@ const navItems: NavItem[] = [
     label: "Profil",
     description: "Kelola identitas dan keamanan akun",
     icon: UserCircle2,
+  },
+  {
+    href: "/app/settings/theme",
+    label: "Tema",
+    description: "Personalisasi warna aplikasi",
+    icon: SunMoon,
   },
   {
     href: "/app/settings/branding",
@@ -120,14 +127,14 @@ export default function Sidebar() {
     >
       <div className="flex h-full flex-col">
         <div className="flex items-center gap-3 px-4 pt-6">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-500/20 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(99,102,241,0.35)]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/20 text-sm font-semibold text-text shadow-primary-glow">
             {initials}
           </span>
           {!isCollapsed ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{session?.user?.name ?? "InvoSmart"}</p>
+              <p className="truncate text-sm font-semibold text-text">{session?.user?.name ?? "InvoSmart"}</p>
               {session?.user?.email ? (
-                <p className="truncate text-xs text-white/60">{session?.user?.email}</p>
+                <p className="truncate text-xs text-text/60">{session?.user?.email}</p>
               ) : null}
             </div>
           ) : null}
@@ -146,21 +153,21 @@ export default function Sidebar() {
                 aria-current={active ? "page" : undefined}
                 className={`relative flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition-colors duration-200 ${
                   active
-                    ? "bg-white/10 text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                    ? "bg-white/10 text-text shadow-[0_0_20px_rgba(var(--color-primary)_/_0.35)]"
+                    : "text-text/70 hover:bg-white/10 hover:text-text"
                 } ${isCollapsed ? "justify-center" : ""}`}
               >
                 <span
-                  className={`flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition-colors ${
-                    active ? "text-white" : ""
+                  className={`flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-text/80 transition-colors ${
+                    active ? "text-text" : ""
                   }`}
                 >
                   <Icon className="size-4" />
                 </span>
                 {!isCollapsed ? (
                   <span className="flex flex-col overflow-hidden">
-                    <span className="truncate text-sm text-gray-100">{item.label}</span>
-                    <span className="truncate text-xs text-gray-400">{item.description}</span>
+                    <span className="truncate text-sm text-text">{item.label}</span>
+                    <span className="truncate text-xs text-text/60">{item.description}</span>
                   </span>
                 ) : null}
               </Link>
@@ -174,19 +181,19 @@ export default function Sidebar() {
               isCollapsed ? "flex-col text-center" : "text-left"
             }`}
           >
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 text-sm font-semibold text-white shadow-[0_16px_45px_rgba(99,102,241,0.35)]">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-semibold text-text shadow-accent-glow">
               {initials}
             </div>
             {!isCollapsed ? (
               <div className="min-w-0 text-left">
-                <p className="truncate text-sm font-semibold text-white">
+                <p className="truncate text-sm font-semibold text-text">
                   {session?.user?.name ?? session?.user?.email ?? "Pengguna InvoSmart"}
                 </p>
-                <p className="text-xs text-white/60">Akun aktif</p>
+                <p className="text-xs text-text/60">Akun aktif</p>
               </div>
             ) : null}
             <SignOutButton
-              className={`inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-white/20 ${
+              className={`inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-medium text-text transition-all hover:bg-white/20 ${
                 isCollapsed ? "w-full" : ""
               }`}
             >
@@ -203,7 +210,7 @@ export default function Sidebar() {
         aria-label={isCollapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
         aria-pressed={isCollapsed}
         aria-expanded={!isCollapsed}
-        className="absolute bottom-4 left-1/2 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10"
+        className="absolute bottom-4 left-1/2 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-text/70 transition-colors hover:bg-white/10"
       >
         <ChevronsLeftRight className="size-5" />
       </button>
