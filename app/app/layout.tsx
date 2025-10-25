@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
+import { PageTransition } from "@/components/layout/PageTransition";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -17,11 +18,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="absolute inset-0 bg-diagonal-grid opacity-40" aria-hidden />
       </div>
 
-      <Topbar title="Dashboard" />
+      <Topbar />
 
       <div className="relative mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-16 lg:flex-row lg:gap-12">
         <Sidebar />
-        <main className="relative z-[1] flex-1 pb-16 lg:pb-24">{children}</main>
+        <main className="relative z-[1] flex-1 pb-16 lg:pb-24">
+          <PageTransition>{children}</PageTransition>
+        </main>
       </div>
     </div>
   );

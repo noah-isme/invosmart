@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 type ToastVariant = "default" | "success" | "error";
@@ -80,33 +81,41 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-3 pb-6"
+        className="pointer-events-none fixed top-5 right-5 z-50 flex w-full max-w-sm flex-col gap-3"
       >
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            role="status"
-            className={`pointer-events-auto w-[min(90%,420px)] rounded-2xl border px-4 py-3 shadow-lg backdrop-blur ${
-              variantClassName[toast.variant ?? "default"]
-            }`}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">{toast.title}</p>
-                {toast.description ? (
-                  <p className="text-xs opacity-80">{toast.description}</p>
-                ) : null}
+        <AnimatePresence initial={false}>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              layout
+              initial={{ opacity: 0, y: -12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              role="status"
+              className={`pointer-events-auto rounded-2xl border px-4 py-3 shadow-[0_12px_30px_rgba(8,10,16,0.45)] backdrop-blur ${
+                variantClassName[toast.variant ?? "default"]
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">{toast.title}</p>
+                  {toast.description ? (
+                    <p className="text-xs text-white/75">{toast.description}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dismiss(toast.id)}
+                  aria-label="Tutup notifikasi"
+                  className="rounded-lg px-2 py-1 text-xs font-medium uppercase tracking-wide text-current/60 transition hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  Tutup
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => dismiss(toast.id)}
-                className="text-xs font-medium uppercase tracking-wide text-current/60 transition hover:text-current"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );

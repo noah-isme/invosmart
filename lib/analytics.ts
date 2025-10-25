@@ -1,6 +1,5 @@
-import { InvoiceStatus } from "@prisma/client";
-
 import { db } from "@/lib/db";
+import { InvoiceStatusEnum, parseInvoiceStatus } from "@/lib/schemas";
 
 export type RevenueInsight = {
   months: string[];
@@ -14,6 +13,14 @@ export type RevenueInsight = {
 const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
 
 const getMonthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
+
+type AnalyticsInvoiceRecord = {
+  total: number;
+  status: unknown;
+  issuedAt: Date | string;
+  client: string;
+  paidAt: Date | string | null;
+};
 
 const calculateMonthsRange = (): {
   startDate: Date;
@@ -61,34 +68,39 @@ export const getRevenueInsight = async (userId: string): Promise<RevenueInsight>
     },
   });
 
+  const invoiceRecords = invoices as AnalyticsInvoiceRecord[];
+
   const paymentSpeed = new Map<string, { totalDays: number; count: number }>();
   const overdueClients = new Set<string>();
 
-  invoices.forEach((invoice) => {
-    const monthKey = getMonthKey(new Date(invoice.issuedAt));
+  invoiceRecords.forEach((invoice) => {
+    const status = parseInvoiceStatus(invoice.status);
+    const issuedDate = invoice.issuedAt instanceof Date ? invoice.issuedAt : new Date(invoice.issuedAt);
+    const monthKey = getMonthKey(issuedDate);
     const index = monthIndex.get(monthKey);
 
     if (typeof index === "number") {
-      if (invoice.status === InvoiceStatus.PAID) {
+      if (status === InvoiceStatusEnum.enum.PAID) {
         revenue[index] += invoice.total;
         paid[index] += 1;
       }
 
-      if (invoice.status === InvoiceStatus.OVERDUE) {
+      if (status === InvoiceStatusEnum.enum.OVERDUE) {
         overdue[index] += 1;
         overdueClients.add(invoice.client);
       }
     }
 
-    if (invoice.status === InvoiceStatus.PAID && invoice.paidAt) {
-      const speed = daysBetween(new Date(invoice.issuedAt), new Date(invoice.paidAt));
+    if (status === InvoiceStatusEnum.enum.PAID && invoice.paidAt) {
+      const paidDate = invoice.paidAt instanceof Date ? invoice.paidAt : new Date(invoice.paidAt);
+      const speed = daysBetween(issuedDate, paidDate);
       const entry = paymentSpeed.get(invoice.client) ?? { totalDays: 0, count: 0 };
       entry.totalDays += speed;
       entry.count += 1;
       paymentSpeed.set(invoice.client, entry);
     }
 
-    if (invoice.status === InvoiceStatus.OVERDUE) {
+    if (status === InvoiceStatusEnum.enum.OVERDUE) {
       overdueClients.add(invoice.client);
     }
   });

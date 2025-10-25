@@ -5,7 +5,10 @@ import {
   BarChart3,
   ChevronsLeftRight,
   FilePenLine,
+  Info,
   LayoutDashboard,
+  LifeBuoy,
+  Lightbulb,
   LogOut,
   Palette,
   Sparkles,
@@ -44,6 +47,12 @@ const navItems: NavItem[] = [
     icon: BarChart3,
   },
   {
+    href: "/app/insight",
+    label: "AI Insights",
+    description: "Insight finansial otomatis dari AI",
+    icon: Lightbulb,
+  },
+  {
     href: "/app/invoices/new",
     label: "Invoice Manual",
     description: "Susun invoice profesional secara manual",
@@ -72,6 +81,18 @@ const navItems: NavItem[] = [
     label: "Branding",
     description: "Warna, logo, dan font brand Anda",
     icon: Palette,
+  },
+  {
+    href: "/app/about",
+    label: "Tentang",
+    description: "Pelajari visi & roadmap InvoSmart",
+    icon: Info,
+  },
+  {
+    href: "/app/help",
+    label: "Bantuan",
+    description: "FAQ dan dokumentasi API",
+    icon: LifeBuoy,
   },
 ];
 
@@ -123,7 +144,7 @@ export default function Sidebar() {
     <aside
       aria-label="Navigasi utama"
       style={sidebarStyle}
-      className="group sticky top-20 hidden h-[calc(100vh-5rem)] w-full max-w-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_24px_70px_rgba(8,10,16,0.55)] transition-[width] duration-300 ease-out lg:flex lg:[width:var(--sidebar-width)]"
+      className="group sticky top-20 hidden h-[calc(100vh-5rem)] w-full max-w-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.08] backdrop-blur-xl shadow-[0_0_20px_rgba(0,0,0,0.2)] transition-[width] duration-300 ease-out lg:flex lg:[width:var(--sidebar-width)]"
     >
       <div className="flex h-full flex-col">
         <div className="flex items-center gap-3 px-4 pt-6">
@@ -151,14 +172,14 @@ export default function Sidebar() {
                 href={item.href}
                 data-tooltip={isCollapsed ? item.label : undefined}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                className={`relative flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
                   active
-                    ? "bg-white/10 text-text shadow-[0_0_20px_rgba(var(--color-primary)_/_0.35)]"
-                    : "text-text/70 hover:bg-white/10 hover:text-text"
+                    ? "border-white/25 bg-white/15 text-text shadow-[0_0_20px_rgba(var(--color-primary)_/_0.35)]"
+                    : "text-text/70 hover:border-white/15 hover:bg-white/10 hover:text-text"
                 } ${isCollapsed ? "justify-center" : ""}`}
               >
                 <span
-                  className={`flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-text/80 transition-colors ${
+                  className={`flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-text/80 transition-all duration-200 ${
                     active ? "text-text" : ""
                   }`}
                 >

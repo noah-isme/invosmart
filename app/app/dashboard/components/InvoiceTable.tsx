@@ -3,6 +3,7 @@
 import { InvoiceRow } from "./InvoiceRow";
 import type { DashboardInvoice } from "./types";
 import type { InvoiceStatusValue } from "@/lib/schemas";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 type InvoiceTableProps = {
   invoices: DashboardInvoice[];
@@ -32,21 +33,27 @@ export const InvoiceTable = ({
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5 bg-transparent text-sm text-text/85">
-          {invoices.map((invoice) => (
-            <InvoiceRow
-              key={`${invoice.id}-${invoice.status}`}
-              invoice={invoice}
-              disabled={pendingId === invoice.id}
-              onUpdateStatus={onUpdateStatus}
-              onDelete={onDelete}
-            />
-          ))}
+          {loading
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <tr key={`skeleton-${index}`}>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-32" rounded="lg" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-20" rounded="lg" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-24" rounded="lg" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-4 w-24" rounded="lg" /></td>
+                  <td className="px-6 py-4"><Skeleton className="h-8 w-28" /></td>
+                </tr>
+              ))
+            : invoices.map((invoice) => (
+                <InvoiceRow
+                  key={`${invoice.id}-${invoice.status}`}
+                  invoice={invoice}
+                  disabled={pendingId === invoice.id}
+                  onUpdateStatus={onUpdateStatus}
+                  onDelete={onDelete}
+                />
+              ))}
         </tbody>
       </table>
-
-      {loading ? (
-        <p className="px-6 py-10 text-center text-sm text-text/60">Memuat data invoice...</p>
-      ) : null}
 
       {!loading && invoices.length === 0 ? (
         <p className="px-6 py-10 text-center text-sm text-text/60">

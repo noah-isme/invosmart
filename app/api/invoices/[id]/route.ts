@@ -6,6 +6,7 @@ import {
   InvoiceUpdateSchema,
   type InvoiceUpdateInput,
   InvoiceStatusEnum,
+  parseInvoiceStatus,
 } from "@/lib/schemas";
 import { calculateTotals } from "@/lib/invoice-utils";
 import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
@@ -156,7 +157,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   const now = new Date();
-  const sideEffects = getStatusSideEffects(existing.status, parsed.data.status, now);
+  const previousStatus = parseInvoiceStatus(existing.status);
+  const nextStatus = parseInvoiceStatus(parsed.data.status);
+  const sideEffects = getStatusSideEffects(previousStatus, nextStatus, now);
 
   const data = {
     client: parsed.data.client,
@@ -164,7 +167,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     subtotal: totalsCheck.totals.subtotal,
     tax: totalsCheck.totals.tax,
     total: totalsCheck.totals.total,
-    status: parsed.data.status,
+    status: nextStatus,
     issuedAt,
     dueAt,
     notes: parsed.data.notes ?? null,
@@ -178,8 +181,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (
     dueAt &&
     dueAt.getTime() < now.getTime() &&
-    parsed.data.status !== InvoiceStatusEnum.enum.PAID &&
-    (parsed.data.status === InvoiceStatusEnum.enum.SENT || parsed.data.status === InvoiceStatusEnum.enum.UNPAID)
+    nextStatus !== InvoiceStatusEnum.enum.PAID &&
+    (nextStatus === InvoiceStatusEnum.enum.SENT || nextStatus === InvoiceStatusEnum.enum.UNPAID)
   ) {
     data.status = InvoiceStatusEnum.enum.OVERDUE;
   }

@@ -14,6 +14,14 @@ type BrandingPayload = {
   useThemeForPdf?: boolean;
 };
 
+type BrandingUpdate = {
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  fontFamily?: string | null;
+  brandingSyncWithTheme?: boolean;
+  useThemeForPdf?: boolean;
+};
+
 const hasOwn = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 const normalizeBoolean = (value: unknown) => {
@@ -68,8 +76,8 @@ const normalizePayload = (input: unknown): BrandingPayload => {
   return normalized;
 };
 
-const buildUpdateData = (data: BrandingInput) => {
-  const updateData: Parameters<typeof db.user.update>[0]["data"] = {};
+const buildUpdateData = (data: BrandingInput): BrandingUpdate => {
+  const updateData: BrandingUpdate = {};
 
   if (hasOwn(data, "logoUrl")) {
     updateData.logoUrl = data.logoUrl ?? null;
@@ -141,7 +149,9 @@ const handleUpdate = async (request: NextRequest) => {
   try {
     const updated = await db.user.update({
       where: { id: session.user.id },
-      data: updateData,
+      // Prisma's generated types are not available in this environment, so we cast to avoid
+      // type inference issues while keeping the payload narrowly typed via `BrandingUpdate`.
+      data: updateData as unknown as Record<string, unknown>,
       select: {
         logoUrl: true,
         primaryColor: true,

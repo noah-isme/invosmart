@@ -12,6 +12,7 @@ import { DashboardStats } from "./DashboardStats";
 import { InvoiceFilter } from "./InvoiceFilter";
 import { InvoiceTable } from "./InvoiceTable";
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 const DEFAULT_STATS: InvoiceDashboardStats = {
   revenue: 0,
@@ -42,13 +43,15 @@ export const DashboardContent = () => {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const fetchInvoices = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchInvoices = useCallback(
+    async (override?: InvoiceFilterValue) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const query = filter === "ALL" ? "" : `?status=${filter}`;
-      const response = await fetch(`/api/invoices${query}`);
+      try {
+        const targetFilter = override ?? filter;
+        const query = targetFilter === "ALL" ? "" : `?status=${targetFilter}`;
+        const response = await fetch(`/api/invoices${query}`);
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -68,15 +71,21 @@ export const DashboardContent = () => {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+    },
+    [filter],
+  );
 
   useEffect(() => {
     void fetchInvoices();
   }, [fetchInvoices]);
 
-  const handleFilterChange = useCallback((value: InvoiceFilterValue) => {
-    setFilter(value);
-  }, []);
+  const handleFilterChange = useCallback(
+    (value: InvoiceFilterValue) => {
+      setFilter(value);
+      void fetchInvoices(value);
+    },
+    [fetchInvoices],
+  );
 
   const handleUpdateStatus = useCallback(
     async (invoiceId: string, status: InvoiceStatusValue) => {
@@ -186,7 +195,15 @@ export const DashboardContent = () => {
       </motion.header>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.05, duration: 0.35, ease: "easeOut" }}>
-        <DashboardStats stats={stats} />
+        {loading ? (
+          <div className="grid gap-5 md:grid-cols-3">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          <DashboardStats stats={stats} />
+        )}
       </motion.div>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.1, duration: 0.35, ease: "easeOut" }}>

@@ -46,8 +46,11 @@ export const DashboardStats = ({ stats }: DashboardStatsProps) => {
           key={card.id}
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -6, scale: 1.01 }}
+          whileFocus={{ y: -6, scale: 1.01 }}
           transition={{ delay: index * 0.08, duration: 0.35, ease: "easeOut" }}
-          className="relative"
+          className="relative focus-visible:outline-none"
+          tabIndex={0}
         >
           <div className="glow-border rounded-[28px]">
             <div className="glow-border-inner overflow-hidden rounded-[26px] p-6">
