@@ -1,5 +1,4 @@
 import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
-import type { Invoice, User } from "@prisma/client";
 
 const DEFAULT_PRIMARY_COLOR = "#6366f1"; // indigo-500
 const DEFAULT_ACCENT_COLOR = "#22d3ee";
@@ -58,7 +57,31 @@ const hexToRgb = (hex: string): RGB => {
 
 type InvoiceItem = { name: string; qty: number; price: number };
 
-const resolveItems = (raw: Invoice["items"]): InvoiceItem[] => {
+type PdfInvoice = {
+  number: string;
+  client: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: string;
+  issuedAt: Date | string;
+  dueAt: Date | string | null;
+  items: unknown;
+  notes?: string | null;
+};
+
+type PdfUser = {
+  name?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  themePrimary?: string | null;
+  themeAccent?: string | null;
+  useThemeForPdf?: boolean | null;
+  fontFamily?: string | null;
+};
+
+const resolveItems = (raw: PdfInvoice["items"]): InvoiceItem[] => {
   if (Array.isArray(raw)) {
     return raw as InvoiceItem[];
   }
@@ -77,7 +100,7 @@ const resolveItems = (raw: Invoice["items"]): InvoiceItem[] => {
   return [];
 };
 
-const resolveFontChoice = (fontFamily: User["fontFamily"]): SupportedFont => {
+const resolveFontChoice = (fontFamily: PdfUser["fontFamily"]): SupportedFont => {
   if (!fontFamily) {
     return "sans";
   }
@@ -97,7 +120,7 @@ type PdfPalette = {
   usingTheme: boolean;
 };
 
-const resolvePdfPalette = (user: User): PdfPalette => {
+const resolvePdfPalette = (user: PdfUser): PdfPalette => {
   const brandPrimary = normalizeHex(user.primaryColor ?? undefined, DEFAULT_PRIMARY_COLOR);
   const themePrimary = normalizeHex(user.themePrimary ?? undefined, brandPrimary);
   const themeAccent = normalizeHex(user.themeAccent ?? undefined, DEFAULT_ACCENT_COLOR);
@@ -132,7 +155,7 @@ const formatCurrency = (amount: number) =>
 const drawHeader = async (
   page: PDFPage,
   pdf: PDFDocument,
-  user: User,
+  user: PdfUser,
   fonts: { regular: PDFFont; bold: PDFFont },
   palette: PdfPalette,
 ) => {
@@ -229,7 +252,7 @@ const drawHeader = async (
 
 const drawInvoiceMeta = (
   page: PDFPage,
-  invoice: Invoice,
+  invoice: PdfInvoice,
   fonts: { regular: PDFFont; bold: PDFFont },
   palette: PdfPalette,
 ) => {
@@ -371,7 +394,7 @@ const drawItemsTable = (
 
 const drawTotals = (
   page: PDFPage,
-  invoice: Invoice,
+  invoice: PdfInvoice,
   fonts: { regular: PDFFont; bold: PDFFont },
   palette: PdfPalette,
   startY: number,
@@ -456,7 +479,7 @@ const drawFooter = (
   });
 };
 
-export async function generateInvoicePDF(invoice: Invoice, user: User) {
+export async function generateInvoicePDF(invoice: PdfInvoice, user: PdfUser) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
 

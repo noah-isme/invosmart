@@ -76,9 +76,9 @@ button {
 
 .glass-surface {
   background: rgba(var(--surface-base) / 0.8);
-  border: 1px solid rgba(var(--surface-border) / 0.08);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 20px 45px rgba(8, 10, 14, 0.55);
+  border: 1px solid rgba(var(--surface-border) / 0.12);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
 }
 
 .gradient-button {
@@ -156,21 +156,57 @@ a[data-tooltip]::after {
   position: absolute;
   left: 100%;
   top: 50%;
-  transform: translate(8px, -50%);
+  transform: translate(10px, -50%);
   white-space: nowrap;
   font-size: 12px;
-  color: rgb(var(--color-text) / 0.88);
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(var(--surface-border) / 0.12);
-  padding: 4px 8px;
-  border-radius: 8px;
+  color: rgb(var(--color-text) / 0.9);
+  background: rgba(12, 15, 24, 0.65);
+  border: 1px solid rgba(var(--surface-border) / 0.16);
+  padding: 4px 10px;
+  border-radius: 10px;
   opacity: 0;
+  filter: blur(6px);
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
-.group:hover [data-tooltip]::after {
+.group:hover [data-tooltip]::after,
+a[data-tooltip]:focus-visible::after {
   opacity: 1;
+  filter: blur(0);
+  transition-delay: 0.3s;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 2.4s infinite;
 }
 
 @layer utilities {

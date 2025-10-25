@@ -50,10 +50,39 @@ vi.mock("next/link", () => ({
   },
 }));
 
+vi.mock("next/font/google", () => ({
+  Plus_Jakarta_Sans: () => ({ className: "", variable: "" }),
+  Geist_Mono: () => ({ className: "", variable: "" }),
+}));
+
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+global.ResizeObserver = MockResizeObserver;
+
 vi.mock("framer-motion", () => {
   const createComponent = (tag: keyof HTMLElementTagNameMap) => {
-    const MockComponent = ({ children, ...rest }: PropsWithChildren<Record<string, unknown>>) =>
-      React.createElement(tag, rest, children);
+    const MockComponent = ({ children, ...rest }: PropsWithChildren<Record<string, unknown>>) => {
+      const domProps: Record<string, unknown> = { ...rest };
+      const motionProps = [
+        "initial",
+        "animate",
+        "exit",
+        "transition",
+        "layout",
+        "whileHover",
+        "whileFocus",
+      ];
+
+      motionProps.forEach((prop) => {
+        delete domProps[prop];
+      });
+
+      return React.createElement(tag, domProps, children);
+    };
     MockComponent.displayName = `MockFramerMotion_${tag}`;
     return MockComponent;
   };

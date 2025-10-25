@@ -34,12 +34,14 @@ const MODE_TOKEN = {
   dark: {
     bg: "14 16 22",
     text: "243 244 246",
+    themeColor: "#0e1016",
   },
   light: {
     bg: "255 255 255",
     text: "15 23 42",
+    themeColor: "#ffffff",
   },
-} satisfies Record<ThemeMode, { bg: string; text: string }>;
+} satisfies Record<ThemeMode, { bg: string; text: string; themeColor: string }>;
 
 export const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
@@ -102,6 +104,16 @@ const applyThemeToDocument = (theme: ThemeShape) => {
   root.style.setProperty("--color-text", modeTokens.text);
   root.style.setProperty("color-scheme", theme.mode);
   root.dataset.theme = theme.mode;
+
+  const meta =
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]') ??
+    (() => {
+      const element = document.createElement("meta");
+      element.setAttribute("name", "theme-color");
+      document.head.appendChild(element);
+      return element;
+    })();
+  meta.setAttribute("content", modeTokens.themeColor);
 };
 
 const loadStoredTheme = (): ThemeShape | null => {

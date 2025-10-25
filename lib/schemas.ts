@@ -66,6 +66,15 @@ export const InvoiceStatusEnum = z.enum([
 export type InvoiceStatusValue = z.infer<typeof InvoiceStatusEnum>;
 export const invoiceStatusValues = InvoiceStatusEnum.options;
 
+export const parseInvoiceStatus = (value: unknown): InvoiceStatusValue => {
+  const parsed = InvoiceStatusEnum.safeParse(value);
+  return parsed.success ? parsed.data : InvoiceStatusEnum.enum.DRAFT;
+};
+
+export const isInvoiceStatusValue = (
+  value: unknown,
+): value is InvoiceStatusValue => InvoiceStatusEnum.safeParse(value).success;
+
 export const InvoiceCreateSchema = InvoiceFormSchema.extend({
   status: InvoiceStatusEnum.default("DRAFT"),
 });
@@ -177,3 +186,64 @@ export const ThemeSuggestionSchema = z.object({
 });
 
 export type ThemeSuggestion = z.infer<typeof ThemeSuggestionSchema>;
+
+export const InvoiceInsightClientSchema = z.object({
+  client: z.string().trim().min(1).max(200),
+  revenue: z.number().nonnegative(),
+  paidInvoices: z.number().int().nonnegative(),
+  overdueInvoices: z.number().int().nonnegative(),
+});
+
+export const InvoiceInsightSummarySchema = z.object({
+  totals: z.object({
+    revenue: z.number().nonnegative(),
+    paidInvoices: z.number().int().nonnegative(),
+    overdueInvoices: z.number().int().nonnegative(),
+    outstandingInvoices: z.number().int().nonnegative(),
+    averageInvoice: z.number().nonnegative(),
+  }),
+  monthlyRevenue: z
+    .array(
+      z.object({
+        month: z.string().trim().min(1),
+        revenue: z.number().nonnegative(),
+        paid: z.number().int().nonnegative(),
+        overdue: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1),
+  topClients: z.array(InvoiceInsightClientSchema).max(12),
+  recentInvoices: z
+    .array(
+      z.object({
+        client: z.string().trim().min(1).max(200),
+        total: z.number().nonnegative(),
+        status: InvoiceStatusEnum,
+        issuedAt: z.string().trim().min(8),
+      }),
+    )
+    .max(12)
+    .optional(),
+  period: z.object({
+    label: z.string().trim().min(1),
+    months: z.array(z.string().trim().min(1)).min(1),
+    currency: z.string().trim().min(1),
+  }),
+  trend: z
+    .object({
+      lastMonth: z.number().nonnegative(),
+      previousMonth: z.number().nonnegative(),
+    })
+    .optional(),
+});
+
+export type InvoiceInsightSummary = z.infer<typeof InvoiceInsightSummarySchema>;
+
+export const AiInvoiceInsightSchema = z.object({
+  totalRevenue: z.string().trim().min(1),
+  topClient: z.string().trim().min(1),
+  insight: z.string().trim().min(1),
+  recommendation: z.string().trim().min(1),
+});
+
+export type AiInvoiceInsight = z.infer<typeof AiInvoiceInsightSchema>;

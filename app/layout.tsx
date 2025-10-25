@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
+import Footer from "@/components/layout/Footer";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 
@@ -18,15 +19,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "InvoSmart | Smart Invoice Assistant",
+    default: "InvoSmart – Smart AI Invoice & Insight Platform",
     template: "%s | InvoSmart",
   },
   description:
-    "InvoSmart membantu freelancer dan bisnis kecil membuat, mengelola, dan menganalisis invoice profesional secara otomatis dengan dukungan AI.",
+    "Kelola invoice, tema, dan insight finansial secara otomatis dengan kecerdasan buatan.",
   openGraph: {
-    title: "InvoSmart | Smart Invoice Assistant",
+    title: "InvoSmart – Smart AI Invoice & Insight Platform",
     description:
-      "Kelola invoice dengan cepat, profesional, dan berbasis insight AI di satu dashboard terintegrasi.",
+      "Kelola invoice, tema, dan insight finansial secara otomatis dengan kecerdasan buatan.",
     url: "https://invosmart.example.com",
     siteName: "InvoSmart",
     locale: "id_ID",
@@ -34,10 +35,18 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "InvoSmart | Smart Invoice Assistant",
+    title: "InvoSmart – Smart AI Invoice & Insight Platform",
     description:
-      "Bangun proses invoice yang cerdas dengan generator AI, template profesional, dan analitik bisnis real-time.",
+      "Kelola invoice, tema, dan insight finansial secara otomatis dengan kecerdasan buatan.",
   },
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1016" },
+  ],
 };
 
 export default function RootLayout({
@@ -50,7 +59,10 @@ export default function RootLayout({
       <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
           <ToastProvider>
-            <div className="relative min-h-screen bg-bg text-text transition-colors duration-200">{children}</div>
+            <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
+              <div className="flex-1 pb-24">{children}</div>
+              <Footer version="v1.0.0" />
+            </div>
           </ToastProvider>
         </ThemeProvider>
       </body>
