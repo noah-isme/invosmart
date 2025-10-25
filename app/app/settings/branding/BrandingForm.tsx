@@ -4,12 +4,14 @@ import { type FormEvent, type MouseEvent, useEffect, useMemo, useState } from "r
 
 import { Button } from "@/components/ui/Button";
 import { useTheme } from "@/context/ThemeContext";
+import { useToast } from "@/context/ToastContext";
 
 type BrandingFormState = {
   logoUrl: string;
   primaryColor: string;
   fontFamily: "sans" | "serif" | "mono";
   syncWithTheme: boolean;
+  useThemeForPdf: boolean;
 };
 
 const DEFAULT_COLOR = "#6366f1";
@@ -71,6 +73,7 @@ const subtleText = "text-xs text-text/55";
 
 export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
   const { primary: themePrimary } = useTheme();
+  const { notify } = useToast();
   const [state, setState] = useState<BrandingFormState>(initialBranding);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +113,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
       primaryColor: (state.syncWithTheme ? themePrimary : state.primaryColor).trim() || null,
       fontFamily: state.fontFamily,
       syncWithTheme: state.syncWithTheme,
+      useThemeForPdf: state.useThemeForPdf,
     } as const;
 
     try {
@@ -132,6 +136,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
               primaryColor: string | null;
               fontFamily: string | null;
               brandingSyncWithTheme?: boolean | null;
+              useThemeForPdf?: boolean | null;
             };
           }
         | null;
@@ -142,10 +147,19 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
           primaryColor: body.data.primaryColor ?? DEFAULT_COLOR,
           fontFamily: (body.data.fontFamily ?? "sans") as BrandingFormState["fontFamily"],
           syncWithTheme: Boolean(body.data.brandingSyncWithTheme),
+          useThemeForPdf: Boolean(body.data.useThemeForPdf),
         });
       }
 
       setSuccess("Branding berhasil diperbarui. PDF terbaru akan menggunakan preferensi ini.");
+
+      if (payload.useThemeForPdf) {
+        notify({
+          title: "🧾 PDF branding telah disinkronkan.",
+          description: "Invoice akan mengikuti warna tema terbaru Anda.",
+          variant: "success",
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Terjadi kesalahan tak terduga.";
       setError(message);
@@ -224,6 +238,43 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
             </button>
             <p className={subtleText}>
               Saat aktif, warna branding akan mengikuti tema aplikasi (saat ini {formatHexLabel(themePrimary)}).
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className={labelClass}>PDF Invoice</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={state.useThemeForPdf}
+              onClick={() =>
+                setState((previous) => ({
+                  ...previous,
+                  useThemeForPdf: !previous.useThemeForPdf,
+                }))
+              }
+              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                state.useThemeForPdf
+                  ? "border-accent/60 bg-accent/15 text-slate-900"
+                  : "border-white/10 bg-white/0 text-text"
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg`}
+            >
+              <span className="max-w-[80%] font-medium">Gunakan warna tema pada PDF Invoice</span>
+              <span
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+                  state.useThemeForPdf ? "bg-accent/80" : "bg-white/20"
+                }`}
+                aria-hidden
+              >
+                <span
+                  className={`size-5 rounded-full bg-white shadow transition ${
+                    state.useThemeForPdf ? "translate-x-5" : "translate-x-1"
+                  }`}
+                />
+              </span>
+            </button>
+            <p className={subtleText}>
+              Saat diaktifkan, header, status, dan footer PDF akan mengikuti warna tema aplikasi Anda.
             </p>
           </div>
 

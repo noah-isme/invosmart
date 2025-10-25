@@ -2,6 +2,7 @@ import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage, t
 import type { Invoice, User } from "@prisma/client";
 
 const DEFAULT_PRIMARY_COLOR = "#6366f1"; // indigo-500
+const DEFAULT_ACCENT_COLOR = "#22d3ee";
 const FONT_MAP = {
   sans: {
     regular: StandardFonts.Helvetica,
@@ -20,6 +21,27 @@ const FONT_MAP = {
 type SupportedFont = keyof typeof FONT_MAP;
 
 const isHexColor = (value: string): boolean => /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(value.trim());
+
+const normalizeHex = (value: string | null | undefined, fallback: string) => {
+  if (!value) {
+    return fallback;
+  }
+
+  let normalized = value.trim().toLowerCase();
+  if (!normalized.startsWith("#")) {
+    normalized = `#${normalized}`;
+  }
+
+  if (!isHexColor(normalized)) {
+    return fallback;
+  }
+
+  if (normalized.length === 4) {
+    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+  }
+
+  return normalized;
+};
 
 const hexToRgb = (hex: string): RGB => {
   const normalized = hex.trim().toLowerCase();
@@ -67,12 +89,36 @@ const resolveFontChoice = (fontFamily: User["fontFamily"]): SupportedFont => {
   return "sans";
 };
 
-const resolvePrimaryColor = (primaryColor: User["primaryColor"]): RGB => {
-  if (typeof primaryColor === "string" && isHexColor(primaryColor)) {
-    return hexToRgb(primaryColor);
+type PdfPalette = {
+  primary: RGB;
+  accent: RGB;
+  primaryHex: string;
+  accentHex: string;
+  usingTheme: boolean;
+};
+
+const resolvePdfPalette = (user: User): PdfPalette => {
+  const brandPrimary = normalizeHex(user.primaryColor ?? undefined, DEFAULT_PRIMARY_COLOR);
+  const themePrimary = normalizeHex(user.themePrimary ?? undefined, brandPrimary);
+  const themeAccent = normalizeHex(user.themeAccent ?? undefined, DEFAULT_ACCENT_COLOR);
+
+  if (user.useThemeForPdf) {
+    return {
+      primary: hexToRgb(themePrimary),
+      accent: hexToRgb(themeAccent),
+      primaryHex: themePrimary,
+      accentHex: themeAccent,
+      usingTheme: true,
+    };
   }
 
-  return hexToRgb(DEFAULT_PRIMARY_COLOR);
+  return {
+    primary: hexToRgb(brandPrimary),
+    accent: hexToRgb(brandPrimary),
+    primaryHex: brandPrimary,
+    accentHex: brandPrimary,
+    usingTheme: false,
+  };
 };
 
 const formatCurrency = (amount: number) =>
@@ -88,17 +134,38 @@ const drawHeader = async (
   pdf: PDFDocument,
   user: User,
   fonts: { regular: PDFFont; bold: PDFFont },
-  accent: RGB,
+  palette: PdfPalette,
 ) => {
   const { width, height } = page.getSize();
   const margin = 50;
+  const headerHeight = 120;
+
+  page.drawRectangle({
+    x: 0,
+    y: height - headerHeight,
+    width,
+    height: headerHeight,
+    color: palette.primary,
+    opacity: 0.82,
+  });
+
+  page.drawRectangle({
+    x: width / 2,
+    y: height - headerHeight,
+    width: width / 2,
+    height: headerHeight,
+    color: palette.accent,
+    opacity: 0.72,
+  });
+
+  const headerTextColor = rgb(0.97, 0.98, 1);
 
   page.drawText(user.name ?? "InvoSmart User", {
     x: margin,
     y: height - margin - 10,
     size: 22,
     font: fonts.bold,
-    color: accent,
+    color: headerTextColor,
   });
 
   const contactLine = user.email ? `Email: ${user.email}` : "Invoice by InvoSmart";
@@ -107,7 +174,7 @@ const drawHeader = async (
     y: height - margin - 35,
     size: 10,
     font: fonts.regular,
-    color: rgb(0.45, 0.45, 0.5),
+    color: rgb(0.9, 0.92, 0.95),
   });
 
   const addressLine = user.primaryColor ? "Branding aktif" : "Branding default";
@@ -116,7 +183,7 @@ const drawHeader = async (
     y: height - margin - 50,
     size: 10,
     font: fonts.regular,
-    color: rgb(0.45, 0.45, 0.5),
+    color: rgb(0.9, 0.92, 0.95),
   });
 
   if (user.logoUrl) {
@@ -154,8 +221,9 @@ const drawHeader = async (
   page.drawLine({
     start: { x: margin, y: height - margin - 70 },
     end: { x: width - margin, y: height - margin - 70 },
-    thickness: 1.2,
-    color: accent,
+    thickness: 1.6,
+    color: palette.accent,
+    opacity: 0.85,
   });
 };
 
@@ -163,9 +231,9 @@ const drawInvoiceMeta = (
   page: PDFPage,
   invoice: Invoice,
   fonts: { regular: PDFFont; bold: PDFFont },
-  accent: RGB,
+  palette: PdfPalette,
 ) => {
-  const { height } = page.getSize();
+  const { height, width } = page.getSize();
   const margin = 50;
 
   page.drawText(`Invoice #${invoice.number}`, {
@@ -173,7 +241,7 @@ const drawInvoiceMeta = (
     y: height - margin - 95,
     size: 14,
     font: fonts.bold,
-    color: accent,
+    color: palette.accent,
   });
 
   page.drawText(`Klien: ${invoice.client}`, {
@@ -206,13 +274,33 @@ const drawInvoiceMeta = (
     font: fonts.regular,
     color: rgb(0.25, 0.25, 0.3),
   });
+
+  const statusLabel = invoice.status.toUpperCase();
+  const badgeWidth = fonts.bold.widthOfTextAtSize(statusLabel, 10) + 16;
+
+  page.drawRectangle({
+    x: width - margin - badgeWidth,
+    y: height - margin - 138,
+    width: badgeWidth,
+    height: 22,
+    color: palette.accent,
+    opacity: 0.18,
+  });
+
+  page.drawText(statusLabel, {
+    x: width - margin - badgeWidth + 8,
+    y: height - margin - 132,
+    size: 10,
+    font: fonts.bold,
+    color: palette.accent,
+  });
 };
 
 const drawItemsTable = (
   page: PDFPage,
   items: InvoiceItem[],
   fonts: { regular: PDFFont; bold: PDFFont },
-  accent: RGB,
+  palette: PdfPalette,
 ) => {
   const { width } = page.getSize();
   const margin = 50;
@@ -224,7 +312,7 @@ const drawItemsTable = (
     y: y - 6,
     width: width - margin * 2,
     height: 26,
-    color: accent,
+    color: palette.accent,
     opacity: 0.08,
   });
 
@@ -235,7 +323,7 @@ const drawItemsTable = (
       y: y,
       size: 11,
       font: fonts.bold,
-      color: accent,
+      color: palette.accent,
     });
   });
 
@@ -285,7 +373,7 @@ const drawTotals = (
   page: PDFPage,
   invoice: Invoice,
   fonts: { regular: PDFFont; bold: PDFFont },
-  accent: RGB,
+  palette: PdfPalette,
   startY: number,
 ) => {
   const margin = 50;
@@ -303,7 +391,7 @@ const drawTotals = (
       y,
       size: highlight ? 12 : 11,
       font: highlight ? fonts.bold : fonts.regular,
-      color: highlight ? accent : rgb(0.25, 0.25, 0.3),
+      color: highlight ? palette.accent : rgb(0.25, 0.25, 0.3),
     });
 
     page.drawText(formatCurrency(amount), {
@@ -311,7 +399,7 @@ const drawTotals = (
       y,
       size: highlight ? 12 : 11,
       font: highlight ? fonts.bold : fonts.regular,
-      color: highlight ? accent : rgb(0.25, 0.25, 0.3),
+      color: highlight ? palette.accent : rgb(0.25, 0.25, 0.3),
     });
 
     y -= 18;
@@ -321,6 +409,7 @@ const drawTotals = (
 const drawFooter = (
   page: PDFPage,
   fonts: { regular: PDFFont; bold: PDFFont },
+  palette: PdfPalette,
 ) => {
   const { width } = page.getSize();
   const margin = 50;
@@ -331,6 +420,14 @@ const drawFooter = (
   }).format(new Date());
 
   const footerColor = rgb(0.55, 0.55, 0.6);
+
+  page.drawLine({
+    start: { x: margin, y: 80 },
+    end: { x: width - margin, y: 80 },
+    thickness: 1.5,
+    color: palette.primary,
+    opacity: 0.3,
+  });
 
   page.drawText(`Dicetak: ${printedAt}`, {
     x: margin,
@@ -369,14 +466,14 @@ export async function generateInvoicePDF(invoice: Invoice, user: User) {
     bold: await pdf.embedFont(FONT_MAP[fontChoice].bold),
   };
 
-  const accent = resolvePrimaryColor(user.primaryColor);
+  const palette = resolvePdfPalette(user);
   const items = resolveItems(invoice.items);
 
-  await drawHeader(page, pdf, user, fonts, accent);
-  drawInvoiceMeta(page, invoice, fonts, accent);
-  const afterTableY = drawItemsTable(page, items, fonts, accent);
-  drawTotals(page, invoice, fonts, accent, afterTableY);
-  drawFooter(page, fonts);
+  await drawHeader(page, pdf, user, fonts, palette);
+  drawInvoiceMeta(page, invoice, fonts, palette);
+  const afterTableY = drawItemsTable(page, items, fonts, palette);
+  drawTotals(page, invoice, fonts, palette, afterTableY);
+  drawFooter(page, fonts, palette);
 
   return pdf.save();
 }

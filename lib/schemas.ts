@@ -137,6 +137,7 @@ export const BrandingSchema = z.object({
     .optional(),
   fontFamily: z.union([z.literal("sans"), z.literal("serif"), z.literal("mono"), z.null()]).optional(),
   syncWithTheme: z.boolean().optional(),
+  useThemeForPdf: z.boolean().optional(),
 });
 
 export type BrandingInput = z.infer<typeof BrandingSchema>;
@@ -156,3 +157,23 @@ export const ThemeUpdateSchema = z.object({
 });
 
 export type ThemeUpdateInput = z.infer<typeof ThemeUpdateSchema>;
+
+export const ThemeSuggestionSchema = z.object({
+  primary: z
+    .string()
+    .trim()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Warna primer harus berupa kode hex, misal #6366F1."),
+  accent: z
+    .string()
+    .trim()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Warna aksen harus berupa kode hex, misal #22D3EE."),
+  label: z.string().trim().min(2, "Label tema minimal 2 karakter.").max(60, "Label tema maksimal 60 karakter."),
+  description: z
+    .string()
+    .trim()
+    .min(6, "Deskripsi tema minimal 6 karakter.")
+    .max(240, "Deskripsi tema maksimal 240 karakter."),
+  mode: z.enum(["light", "dark"]).optional(),
+});
+
+export type ThemeSuggestion = z.infer<typeof ThemeSuggestionSchema>;

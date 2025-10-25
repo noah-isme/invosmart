@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BrandingForm } from "@/app/app/settings/branding/BrandingForm";
 import { DEFAULT_THEME, ThemeContext, type ThemeContextValue } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 describe("Branding sync toggle", () => {
   const fetchMock = vi.fn();
@@ -33,19 +34,30 @@ describe("Branding sync toggle", () => {
       updateTheme: vi.fn(),
       saveTheme: vi.fn(),
       resetTheme: vi.fn(),
+      applyAiTheme: vi.fn(),
       isLoading: false,
       isSaving: false,
     };
 
     render(
       <ThemeContext.Provider value={themeValue}>
-        <BrandingForm
-          initialBranding={{ logoUrl: "", primaryColor: "#334155", fontFamily: "sans", syncWithTheme: false }}
-        />
+        <ToastProvider>
+          <BrandingForm
+            initialBranding={{
+              logoUrl: "",
+              primaryColor: "#334155",
+              fontFamily: "sans",
+              syncWithTheme: false,
+              useThemeForPdf: false,
+            }}
+          />
+        </ToastProvider>
       </ThemeContext.Provider>,
     );
 
-    fireEvent.click(screen.getByRole("switch"));
+    fireEvent.click(
+      screen.getByRole("switch", { name: /Gunakan warna tema sebagai warna branding/i }),
+    );
 
     expect(screen.getByLabelText(/Pilih warna utama/i)).toBeDisabled();
 
@@ -64,6 +76,7 @@ describe("Branding sync toggle", () => {
       primaryColor: DEFAULT_THEME.primary,
       fontFamily: "sans",
       syncWithTheme: true,
+      useThemeForPdf: false,
     });
   });
 });

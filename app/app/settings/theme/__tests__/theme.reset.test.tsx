@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeSettingsPanel } from "@/app/app/settings/theme/ThemeSettingsPanel";
 import { DEFAULT_THEME, ThemeContext, type ThemeContextValue } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 
 describe("Theme reset", () => {
   const fetchMock = vi.fn();
@@ -24,13 +25,16 @@ describe("Theme reset", () => {
       updateTheme: vi.fn(),
       saveTheme: vi.fn(),
       resetTheme,
+      applyAiTheme: vi.fn(),
       isLoading: false,
       isSaving: false,
     };
 
     render(
       <ThemeContext.Provider value={themeValue}>
-        <ThemeSettingsPanel initialBrandingSync={true} />
+        <ToastProvider>
+          <ThemeSettingsPanel initialBrandingSync={true} brandName="Acme" brandLogoUrl="https://cdn/logo.png" />
+        </ToastProvider>
       </ThemeContext.Provider>,
     );
 

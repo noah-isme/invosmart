@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 import { ThemeSettingsPanel } from "@/app/app/settings/theme/ThemeSettingsPanel";
 
 vi.mock("next-auth/react", async () => {
@@ -19,7 +20,9 @@ describe("Theme mode switch", () => {
   it("mengubah atribut data-theme tanpa menghilangkan konten", async () => {
     render(
       <ThemeProvider>
-        <ThemeSettingsPanel />
+        <ToastProvider>
+          <ThemeSettingsPanel initialBrandingSync={false} brandName="Tester" brandLogoUrl={null} />
+        </ToastProvider>
       </ThemeProvider>,
     );
 
