@@ -8,6 +8,7 @@ type BrandingSelection = {
   logoUrl: string | null;
   primaryColor: string | null;
   fontFamily: string | null;
+  brandingSyncWithTheme: boolean;
 };
 
 describe("PUT /api/user/branding", () => {
@@ -29,6 +30,7 @@ describe("PUT /api/user/branding", () => {
       logoUrl: "https://cdn.brand/logo.png",
       primaryColor: "#123abc",
       fontFamily: "mono",
+      brandingSyncWithTheme: true,
     } satisfies BrandingSelection);
 
     const request = new Request("http://localhost/api/user/branding", {
@@ -38,6 +40,7 @@ describe("PUT /api/user/branding", () => {
         logoUrl: " https://cdn.brand/logo.png ",
         primaryColor: "#123ABC",
         fontFamily: "mono",
+        syncWithTheme: true,
       }),
     });
 
@@ -50,8 +53,9 @@ describe("PUT /api/user/branding", () => {
         logoUrl: "https://cdn.brand/logo.png",
         primaryColor: "#123abc",
         fontFamily: "mono",
+        brandingSyncWithTheme: true,
       },
-      select: { logoUrl: true, primaryColor: true, fontFamily: true },
+      select: { logoUrl: true, primaryColor: true, fontFamily: true, brandingSyncWithTheme: true },
     });
 
     const payload = await response.json();
@@ -60,6 +64,7 @@ describe("PUT /api/user/branding", () => {
         logoUrl: "https://cdn.brand/logo.png",
         primaryColor: "#123abc",
         fontFamily: "mono",
+        brandingSyncWithTheme: true,
       },
     });
   });

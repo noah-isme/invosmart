@@ -15,6 +15,7 @@ model User {
   logoUrl       String?
   primaryColor  String?
   fontFamily    String?
+  brandingSyncWithTheme Boolean @default(false)
   themePrimary  String?  @default("#6366F1")
   themeAccent   String?  @default("#22D3EE")
   themeMode     String?  @default("dark")

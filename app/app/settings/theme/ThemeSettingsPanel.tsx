@@ -1,16 +1,32 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
-import { useTheme } from "@/context/ThemeContext";
+import { DEFAULT_THEME, useTheme } from "@/context/ThemeContext";
 
 type ThemeMode = "light" | "dark";
 
+type ThemeSettingsPanelProps = {
+  initialBrandingSync: boolean;
+};
+
+const PRESET_THEMES = [
+  { name: "Oceanic", primary: "#0EA5E9", accent: "#22D3EE" },
+  { name: "Amethyst", primary: "#8B5CF6", accent: "#EC4899" },
+  { name: "Sunset", primary: "#F59E0B", accent: "#EF4444" },
+  { name: "Emerald", primary: "#10B981", accent: "#14B8A6" },
+] as const;
+
 const formatHexLabel = (value: string) => value.toUpperCase();
 
-const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: string; mode: ThemeMode }) => {
+const cardClassNames = (mode: ThemeMode) =>
+  mode === "dark"
+    ? "glass-surface relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-950/60 to-slate-900/40 p-6 shadow-[0_0_30px_rgba(8,10,26,0.55)]"
+    : "relative overflow-hidden rounded-2xl border border-accent/30 bg-white/90 p-6 shadow-[0_20px_45px_rgba(148,163,184,0.32)] backdrop-blur-xl";
+
+export const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: string; mode: ThemeMode }) => {
   const cardKey = useMemo(() => `${primary}-${accent}-${mode}`, [accent, mode, primary]);
 
   return (
@@ -19,9 +35,16 @@ const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: strin
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="glass-surface relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6"
+      className={cardClassNames(mode)}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(var(--color-primary)_/_0.16),_transparent_60%)]" aria-hidden />
+      <div
+        className={
+          mode === "dark"
+            ? "absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(var(--color-primary)_/_0.3),_transparent_70%)]"
+            : "absolute inset-0 bg-[linear-gradient(140deg,_rgba(var(--color-primary)_/_0.12),_transparent_40%),linear-gradient(220deg,_rgba(var(--color-accent)_/_0.12),_transparent_55%)]"
+        }
+        aria-hidden
+      />
       <div className="relative flex flex-col gap-6">
         <header className="flex items-start justify-between">
           <div>
@@ -36,17 +59,21 @@ const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: strin
           </span>
         </header>
 
-        <section className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <section
+          className={
+            mode === "dark"
+              ? "space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_18px_48px_rgba(8,10,16,0.45)]"
+              : "space-y-3 rounded-2xl border border-primary/20 bg-white/60 p-4 shadow-[0_12px_35px_rgba(148,163,184,0.28)]"
+          }
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.32em] text-text/45">Revenue</p>
               <p className="text-base font-semibold text-text">Rp24.400.000</p>
             </div>
-            <span className="rounded-full bg-primary/20 px-3 py-1 text-xs font-medium text-primary">
-              +18%
-            </span>
+            <span className="rounded-full bg-primary/20 px-3 py-1 text-xs font-medium text-primary">+18%</span>
           </div>
-          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/15">
             <motion.div
               key={`revenue-${cardKey}`}
               initial={{ width: "45%" }}
@@ -57,7 +84,13 @@ const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: strin
           </div>
         </section>
 
-        <section className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-2">
+        <section
+          className={
+            mode === "dark"
+              ? "grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_14px_38px_rgba(8,10,16,0.38)] md:grid-cols-2"
+              : "grid gap-3 rounded-2xl border border-primary/20 bg-white/70 p-4 shadow-[0_16px_40px_rgba(148,163,184,0.25)] md:grid-cols-2"
+          }
+        >
           <div>
             <p className="text-xs uppercase tracking-[0.32em] text-text/45">Paid invoices</p>
             <p className="mt-1 text-lg font-semibold text-text">32 dokumen</p>
@@ -78,19 +111,83 @@ const PreviewCard = ({ primary, accent, mode }: { primary: string; accent: strin
   );
 };
 
-export const ThemeSettingsPanel = () => {
-  const { primary, accent, mode, updateTheme, saveTheme, isLoading, isSaving } = useTheme();
+export const ThemeSettingsPanel = ({ initialBrandingSync }: ThemeSettingsPanelProps) => {
+  const brandingSyncRef = useRef(initialBrandingSync);
+  const { primary, accent, mode, updateTheme, saveTheme, resetTheme, isLoading, isSaving } = useTheme();
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const syncBrandingWithTheme = useCallback(
+    async (color: string) => {
+      if (!brandingSyncRef.current) {
+        return;
+      }
+
+      try {
+        await fetch("/api/user/branding", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ primaryColor: color }),
+        });
+      } catch {
+        // Ignore sync failures to keep theme updates responsive.
+      }
+    },
+    [],
+  );
+
+  const clearMessages = () => {
+    setStatus(null);
+    setError(null);
+  };
 
   const handlePrimaryChange = (value: string) => {
+    clearMessages();
+    setHasPendingChanges(true);
     void updateTheme({ primary: value });
   };
 
   const handleAccentChange = (value: string) => {
+    clearMessages();
+    setHasPendingChanges(true);
     void updateTheme({ accent: value });
   };
 
   const handleModeChange = (value: ThemeMode) => {
+    clearMessages();
+    setHasPendingChanges(true);
     void updateTheme({ mode: value });
+  };
+
+  const handlePresetSelect = (preset: (typeof PRESET_THEMES)[number]) => {
+    clearMessages();
+    setHasPendingChanges(true);
+    void updateTheme({ primary: preset.primary, accent: preset.accent });
+  };
+
+  const handleSave = async () => {
+    clearMessages();
+    try {
+      await saveTheme();
+      await syncBrandingWithTheme(primary);
+      setStatus("Tema berhasil disimpan.");
+      setHasPendingChanges(false);
+    } catch {
+      setError("Gagal menyimpan tema. Coba lagi.");
+    }
+  };
+
+  const handleReset = async () => {
+    clearMessages();
+    try {
+      await resetTheme();
+      await syncBrandingWithTheme(DEFAULT_THEME.primary);
+      setStatus("Tema berhasil direset ke default.");
+      setHasPendingChanges(false);
+    } catch {
+      setError("Tidak dapat mereset tema saat ini.");
+    }
   };
 
   if (isLoading) {
@@ -117,6 +214,24 @@ export const ThemeSettingsPanel = () => {
         </header>
 
         <div className="space-y-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.32em] text-text/45">Preset cepat</p>
+            <div className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-4">
+              {PRESET_THEMES.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => handlePresetSelect(preset)}
+                  style={{
+                    background: `linear-gradient(45deg, ${preset.primary}, ${preset.accent})`,
+                  }}
+                  className="h-12 rounded-xl shadow-[0_0_16px_rgba(0,0,0,0.35)] transition-transform duration-200 ease-out hover:scale-[1.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:ring-primary/60"
+                  aria-label={`Apply ${preset.name} theme`}
+                />
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-text/70" htmlFor="theme-primary">
               Primary color
@@ -167,16 +282,18 @@ export const ThemeSettingsPanel = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3">
           <p className="text-sm text-text/60">Perubahan otomatis disimpan di perangkat. Klik simpan untuk menyinkronkan ke akun.</p>
-          <Button
-            onClick={async () => {
-              await saveTheme();
-            }}
-            disabled={isSaving}
-          >
-            Simpan Tema
-          </Button>
+          {status ? <p className="text-xs font-medium text-emerald-300">{status}</p> : null}
+          {error ? <p className="text-xs font-medium text-rose-300">{error}</p> : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={handleSave} disabled={isSaving || !hasPendingChanges}>
+              Simpan Tema
+            </Button>
+            <Button variant="ghost" onClick={handleReset} disabled={isSaving}>
+              Reset ke Tema Default
+            </Button>
+          </div>
         </div>
       </section>
 
