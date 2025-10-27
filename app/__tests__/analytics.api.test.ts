@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { InvoiceStatus, type PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextRequest } from "next/server";
@@ -15,7 +16,7 @@ vi.mock("@/server/auth", () => ({ authOptions: {} }));
 
 const getServerSessionMock = vi.mocked(getServerSession);
 
-let db: PrismaClient;
+let db: any;
 
 describe("GET /api/insight/revenue", () => {
   beforeAll(async () => {

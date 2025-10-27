@@ -196,7 +196,7 @@ const sprintPhaseOne: {
         {
           title: "Setup .env lokal",
           description:
-            "Variabel: NEXT_PUBLIC_API_URL, JWT_SECRET, OPENAI_API_KEY",
+            "Variabel: NEXT_PUBLIC_API_URL, JWT_SECRET, OPENAI_API_KEY, GEMINI_API_KEY",
           status: "pending",
         },
         {

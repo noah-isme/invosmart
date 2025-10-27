@@ -7,19 +7,7 @@ import { authOptions } from "@/server/auth";
 
 const handler = NextAuth(authOptions);
 
-const handleWithGuards = (request: NextRequest) => {
-  const httpsCheck = enforceHttps(request);
-  if (httpsCheck) {
-    return httpsCheck;
-  }
-
-  const limited = rateLimit(request, "auth");
-  if (limited) {
-    return limited;
-  }
-
-  return handler(request);
-};
-
-export const GET = (request: NextRequest) => handleWithGuards(request);
-export const POST = (request: NextRequest) => handleWithGuards(request);
+// Export the NextAuth handler directly for App Router. Avoid wrapping the
+// handler with a NextRequest-based wrapper because the internal NextAuth
+// implementation expects the original request/response shape.
+export { handler as GET, handler as POST };

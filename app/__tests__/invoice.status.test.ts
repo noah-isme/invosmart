@@ -1,5 +1,4 @@
-import { InvoiceStatus, PrismaClient } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import { InvoiceStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import { calculateTotals } from "@/lib/invoice-utils";
@@ -52,8 +51,13 @@ describe("Invoice utilities", () => {
   });
 
   it("memperbarui invoice user yang sudah lewat tempo", async () => {
-    const db = new PrismaClient();
-    db.invoice.updateMany.mockResolvedValueOnce({ count: 1 } as Prisma.BatchPayload);
+  // Create a small mocked client shape to satisfy typing without pulling
+  // in heavy runtime behaviour.
+  const db = {
+    invoice: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+  } as const;
 
     const now = new Date("2024-11-20T00:00:00.000Z");
 

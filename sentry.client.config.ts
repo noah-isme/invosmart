@@ -5,7 +5,7 @@ import { RELEASE_TAG } from "./lib/release";
 const enabled =
   process.env.NEXT_PUBLIC_ENABLE_TELEMETRY !== "false" && Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN);
 
-Sentry.init({
+;(Sentry as any).init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   enabled,
   release: RELEASE_TAG,

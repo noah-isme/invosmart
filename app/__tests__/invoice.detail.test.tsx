@@ -20,7 +20,6 @@ describe("Invoice detail actions", () => {
     pushMock.mockReset();
     refreshMock.mockReset();
     fetchMock.mockReset();
-    // @ts-expect-error - jsdom fetch override
     global.fetch = fetchMock;
   });
 

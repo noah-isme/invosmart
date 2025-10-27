@@ -16,7 +16,6 @@ describe("Theme reset", () => {
 
   it("mereset tema ke default dan menyinkronkan branding", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
-    // @ts-expect-error test override
     global.fetch = fetchMock;
 
     const resetTheme = vi.fn().mockResolvedValue(undefined);

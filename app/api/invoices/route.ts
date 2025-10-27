@@ -43,7 +43,7 @@ const getInvoices = async (request: NextRequest) => {
 
   await markUserOverdueInvoices(db, userId);
 
-  const statusParam = request.nextUrl.searchParams.get("status");
+  const statusParam = request.nextUrl?.searchParams?.get("status");
 
   let statusFilter: InvoiceStatusValue | undefined;
 

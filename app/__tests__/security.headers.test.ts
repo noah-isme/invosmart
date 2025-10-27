@@ -8,7 +8,7 @@ describe("Security headers", () => {
     expect(headers).toBeDefined();
     expect(headers?.[0].source).toBe("/(.*)");
 
-    const headerMap = new Map(headers?.[0].headers.map((header) => [header.key, header.value]));
+  const headerMap = new Map(headers?.[0].headers.map((header: { key: string; value: string }) => [header.key, header.value]));
 
     expect(headerMap.get("X-Frame-Options")).toBe("DENY");
     expect(headerMap.get("X-Content-Type-Options")).toBe("nosniff");

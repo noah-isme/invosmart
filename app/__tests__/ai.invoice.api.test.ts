@@ -25,7 +25,8 @@ describe("POST /api/invoices/ai", () => {
   beforeEach(() => {
     getServerSessionMock.mockReset();
     createMock.mockReset();
-    process.env.OPENAI_API_KEY = "test-key";
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.GEMINI_API_KEY = "";
   });
 
   it("mengembalikan draft invoice ketika respons AI valid", async () => {

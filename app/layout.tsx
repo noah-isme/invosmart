@@ -4,9 +4,7 @@ import "./globals.css";
 
 import Footer from "@/components/layout/Footer";
 import { Banner } from "@/components/layout/Banner";
-import { TelemetryProvider } from "@/components/telemetry/TelemetryProvider";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { ToastProvider } from "@/context/ToastContext";
+import ClientRoot from "@/components/ClientRoot";
 import { APP_VERSION } from "@/lib/release";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -46,10 +44,6 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
     apple: "/favicon.svg",
   },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0e1016" },
-  ],
 };
 
 export default function RootLayout({
@@ -60,17 +54,13 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
-        <TelemetryProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
-                <Banner text={`🎉 InvoSmart ${APP_VERSION} is live! Thanks for supporting our launch.`} />
-                <div className="flex-1 pb-24">{children}</div>
-                <Footer version={APP_VERSION} />
-              </div>
-            </ToastProvider>
-          </ThemeProvider>
-        </TelemetryProvider>
+  <ClientRoot>
+          <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
+            <Banner text={`🎉 InvoSmart ${APP_VERSION} is live! Thanks for supporting our launch.`} />
+            <div className="flex-1 pb-24">{children}</div>
+            <Footer version={APP_VERSION} />
+          </div>
+  </ClientRoot>
       </body>
     </html>
   );

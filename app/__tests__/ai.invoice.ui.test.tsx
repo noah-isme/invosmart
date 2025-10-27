@@ -18,7 +18,6 @@ describe("AIInvoiceGeneratorClient", () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
-    // @ts-expect-error - override fetch for testing
     global.fetch = fetchMock;
     pushMock.mockReset();
     refreshMock.mockReset();

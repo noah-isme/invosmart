@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import OpenAI from "openai";
+import { createClient, DEFAULT_MODEL } from "@/lib/ai";
 import { z } from "zod";
 
 import { AIInvoiceSchema } from "@/lib/schemas";
@@ -43,13 +43,7 @@ const extractJson = (content: string) => {
   return content.slice(firstBrace, lastBrace + 1);
 };
 
-const createClient = () => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-};
+// Use createClient from lib/ai which prefers Gemini when configured.
 
 const generateInvoiceDraft = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
@@ -92,7 +86,7 @@ const generateInvoiceDraft = async (request: NextRequest) => {
     const client = createClient();
 
     const aiRes = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: parsedPrompt.data.prompt },

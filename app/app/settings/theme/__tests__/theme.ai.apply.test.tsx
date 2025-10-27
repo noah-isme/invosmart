@@ -25,7 +25,6 @@ describe("AI Theme Advisor", () => {
       }),
     });
 
-    // @ts-expect-error override fetch for test
     global.fetch = fetchMock;
 
     const applyAiTheme = vi.fn();

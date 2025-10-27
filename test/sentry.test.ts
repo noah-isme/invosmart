@@ -7,8 +7,8 @@ describe("sentry configuration", () => {
     process.env.NEXT_PUBLIC_SENTRY_DSN = "https://public@sentry.example/1";
     process.env.NEXT_PUBLIC_APP_VERSION = "v1.0.0";
 
-    const sentry = await import("@sentry/nextjs");
-    sentry.init.mockClear();
+  const sentry = (await import("@sentry/nextjs")) as unknown as { init?: { mockClear?: () => void }; captureException?: unknown };
+  (sentry.init as unknown as { mockClear?: () => void } )?.mockClear?.();
 
     await import("../sentry.client.config");
 
@@ -25,8 +25,8 @@ describe("sentry configuration", () => {
     process.env.SENTRY_DSN = "https://public@sentry.example/1";
     process.env.NEXT_PUBLIC_APP_VERSION = "v1.0.0";
 
-    const sentry = await import("@sentry/nextjs");
-    sentry.init.mockClear();
+  const sentry = (await import("@sentry/nextjs")) as unknown as { init?: { mockClear?: () => void }; captureException?: unknown };
+  (sentry.init as unknown as { mockClear?: () => void })?.mockClear?.();
 
     await import("../sentry.server.config");
 

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
-import OpenAI from "openai";
+import { createClient, DEFAULT_MODEL } from "@/lib/ai";
 
 import {
   AiInvoiceInsightSchema,
@@ -14,7 +14,7 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 
-const MODEL = "gpt-4o-mini";
+const MODEL = DEFAULT_MODEL;
 
 const formatCurrency = (value: number, currency: string) =>
   new Intl.NumberFormat("id-ID", {
@@ -85,13 +85,7 @@ Berikan respons dalam format JSON dengan struktur:
 Gunakan bahasa Indonesia yang profesional.`;
 };
 
-const createClient = () => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-};
+// Use createClient from lib/ai which prefers Gemini when configured.
 
 const parseAiResponse = (content: string) => {
   const cleaned = content.replace(/```json|```/g, "").trim();

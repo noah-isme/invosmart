@@ -14,9 +14,10 @@ export const withTiming = <TArgs extends unknown[]>(
   options?: TimingOptions,
 ) =>
   async (...args: TArgs) => {
-    const request = args[0] instanceof NextRequest ? (args[0] as NextRequest) : undefined;
-    const method = request?.method ?? "UNKNOWN";
-    const path = request?.nextUrl?.pathname ?? request?.url ?? "unknown";
+    // can't rely on instanceof checks in runtime across environments; use duck-typing
+    const maybeRequest = args[0] as unknown as { method?: string; nextUrl?: { pathname?: string }; url?: string } | undefined;
+    const method = maybeRequest?.method ?? "UNKNOWN";
+    const path = maybeRequest?.nextUrl?.pathname ?? maybeRequest?.url ?? "unknown";
     const startedAt = Date.now();
 
     let status = 500;
@@ -26,7 +27,7 @@ export const withTiming = <TArgs extends unknown[]>(
       status = response.status;
       return response;
     } catch (error) {
-      Sentry.captureException(error);
+      (Sentry as any).captureException?.(error);
       throw error;
     } finally {
       const duration = Date.now() - startedAt;

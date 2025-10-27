@@ -42,6 +42,7 @@ describe("POST /api/ai/theme-suggest", () => {
     redisSetMock.mockReset();
     redisGetMock.mockResolvedValue(null);
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "";
   });
 
   it("menghasilkan rekomendasi tema ketika respons AI valid", async () => {
@@ -64,7 +65,7 @@ describe("POST /api/ai/theme-suggest", () => {
       ],
     });
 
-    const request = new NextRequest("http://localhost/api/ai/theme-suggest", {
+    const request = new Request("http://localhost/api/ai/theme-suggest", {
       method: "POST",
       body: JSON.stringify({ brandName: "Acme Studio", preferredMode: "dark" }),
     });
@@ -97,7 +98,7 @@ describe("POST /api/ai/theme-suggest", () => {
       description: "Diambil dari cache",
     });
 
-    const request = new NextRequest("http://localhost/api/ai/theme-suggest", {
+    const request = new Request("http://localhost/api/ai/theme-suggest", {
       method: "POST",
       body: JSON.stringify({ brandName: "Acme Studio", preferredMode: "dark" }),
     });

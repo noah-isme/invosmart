@@ -8,7 +8,7 @@ type InvoiceRecord = Parameters<typeof generateInvoicePDF>[0];
 type UserRecord = Parameters<typeof generateInvoicePDF>[1];
 
 const createInvoice = (): InvoiceRecord => ({
-  id: "inv-001",
+  ...( { id: "inv-001" } as unknown as Record<string, unknown> ),
   number: "INV-2024-001",
   client: "PT Kreatif Maju",
   items: [
@@ -29,20 +29,14 @@ const createInvoice = (): InvoiceRecord => ({
 });
 
 const createUser = (): UserRecord => ({
-  id: "user-123",
   email: "studio@invosmart.dev",
   name: "Studio InvoSmart",
-  password: null,
   logoUrl: null,
   primaryColor: "#0ea5e9",
   fontFamily: "serif",
-  brandingSyncWithTheme: false,
-  useThemeForPdf: false,
   themePrimary: "#6366f1",
   themeAccent: "#22d3ee",
-  themeMode: "dark",
-  createdAt: new Date("2024-09-01T00:00:00.000Z"),
-  updatedAt: new Date("2024-10-01T00:00:00.000Z"),
+  useThemeForPdf: false,
 });
 
 describe("generateInvoicePDF", () => {

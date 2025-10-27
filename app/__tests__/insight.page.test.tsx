@@ -65,7 +65,6 @@ describe("InsightClient", () => {
       }),
     });
 
-    // @ts-expect-error - override global fetch for testing
     global.fetch = fetchMock;
 
     render(<InsightClient summary={summary} revenueInsight={revenueInsight} />);

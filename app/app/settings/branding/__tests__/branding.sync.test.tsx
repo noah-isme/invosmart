@@ -26,7 +26,6 @@ describe("Branding sync toggle", () => {
         },
       }),
     });
-    // @ts-expect-error test override
     global.fetch = fetchMock;
 
     const themeValue: ThemeContextValue = {

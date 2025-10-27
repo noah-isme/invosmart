@@ -53,7 +53,6 @@ beforeEach(() => {
     json: async () => ({ data: invoices, stats }),
   });
 
-  // @ts-expect-error - jsdom fetch override for testing
   global.fetch = fetchMock;
 });
 

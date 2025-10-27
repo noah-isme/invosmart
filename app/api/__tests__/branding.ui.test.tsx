@@ -11,7 +11,6 @@ describe("BrandingForm", () => {
 
   beforeEach(() => {
     fetchMock.mockReset();
-    // @ts-expect-error jsdom override
     global.fetch = fetchMock;
   });
 

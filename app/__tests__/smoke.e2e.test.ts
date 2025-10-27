@@ -24,7 +24,7 @@ let db: PrismaClient;
 
 describe("Smoke tests for critical routes", () => {
   beforeAll(async () => {
-    ({ db } = await import("@/lib/db"));
+    ({ db } = (await import("@/lib/db")) as unknown as { db: PrismaClient });
   });
 
   beforeEach(() => {
@@ -49,7 +49,7 @@ describe("Smoke tests for critical routes", () => {
       name: "Tester",
     } as never);
 
-    const request = new NextRequest("http://localhost/api/auth/register", {
+  const request = new Request("http://localhost/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -81,7 +81,7 @@ describe("Smoke tests for critical routes", () => {
       },
     ]);
 
-    const response = await GET(new NextRequest("http://localhost/api/insight/revenue"));
+  const response = await GET(new Request("http://localhost/api/insight/revenue") as unknown as NextRequest);
     expect(response.status).toBe(200);
   });
 
@@ -98,7 +98,7 @@ describe("Smoke tests for critical routes", () => {
     db.invoice.count.mockResolvedValueOnce(0);
     db.invoice.count.mockResolvedValueOnce(0);
 
-    const response = await GET(new NextRequest("http://localhost/api/invoices"));
+  const response = await GET(new Request("http://localhost/api/invoices") as unknown as NextRequest);
     expect(response.status).toBe(200);
   });
 });

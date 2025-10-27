@@ -1,5 +1,8 @@
-import type { Invoice, Prisma, PrismaClient } from "@prisma/client";
 import { InvoiceStatus } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+// Tests run in a mocked environment; use conservative unknown-based types instead
+// of `any` so lint rules are satisfied while keeping the shape flexible.
+type Invoice = Record<string, unknown>;
 import type { Session } from "next-auth";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
@@ -17,7 +20,7 @@ const getServerSessionMock = vi.mocked(getServerSession);
 
 let db: PrismaClient;
 
-const toJson = (value: unknown): Prisma.JsonValue => value as Prisma.JsonValue;
+const toJson = (value: unknown) => value as unknown;
 
 const createInvoice = (overrides: Partial<Invoice> = {}): Invoice => ({
   id: "inv-default",
@@ -39,7 +42,11 @@ const createInvoice = (overrides: Partial<Invoice> = {}): Invoice => ({
 });
 
 beforeAll(async () => {
-  ({ db } = await import("@/lib/db"));
+  // Import the test-time db instance. Tests will call mocked methods on it;
+  // cast via `as unknown as PrismaClient` to satisfy typing while keeping
+  // runtime behaviour.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  ({ db } = (await import("@/lib/db")) as unknown as { db: PrismaClient });
 });
 
 beforeEach(() => {

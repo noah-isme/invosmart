@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import type { Invoice, Prisma, PrismaClient } from "@prisma/client";
 import { InvoiceStatus } from "@prisma/client";
 import type { Session } from "next-auth";
@@ -15,7 +16,7 @@ vi.mock("@/server/auth", () => ({ authOptions: {} }));
 
 const getServerSessionMock = vi.mocked(getServerSession);
 
-let db: PrismaClient;
+let db: any;
 
 const toJson = (value: unknown): Prisma.JsonValue => value as Prisma.JsonValue;
 

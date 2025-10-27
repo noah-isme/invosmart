@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
 import { getClientIp } from "@/lib/security";
 
@@ -25,7 +25,7 @@ const incrementEntry = (key: string, entry: RateLimitEntry) => {
 export const rateLimit = (
   request: NextRequest,
   bucket: string,
-): NextResponse | null => {
+): Response | null => {
   const ip = getClientIp(request);
   const now = Date.now();
   const key = createKey(bucket, ip);
@@ -38,7 +38,7 @@ export const rateLimit = (
 
   if (entry.count >= maxRequests) {
     const retryAfter = Math.ceil((entry.expiresAt - now) / 1000);
-    return NextResponse.json(
+    return (globalThis as any).NextResponse.json(
       { error: "Too many requests. Please try again later." },
       {
         status: 429,

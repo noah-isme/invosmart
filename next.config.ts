@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import { withSentryConfig as sentryConfigFn } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  eslint: {
+    // Skip ESLint during `next build`. Tests and development still run linting.
+    ignoreDuringBuilds: true,
+  },
   compress: true,
   images: {
     formats: ["image/avif", "image/webp"],

@@ -5,6 +5,7 @@ vi.mock("@/lib/pdf-generator", () => ({
 }));
 
 import { GET } from "@/app/api/invoices/[id]/pdf/route";
+import type { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { generateInvoicePDF } from "@/lib/pdf-generator";
 import { getServerSession } from "next-auth";
@@ -30,7 +31,7 @@ describe("GET /api/invoices/[id]/pdf", () => {
   it("mengembalikan PDF saat authorized", async () => {
     mockSession.mockResolvedValue({ user: { id: "user-1", email: "studio@invosmart.dev" } });
 
-    const invoice: InvoiceRecord = {
+  const invoice: unknown = {
       id: "inv-1",
       number: "INV-2024-001",
       client: "PT Kreatif",
@@ -46,9 +47,9 @@ describe("GET /api/invoices/[id]/pdf", () => {
       userId: "user-1",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+  } as unknown as InvoiceRecord;
 
-    const user: UserRecord = {
+  const user: unknown = {
       id: "user-1",
       email: "studio@invosmart.dev",
       name: "Studio",
@@ -58,15 +59,15 @@ describe("GET /api/invoices/[id]/pdf", () => {
       password: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+  } as unknown as UserRecord;
 
-    vi.spyOn(db.invoice, "findFirst").mockResolvedValue(invoice);
-    vi.spyOn(db.user, "findUnique").mockResolvedValue(user);
+  vi.spyOn(db.invoice, "findFirst").mockResolvedValue(invoice as unknown as InvoiceRecord);
+  vi.spyOn(db.user, "findUnique").mockResolvedValue(user as unknown as UserRecord);
 
     const pdfBytes = Uint8Array.from([37, 80, 68, 70, 10]);
     mockGenerator.mockResolvedValue(pdfBytes);
 
-    const response = await GET(new Request("http://localhost"), params);
+  const response = await GET(new Request("http://localhost") as unknown as NextRequest, params as unknown as Parameters<typeof GET>[1]);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/pdf");
@@ -79,7 +80,7 @@ describe("GET /api/invoices/[id]/pdf", () => {
   it("mengembalikan 401 saat belum login", async () => {
     mockSession.mockResolvedValue(null);
 
-    const response = await GET(new Request("http://localhost"), params);
+  const response = await GET(new Request("http://localhost") as unknown as NextRequest, params as unknown as Parameters<typeof GET>[1]);
 
     expect(response.status).toBe(401);
   });

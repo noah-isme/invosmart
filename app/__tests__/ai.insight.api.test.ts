@@ -57,7 +57,8 @@ describe("POST /api/ai/invoice-insight", () => {
   beforeEach(() => {
     getServerSessionMock.mockReset();
     createMock.mockReset();
-    process.env.OPENAI_API_KEY = "test-key";
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.GEMINI_API_KEY = "";
   });
 
   it("returns AI insight when OpenAI responds with valid payload", async () => {
