@@ -49,5 +49,11 @@
     "test/**",
     "app/**/__tests__/**",
     "**/*.spec.*"
+  ],
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
   ]
 }

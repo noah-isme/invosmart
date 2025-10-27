@@ -2,22 +2,34 @@
 
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type {
   DashboardInvoice,
   InvoiceDashboardStats,
   InvoiceFilterValue,
+  InvoiceFilterCounts,
 } from "./types";
 import { DashboardStats } from "./DashboardStats";
 import { InvoiceFilter } from "./InvoiceFilter";
 import { InvoiceTable } from "./InvoiceTable";
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
 
 const DEFAULT_STATS: InvoiceDashboardStats = {
   revenue: 0,
   unpaid: 0,
   overdue: 0,
+};
+
+const DEFAULT_FILTER_COUNTS: InvoiceFilterCounts = {
+  ALL: 0,
+  [InvoiceStatusEnum.enum.DRAFT]: 0,
+  [InvoiceStatusEnum.enum.SENT]: 0,
+  [InvoiceStatusEnum.enum.PAID]: 0,
+  [InvoiceStatusEnum.enum.UNPAID]: 0,
+  [InvoiceStatusEnum.enum.OVERDUE]: 0,
 };
 
 const statusToLabel: Record<InvoiceStatusValue, string> = {
@@ -28,7 +40,8 @@ const statusToLabel: Record<InvoiceStatusValue, string> = {
   [InvoiceStatusEnum.enum.OVERDUE]: "Overdue",
 };
 
-const fetchErrorMessage = "Gagal memuat data invoice. Coba lagi.";
+const fetchErrorMessage =
+  "Kami kesulitan memuat data invoice sekarang. Coba muat ulang atau buat invoice baru.";
 
 const sectionFade = {
   hidden: { opacity: 0, y: 24 },
@@ -39,9 +52,11 @@ export const DashboardContent = () => {
   const [filter, setFilter] = useState<InvoiceFilterValue>("ALL");
   const [invoices, setInvoices] = useState<DashboardInvoice[]>([]);
   const [stats, setStats] = useState<InvoiceDashboardStats>(DEFAULT_STATS);
+  const [filterCounts, setFilterCounts] = useState<InvoiceFilterCounts>(DEFAULT_FILTER_COUNTS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const router = useRouter();
 
   const fetchInvoices = useCallback(
     async (override?: InvoiceFilterValue) => {
@@ -53,24 +68,26 @@ export const DashboardContent = () => {
         const query = targetFilter === "ALL" ? "" : `?status=${targetFilter}`;
         const response = await fetch(`/api/invoices${query}`);
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error ?? fetchErrorMessage);
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.error ?? fetchErrorMessage);
+        }
+
+        const payload = (await response.json()) as {
+          data: DashboardInvoice[];
+          stats: InvoiceDashboardStats;
+          filterCounts: InvoiceFilterCounts;
+        };
+
+        setInvoices(Array.isArray(payload.data) ? payload.data : []);
+        setStats(payload.stats ?? DEFAULT_STATS);
+        setFilterCounts(payload.filterCounts ?? { ...DEFAULT_FILTER_COUNTS });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : fetchErrorMessage;
+        setError(message);
+      } finally {
+        setLoading(false);
       }
-
-      const payload = (await response.json()) as {
-        data: DashboardInvoice[];
-        stats: InvoiceDashboardStats;
-      };
-
-      setInvoices(Array.isArray(payload.data) ? payload.data : []);
-      setStats(payload.stats ?? DEFAULT_STATS);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : fetchErrorMessage;
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
     },
     [filter],
   );
@@ -187,9 +204,29 @@ export const DashboardContent = () => {
         {error ? (
           <div
             role="alert"
-            className="glass-surface rounded-2xl border border-red-500/30 bg-red-500/5 px-5 py-4 text-sm text-red-200 shadow-[0_18px_45px_rgba(239,68,68,0.12)]"
+            className="glass-surface flex flex-col items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-5 py-5 text-sm text-red-50 shadow-[0_18px_45px_rgba(239,68,68,0.12)] md:flex-row md:items-center md:justify-between"
           >
-            {error}
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-red-100">Ups, dashboard kami lagi bermasalah</p>
+              <p className="text-sm text-red-50/80">{error}</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                onClick={() => {
+                  void fetchInvoices();
+                }}
+              >
+                Coba lagi
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  router.push("/app/invoices/new");
+                }}
+              >
+                Buat invoice baru
+              </Button>
+            </div>
           </div>
         ) : null}
       </motion.header>
@@ -207,7 +244,7 @@ export const DashboardContent = () => {
       </motion.div>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.1, duration: 0.35, ease: "easeOut" }}>
-        <InvoiceFilter value={filter} onChange={handleFilterChange} />
+        <InvoiceFilter value={filter} onChange={handleFilterChange} counts={filterCounts} />
       </motion.div>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.15, duration: 0.35, ease: "easeOut" }}>
@@ -215,8 +252,12 @@ export const DashboardContent = () => {
           invoices={invoices}
           loading={loading}
           pendingId={pendingId}
+          filter={filter}
           onUpdateStatus={handleUpdateStatus}
           onDelete={handleDelete}
+          onCreateInvoice={() => {
+            router.push("/app/invoices/new");
+          }}
         />
       </motion.div>
     </motion.section>

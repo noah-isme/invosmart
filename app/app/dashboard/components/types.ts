@@ -25,3 +25,5 @@ export type InvoiceDashboardStats = {
 };
 
 export type InvoiceFilterValue = InvoiceStatusValue | "ALL";
+
+export type InvoiceFilterCounts = Record<InvoiceFilterValue, number>;

@@ -33,7 +33,7 @@ Antarmuka InvoSmart kini hadir dengan gaya high-end SaaS: sidebar glassmorphism,
    Nilai yang wajib diisi minimal:
    - `NEXTAUTH_SECRET` → gunakan string acak yang kuat.
    - `DATABASE_URL` → `file:./dev.db` sudah cukup untuk pengembangan lokal (SQLite). Ganti ke URL Postgres saat deploy.
-   - `NEXTAUTH_URL` → alamat dasar aplikasi (default `http://localhost:3000`).
+   - `NEXTAUTH_URL` → alamat dasar aplikasi (default `http://localhost:1234`).
    Google OAuth bersifat opsional; cukup tambahkan `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET` ketika ingin mengaktifkan login Google.
 3. **Jalankan pemeriksaan kualitas**
    ```bash
@@ -46,7 +46,7 @@ Antarmuka InvoSmart kini hadir dengan gaya high-end SaaS: sidebar glassmorphism,
    ```bash
    npm run dev
    ```
-5. Buka `http://localhost:3000` untuk melihat antarmuka awal InvoSmart.
+5. Buka `http://localhost:1234` untuk melihat antarmuka awal InvoSmart.
 
 ### Scripts
 - `npm run dev` – Menjalankan Next.js dalam mode pengembangan dengan HMR.
@@ -90,9 +90,9 @@ Antarmuka InvoSmart kini hadir dengan gaya high-end SaaS: sidebar glassmorphism,
 
 ### Konfigurasi Google OAuth
 1. Buka [Google Cloud Console](https://console.cloud.google.com/) dan buat project baru (atau gunakan yang sudah ada).
-2. Aktifkan **OAuth consent screen** dan tambahkan domain `http://localhost:3000` (atau domain produksi) sebagai authorized domain.
+2. Aktifkan **OAuth consent screen** dan tambahkan domain `http://localhost:1234` (atau domain produksi) sebagai authorized domain.
 3. Buat kredensial **OAuth Client ID** dengan tipe **Web application**.
-4. Tambahkan `http://localhost:3000/api/auth/callback/google` sebagai **Authorized redirect URI** (ganti domain sesuai nilai `NEXTAUTH_URL` saat deploy).
+4. Tambahkan `http://localhost:1234/api/auth/callback/google` sebagai **Authorized redirect URI** (ganti domain sesuai nilai `NEXTAUTH_URL` saat deploy).
 5. Salin `Client ID` dan `Client Secret` lalu isi ke variabel `.env`:
    ```bash
    GOOGLE_CLIENT_ID=your_client_id

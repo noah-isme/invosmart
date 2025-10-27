@@ -1,10 +1,6 @@
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const HTTPS_HEADER = "x-forwarded-proto";
-const HTTPS_REQUIRED_RESPONSE = (globalThis as any).NextResponse.json(
-  { error: "HTTPS is required for this endpoint" },
-  { status: 403 },
-);
 
 export const enforceHttps = (request: NextRequest): Response | null => {
   // Only enforce HTTPS in production. During local development the dev server
@@ -15,7 +11,10 @@ export const enforceHttps = (request: NextRequest): Response | null => {
 
   const proto = request.headers.get(HTTPS_HEADER);
   if (proto && proto.toLowerCase() !== "https") {
-    return HTTPS_REQUIRED_RESPONSE;
+    return NextResponse.json(
+      { error: "HTTPS is required for this endpoint" },
+      { status: 403 },
+    );
   }
 
   return null;

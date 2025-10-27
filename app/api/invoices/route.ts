@@ -62,7 +62,13 @@ const getInvoices = async (request: NextRequest) => {
     ...(statusFilter ? { status: statusFilter } : {}),
   };
 
-  const [invoices, revenueAggregate, unpaidCount, overdueCount] = await Promise.all([
+  const [
+    invoices,
+    revenueAggregate,
+    unpaidCount,
+    overdueCount,
+    statusCountEntries,
+  ] = await Promise.all([
     db.invoice.findMany({
       where,
       take: 20,
@@ -74,9 +80,17 @@ const getInvoices = async (request: NextRequest) => {
     }),
     db.invoice.count({ where: { userId, status: InvoiceStatusEnum.enum.UNPAID } }),
     db.invoice.count({ where: { userId, status: InvoiceStatusEnum.enum.OVERDUE } }),
+    Promise.all(
+      (Object.values(InvoiceStatusEnum.enum) as InvoiceStatusValue[]).map(async (status) => [
+        status,
+        await db.invoice.count({ where: { userId, status } }),
+      ]),
+    ),
   ]);
 
   const revenue = revenueAggregate._sum.total ?? 0;
+  const countsByStatus = Object.fromEntries(statusCountEntries) as Record<InvoiceStatusValue, number>;
+  const allCount = Object.values(countsByStatus).reduce((acc, count) => acc + count, 0);
 
   return NextResponse.json({
     data: invoices,
@@ -84,6 +98,10 @@ const getInvoices = async (request: NextRequest) => {
       revenue,
       unpaid: unpaidCount,
       overdue: overdueCount,
+    },
+    filterCounts: {
+      ALL: allCount,
+      ...countsByStatus,
     },
   });
 };

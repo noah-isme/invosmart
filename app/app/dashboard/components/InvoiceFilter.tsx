@@ -2,12 +2,13 @@
 
 import { motion } from "framer-motion";
 
-import type { InvoiceFilterValue } from "./types";
+import type { InvoiceFilterCounts, InvoiceFilterValue } from "./types";
 import { InvoiceStatusEnum } from "@/lib/schemas";
 
 type InvoiceFilterProps = {
   value: InvoiceFilterValue;
   onChange: (value: InvoiceFilterValue) => void;
+  counts?: InvoiceFilterCounts;
 };
 
 const options: { label: string; value: InvoiceFilterValue }[] = [
@@ -19,14 +20,15 @@ const options: { label: string; value: InvoiceFilterValue }[] = [
   { label: "Overdue", value: InvoiceStatusEnum.enum.OVERDUE },
 ];
 
-export const InvoiceFilter = ({ value, onChange }: InvoiceFilterProps) => {
+export const InvoiceFilter = ({ value, onChange, counts }: InvoiceFilterProps) => {
   return (
     <div
       role="radiogroup"
-      className="glass-surface flex flex-wrap gap-3 rounded-[22px] border border-white/5 bg-white/[0.04] p-3"
+      className="glass-surface flex flex-wrap gap-4 rounded-[22px] border border-white/5 bg-white/[0.04] p-4"
     >
       {options.map((option) => {
         const isActive = option.value === value;
+        const count = counts?.[option.value] ?? 0;
 
         return (
           <motion.button
@@ -36,13 +38,21 @@ export const InvoiceFilter = ({ value, onChange }: InvoiceFilterProps) => {
             aria-checked={isActive}
             onClick={() => onChange(option.value)}
             whileTap={{ scale: 0.94 }}
-            className={`relative inline-flex items-center justify-center rounded-full px-5 py-2 text-xs font-semibold uppercase tracking-[0.24em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
+            className={`relative inline-flex items-center justify-center gap-3 rounded-full px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
               isActive
                 ? "bg-gradient-to-r from-primary to-accent text-text shadow-[0_15px_40px_rgba(var(--color-primary)_/_0.35)]"
                 : "border border-white/10 bg-transparent text-text/60 hover:border-white/20 hover:text-text"
             }`}
           >
-            {option.label}
+            <span>{option.label}</span>
+            <span
+              className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 text-[0.6rem] tracking-widest ${
+                isActive ? "bg-white/15 text-text" : "bg-white/5 text-text/70"
+              }`}
+              aria-hidden
+            >
+              {count}
+            </span>
           </motion.button>
         );
       })}
