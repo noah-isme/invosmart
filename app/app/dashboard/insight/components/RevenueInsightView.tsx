@@ -1,6 +1,21 @@
 "use client";
 
-import { motion } from "framer-motion";
+import * as FramerMotion from "framer-motion";
+import { useMemo } from "react";
+
+type MotionModule = typeof import("framer-motion") & {
+  useReducedMotion?: () => boolean;
+};
+
+const motionModule = FramerMotion as MotionModule;
+const { motion } = motionModule;
+const resolvedUseReducedMotion:
+  | MotionModule["useReducedMotion"]
+  | (() => boolean) =
+  "useReducedMotion" in motionModule &&
+  typeof motionModule.useReducedMotion === "function"
+    ? motionModule.useReducedMotion.bind(motionModule)
+    : () => false;
 import {
   Bar,
   BarChart,
@@ -44,16 +59,24 @@ type RevenueInsightViewProps = {
 };
 
 export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
-  const chartData = getChartData(insight);
-  const statusData = aggregateStatus(insight);
+  const shouldReduceMotion = resolvedUseReducedMotion();
+  const chartData = useMemo(() => getChartData(insight), [insight]);
+  const statusData = useMemo(() => aggregateStatus(insight), [insight]);
+  const transition = useMemo(
+    () => ({
+      duration: shouldReduceMotion ? 0.18 : 0.26,
+      ease: "easeOut" as const,
+    }),
+    [shouldReduceMotion],
+  );
 
   return (
     <div className="space-y-10">
       <section className="grid gap-6 lg:grid-cols-3">
         <motion.article
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          transition={transition}
           className="glass-surface relative overflow-hidden rounded-[28px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_70px_rgba(8,10,16,0.55)] lg:col-span-2"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(var(--color-primary)_/_0.18),_transparent_55%)]" />
@@ -79,11 +102,12 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
                   formatter={(value: number) => formatCurrency(value)}
                   labelFormatter={(label) => `Periode: ${label}`}
                   contentStyle={{
-                    background: "rgba(24,27,34,0.9)",
+                    background: "rgba(24,27,34,0.88)",
                     borderRadius: 16,
                     border: "1px solid rgba(255,255,255,0.08)",
                     color: "rgb(var(--color-text))",
-                    backdropFilter: "blur(12px)",
+                    backdropFilter: "blur(8px)",
+                    willChange: "transform",
                   }}
                 />
                 <Legend wrapperStyle={{ color: "rgb(var(--color-text))" }} iconType="circle" verticalAlign="bottom" height={32} />
@@ -96,9 +120,9 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
         </motion.article>
 
         <motion.article
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
+          transition={{ ...transition, delay: shouldReduceMotion ? 0 : 0.08 }}
           className="glass-surface relative overflow-hidden rounded-[28px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_70px_rgba(8,10,16,0.55)]"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(var(--color-accent)_/_0.16),_transparent_60%)]" />
@@ -121,11 +145,12 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
                 <Tooltip
                   formatter={(value: number) => `${value} invoice`}
                   contentStyle={{
-                    background: "rgba(14,16,22,0.92)",
+                    background: "rgba(14,16,22,0.9)",
                     borderRadius: 16,
                     border: "1px solid rgba(255,255,255,0.08)",
                     color: "rgb(var(--color-text))",
-                    backdropFilter: "blur(12px)",
+                    backdropFilter: "blur(8px)",
+                    willChange: "transform",
                   }}
                 />
                 <Bar dataKey="value" radius={[14, 14, 0, 0]} fill="url(#statusGradient)" />
@@ -143,9 +168,9 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
 
       <section className="grid gap-6 md:grid-cols-2">
         <motion.article
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.4, ease: "easeOut" }}
+          transition={{ ...transition, delay: shouldReduceMotion ? 0 : 0.12 }}
           className="glass-surface rounded-[26px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_60px_rgba(8,10,16,0.45)]"
         >
           <h3 className="text-lg font-semibold text-text">🏆 Klien paling cepat membayar</h3>
@@ -162,9 +187,9 @@ export const RevenueInsightView = ({ insight }: RevenueInsightViewProps) => {
         </motion.article>
 
         <motion.article
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
+          transition={{ ...transition, delay: shouldReduceMotion ? 0 : 0.16 }}
           className="glass-surface rounded-[26px] border border-white/6 bg-white/[0.04] p-6 shadow-[0_24px_60px_rgba(8,10,16,0.45)]"
         >
           <h3 className="text-lg font-semibold text-text">⚠️ Klien dengan invoice overdue</h3>

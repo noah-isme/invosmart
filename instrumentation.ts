@@ -6,11 +6,13 @@ const dsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN;
 const enabled = (process.env.ENABLE_TELEMETRY ?? "true") !== "false" && Boolean(dsn);
 
 export function register() {
-  Sentry.init({
-    dsn,
-    enabled,
-    release: RELEASE_TAG,
-    environment: process.env.NEXT_PUBLIC_SENTRY_ENV ?? process.env.NODE_ENV,
-    tracesSampleRate: 0.2,
-  });
+  if (typeof Sentry.init === "function") {
+    Sentry.init({
+      dsn,
+      enabled,
+      release: RELEASE_TAG,
+      environment: process.env.NEXT_PUBLIC_SENTRY_ENV ?? process.env.NODE_ENV,
+      tracesSampleRate: 0.2,
+    });
+  }
 }

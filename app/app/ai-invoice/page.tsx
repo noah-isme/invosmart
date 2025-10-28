@@ -1,8 +1,8 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
-import { AIInvoiceGeneratorClient } from "./AIInvoiceGeneratorClient";
 import { authOptions } from "@/server/auth";
+import { AIInvoiceGeneratorBoundary } from "./AIInvoiceGeneratorBoundary";
 
 export default async function AIInvoicePage() {
   const session = await getServerSession(authOptions);
@@ -13,7 +13,7 @@ export default async function AIInvoicePage() {
 
   return (
     <div className="space-y-8 pb-12">
-      <AIInvoiceGeneratorClient />
+      <AIInvoiceGeneratorBoundary />
     </div>
   );
 }

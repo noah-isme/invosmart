@@ -1,8 +1,38 @@
 "use client";
 
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
 
-import { InvoiceFormClient, type InvoiceFormInitialValues } from "@/components/invoices/InvoiceFormClient";
+import { Skeleton, SkeletonText } from "@/components/ui/Skeleton";
+import type { InvoiceFormInitialValues } from "@/components/invoices/InvoiceFormClient";
+
+const InvoiceFormClient = dynamic(
+  () =>
+    import("@/components/invoices/InvoiceFormClient").then(
+      (mod) => mod.InvoiceFormClient,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <section className="glass-surface space-y-4 rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+        <Skeleton className="h-6 w-40" />
+        <SkeletonText lines={4} />
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-11 w-full" />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-28" />
+        </div>
+      </section>
+    ),
+  },
+);
 
 type AIInvoicePreviewProps = {
   ready: boolean;

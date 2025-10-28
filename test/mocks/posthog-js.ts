@@ -12,4 +12,8 @@ const posthog = {
   reset: posthogReset,
 };
 
+if (typeof globalThis !== "undefined") {
+  (globalThis as { __POSTHOG_CLIENT__?: typeof posthog }).__POSTHOG_CLIENT__ = posthog;
+}
+
 export default posthog;

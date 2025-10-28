@@ -40,6 +40,10 @@ export const metadata: Metadata = {
     description:
       "Kelola invoice, tema, dan insight finansial secara otomatis dengan kecerdasan buatan.",
   },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1016" },
+  ],
   icons: {
     icon: "/favicon.svg",
     apple: "/favicon.svg",

@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 
 import { captureServerMetric } from "@/lib/server-telemetry";
@@ -27,7 +26,9 @@ export const withTiming = <TArgs extends unknown[]>(
       status = response.status;
       return response;
     } catch (error) {
-      (Sentry as any).captureException?.(error);
+      if (typeof Sentry.captureException === "function") {
+        Sentry.captureException(error);
+      }
       throw error;
     } finally {
       const duration = Date.now() - startedAt;
