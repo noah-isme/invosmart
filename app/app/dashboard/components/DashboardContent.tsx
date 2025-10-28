@@ -43,6 +43,16 @@ const statusToLabel: Record<InvoiceStatusValue, string> = {
 const fetchErrorMessage =
   "Kami kesulitan memuat data invoice sekarang. Coba muat ulang atau buat invoice baru.";
 
+type AppRouterInstance = ReturnType<typeof useRouter> | null;
+
+const useOptionalRouter = (): AppRouterInstance => {
+  try {
+    return useRouter();
+  } catch {
+    return null;
+  }
+};
+
 const sectionFade = {
   hidden: { opacity: 0, y: 24 },
   visible: { opacity: 1, y: 0 },
@@ -56,7 +66,7 @@ export const DashboardContent = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const router = useRouter();
+  const router = useOptionalRouter();
 
   const fetchInvoices = useCallback(
     async (override?: InvoiceFilterValue) => {
@@ -221,7 +231,7 @@ export const DashboardContent = () => {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  router.push("/app/invoices/new");
+                  router?.push?.("/app/invoices/new");
                 }}
               >
                 Buat invoice baru
@@ -256,7 +266,7 @@ export const DashboardContent = () => {
           onUpdateStatus={handleUpdateStatus}
           onDelete={handleDelete}
           onCreateInvoice={() => {
-            router.push("/app/invoices/new");
+            router?.push?.("/app/invoices/new");
           }}
         />
       </motion.div>

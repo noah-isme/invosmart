@@ -12,7 +12,9 @@ type GlobalErrorProps = {
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
-    Sentry.captureException(error);
+    if (typeof Sentry.captureException === "function") {
+      Sentry.captureException(error);
+    }
   }, [error]);
 
   return (

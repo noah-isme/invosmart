@@ -1,9 +1,9 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
-import { RevenueInsightView } from "./components/RevenueInsightView";
 import { getRevenueInsight } from "@/lib/analytics";
 import { authOptions } from "@/server/auth";
+import { RevenueInsightBoundary } from "./RevenueInsightBoundary";
 
 export const metadata = {
   title: "Revenue Insight | InvoSmart",
@@ -28,7 +28,7 @@ export default async function InsightDashboardPage() {
           berikutnya.
         </p>
       </div>
-      <RevenueInsightView insight={insight} />
+      <RevenueInsightBoundary insight={insight} />
     </main>
   );
 }
