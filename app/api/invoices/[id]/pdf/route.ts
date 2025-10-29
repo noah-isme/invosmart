@@ -8,6 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
+import { withSpan } from "@/lib/tracing";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -84,4 +85,10 @@ const getInvoicePdf = async (request: NextRequest, context: RouteContext) => {
   });
 };
 
-export const GET = withTiming(getInvoicePdf);
+export const GET = withTiming(
+  withSpan("api.invoices.pdf", getInvoicePdf, {
+    op: "http.server",
+    attributes: { "api.operation": "invoice_pdf" },
+  }),
+  { metricName: "api_invoices_pdf_latency" },
+);

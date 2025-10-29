@@ -5,11 +5,12 @@ import { getRevenueInsight } from "@/lib/analytics";
 import { rateLimit } from "@/lib/rate-limit";
 import { enforceHttps } from "@/lib/security";
 import { authOptions } from "@/server/auth";
+import { withSpan } from "@/lib/tracing";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-export async function GET(request: NextRequest) {
+const revenueHandler = async (request: NextRequest) => {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) {
     return httpsCheck;
@@ -29,4 +30,9 @@ export async function GET(request: NextRequest) {
   const data = await getRevenueInsight(session.user.id);
 
   return NextResponse.json(data);
-}
+};
+
+export const GET = withSpan("api.insight.revenue", revenueHandler, {
+  op: "http.server",
+  attributes: { "api.operation": "revenue_insight" },
+});

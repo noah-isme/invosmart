@@ -68,50 +68,45 @@ export const DashboardContent = () => {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const router = useOptionalRouter();
 
-  const fetchInvoices = useCallback(
-    async (override?: InvoiceFilterValue) => {
-      setLoading(true);
-      setError(null);
+  const fetchInvoices = useCallback(async (targetFilter: InvoiceFilterValue) => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const targetFilter = override ?? filter;
-        const query = targetFilter === "ALL" ? "" : `?status=${targetFilter}`;
-        const response = await fetch(`/api/invoices${query}`);
+    try {
+      const query = targetFilter === "ALL" ? "" : `?status=${encodeURIComponent(targetFilter)}`;
+      const response = await fetch(`/api/invoices${query}`);
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          throw new Error(body?.error ?? fetchErrorMessage);
-        }
-
-        const payload = (await response.json()) as {
-          data: DashboardInvoice[];
-          stats: InvoiceDashboardStats;
-          filterCounts: InvoiceFilterCounts;
-        };
-
-        setInvoices(Array.isArray(payload.data) ? payload.data : []);
-        setStats(payload.stats ?? DEFAULT_STATS);
-        setFilterCounts(payload.filterCounts ?? { ...DEFAULT_FILTER_COUNTS });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : fetchErrorMessage;
-        setError(message);
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? fetchErrorMessage);
       }
-    },
-    [filter],
-  );
+
+      const payload = (await response.json()) as {
+        data: DashboardInvoice[];
+        stats: InvoiceDashboardStats;
+        filterCounts: InvoiceFilterCounts;
+      };
+
+      setInvoices(Array.isArray(payload.data) ? payload.data : []);
+      setStats(payload.stats ?? DEFAULT_STATS);
+      setFilterCounts(payload.filterCounts ?? { ...DEFAULT_FILTER_COUNTS });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : fetchErrorMessage;
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void fetchInvoices();
-  }, [fetchInvoices]);
+    void fetchInvoices(filter);
+  }, [fetchInvoices, filter]);
 
   const handleFilterChange = useCallback(
     (value: InvoiceFilterValue) => {
       setFilter(value);
-      void fetchInvoices(value);
     },
-    [fetchInvoices],
+    [],
   );
 
   const handleUpdateStatus = useCallback(
@@ -148,7 +143,7 @@ export const DashboardContent = () => {
           throw new Error(body?.error ?? "Gagal memperbarui invoice.");
         }
 
-        await fetchInvoices();
+        await fetchInvoices(filter);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Gagal memperbarui invoice.";
         setError(message);
@@ -156,7 +151,7 @@ export const DashboardContent = () => {
         setPendingId(null);
       }
     },
-    [fetchInvoices, invoices],
+    [fetchInvoices, invoices, filter],
   );
 
   const handleDelete = useCallback(
@@ -174,7 +169,7 @@ export const DashboardContent = () => {
           throw new Error(body?.error ?? "Gagal menghapus invoice.");
         }
 
-        await fetchInvoices();
+        await fetchInvoices(filter);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Gagal menghapus invoice.";
         setError(message);
@@ -182,7 +177,7 @@ export const DashboardContent = () => {
         setPendingId(null);
       }
     },
-    [fetchInvoices],
+    [fetchInvoices, filter],
   );
 
   const subtitle = useMemo(() => {
@@ -223,7 +218,7 @@ export const DashboardContent = () => {
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 onClick={() => {
-                  void fetchInvoices();
+                  void fetchInvoices(filter);
                 }}
               >
                 Coba lagi
