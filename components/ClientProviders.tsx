@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { ReactNode } from "react";
 
 import { TelemetryProvider } from "@/components/telemetry/TelemetryProvider";
+import { AiOptimizerProvider } from "@/context/AiOptimizerContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
 
@@ -12,7 +13,9 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     <SessionProvider>
       <TelemetryProvider>
         <ThemeProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <AiOptimizerProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AiOptimizerProvider>
         </ThemeProvider>
       </TelemetryProvider>
     </SessionProvider>

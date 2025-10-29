@@ -33,6 +33,9 @@
       "@/components/*": [
         "components/*"
       ],
+      "@/hooks/*": [
+        "hooks/*"
+      ],
       "@/server/*": [
         "server/*"
       ]

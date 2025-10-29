@@ -54,3 +54,22 @@ enum InvoiceStatus {
   UNPAID
   OVERDUE
 }
+
+model OptimizationLog {
+  id         String              @id @default(cuid())
+  route      String
+  change     String
+  impact     String
+  confidence Float               @default(0.7)
+  status     OptimizationStatus  @default(PENDING)
+  actor      String              @default("system")
+  notes      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+}
+
+enum OptimizationStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
