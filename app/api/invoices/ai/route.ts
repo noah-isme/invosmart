@@ -9,6 +9,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
+import { withSpan } from "@/lib/tracing";
 
 const systemPrompt = `
 You are an invoice generation assistant.
@@ -113,5 +114,11 @@ const generateInvoiceDraft = async (request: NextRequest) => {
   }
 };
 
-export const POST = withTiming(generateInvoiceDraft);
+export const POST = withTiming(
+  withSpan("api.invoices.ai", generateInvoiceDraft, {
+    op: "http.server",
+    attributes: { "api.operation": "ai_invoice_draft" },
+  }),
+  { metricName: "api_invoices_ai_latency" },
+);
 

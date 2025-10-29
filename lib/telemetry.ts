@@ -5,6 +5,7 @@ type PosthogClient = {
   capture?: (event: string, props?: TelemetryProperties) => void;
   flush?: () => void;
   reset?: () => void;
+  get_distinct_id?: () => string | undefined;
 };
 
 type PosthogModule = { default?: PosthogClient } & PosthogClient;
@@ -126,6 +127,16 @@ export async function flushTelemetry() {
 
 export function telemetryStatus() {
   return { initialized, enabled: isTelemetryEnabled(), key } as const;
+}
+
+export function getTelemetryDistinctId() {
+  if (!initialized || !posthogClient) return null;
+
+  try {
+    return posthogClient.get_distinct_id?.() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function __resetTelemetryForTests() {

@@ -23,6 +23,7 @@ export default defineConfig({
       "posthog-js": path.resolve(__dirname, "test/mocks/posthog-js.ts"),
       "posthog-node": path.resolve(__dirname, "test/mocks/posthog-node.ts"),
       "@sentry/nextjs": path.resolve(__dirname, "test/mocks/sentry-nextjs.ts"),
+      "@sentry/core": path.resolve(__dirname, "test/mocks/sentry-core.ts"),
     },
   },
   test: {

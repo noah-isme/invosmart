@@ -15,6 +15,7 @@ import { markUserOverdueInvoices } from "@/lib/invoices";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
+import { withSpan } from "@/lib/tracing";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -184,5 +185,17 @@ const createInvoice = async (request: NextRequest) => {
   return NextResponse.json({ data: invoice }, { status: 201 });
 };
 
-export const GET = withTiming(getInvoices);
-export const POST = withTiming(createInvoice);
+export const GET = withTiming(
+  withSpan("api.invoices.list", getInvoices, {
+    op: "http.server",
+    attributes: { "api.operation": "list_invoices" },
+  }),
+  { metricName: "api_invoices_get_latency" },
+);
+export const POST = withTiming(
+  withSpan("api.invoices.create", createInvoice, {
+    op: "http.server",
+    attributes: { "api.operation": "create_invoice" },
+  }),
+  { metricName: "api_invoices_post_latency" },
+);

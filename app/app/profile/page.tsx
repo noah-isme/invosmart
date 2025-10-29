@@ -1,9 +1,22 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import dynamic from "next/dynamic";
+
 import { authOptions } from "@/server/auth";
+
+const ProfileActions = dynamic(() => import("./ProfileActions"), {
+  loading: () => <ProfileActionsFallback />,
+});
+
+function ProfileActionsFallback() {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <div className="h-10 w-28 animate-pulse rounded-2xl bg-white/10" aria-hidden />
+      <div className="h-10 w-40 animate-pulse rounded-2xl bg-white/10" aria-hidden />
+    </div>
+  );
+}
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
@@ -42,15 +55,7 @@ export default async function ProfilePage() {
           </div>
         </dl>
 
-        <div className="flex flex-wrap gap-3">
-          <SignOutButton />
-          <Link
-            href="/app"
-            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-text/80 transition hover:border-white/20 hover:text-text"
-          >
-            Kembali ke dashboard
-          </Link>
-        </div>
+        <ProfileActions />
       </section>
     </main>
   );
