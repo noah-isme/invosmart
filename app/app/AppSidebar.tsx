@@ -2,7 +2,7 @@
 
 import { type ComponentType, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Palette, Sparkles, SunMoon, UserCircle2 } from "lucide-react";
+import { GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2 } from "lucide-react";
 import { BarChart3, FilePenLine, LayoutDashboard, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -59,6 +59,12 @@ const navItems: NavItem[] = [
     label: "Branding",
     description: "Warna, logo, dan font brand Anda",
     icon: Palette,
+  },
+  {
+    href: "/app/settings/performance",
+    label: "Performance",
+    description: "Atur prefetch adaptif AI",
+    icon: GaugeCircle,
   },
 ];
 
