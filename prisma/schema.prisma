@@ -64,6 +64,9 @@ model OptimizationLog {
   status     OptimizationStatus  @default(PENDING)
   actor      String              @default("system")
   notes      String?
+  rollback   Boolean             @default(false)
+  deltaImpact Float              @default(0)
+  evalConfidence Float           @default(0.7)
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
 }
@@ -72,4 +75,19 @@ enum OptimizationStatus {
   PENDING
   APPLIED
   REJECTED
+}
+
+model LearningProfile {
+  route            String   @id
+  successRate      Float    @default(0)
+  avgImpact        Float    @default(0)
+  confidenceWeight Float    @default(0.7)
+  totalEvaluations Int      @default(0)
+  lastLcpP95       Float    @default(0)
+  lastInpP95       Float    @default(0)
+  lastApiLatencyP95 Float   @default(0)
+  lastErrorRate    Float    @default(0)
+  lastEval         DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

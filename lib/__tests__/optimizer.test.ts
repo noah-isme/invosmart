@@ -8,30 +8,30 @@ vi.mock("@prisma/client", () => ({
   },
 }));
 
-import {
+const createMock = vi.fn();
+const findManyMock = vi.fn();
+const updateMock = vi.fn();
+const learningFindManyMock = vi.fn().mockResolvedValue([]);
+
+vi.mock("@/lib/db", () => ({
+  db: {
+    optimizationLog: {
+      create: createMock,
+      findMany: findManyMock,
+      update: updateMock,
+    },
+    learningProfile: {
+      findMany: learningFindManyMock,
+    },
+  },
+}));
+
+const {
   fetchMetrics,
   generateOptimizationRecommendations,
   getLatestRecommendations,
   saveRecommendations,
-} from "@/lib/ai/optimizer";
-
-vi.mock("@/lib/db", () => {
-  const create = vi.fn();
-  const findMany = vi.fn();
-  const update = vi.fn();
-  (globalThis as Record<string, unknown>).__dbMocks = { create, findMany, update };
-  return {
-    db: {
-      optimizationLog: {
-        create,
-        findMany,
-        update,
-      },
-    },
-  };
-});
-
-const dbMocks = (globalThis as { __dbMocks: { create: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> } }).__dbMocks;
+} = await import("@/lib/ai/optimizer");
 
 type MockResponse = {
   ok: boolean;
@@ -63,8 +63,11 @@ vi.mock("@/lib/ai", () => ({
 describe("ai optimizer", () => {
   beforeEach(() => {
     chatCreateMock.mockReset();
-    dbMocks.create.mockReset();
-    dbMocks.findMany.mockReset();
+    createMock.mockReset();
+    findManyMock.mockReset();
+    updateMock.mockReset();
+    learningFindManyMock.mockReset();
+    learningFindManyMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -171,7 +174,7 @@ describe("ai optimizer", () => {
   });
 
   it("persists recommendations to optimization log", async () => {
-    dbMocks.create.mockResolvedValue({
+    createMock.mockResolvedValue({
       id: "rec1",
       route: "/app/dashboard",
       change: "Optimalkan hero",
@@ -199,13 +202,13 @@ describe("ai optimizer", () => {
       },
     ]);
 
-    expect(dbMocks.create).toHaveBeenCalledTimes(1);
+    expect(createMock).toHaveBeenCalledTimes(1);
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ route: "/app/dashboard", status: "PENDING" });
   });
 
   it("returns pending recommendations", async () => {
-    dbMocks.findMany.mockResolvedValue([
+    findManyMock.mockResolvedValue([
       {
         id: "rec1",
         route: "/app/invoices",
@@ -221,7 +224,7 @@ describe("ai optimizer", () => {
     ]);
 
     const results = await getLatestRecommendations({ limit: 5 });
-    expect(dbMocks.findMany).toHaveBeenCalledWith({
+    expect(findManyMock).toHaveBeenCalledWith({
       where: { status: "PENDING" },
       orderBy: { createdAt: "desc" },
       take: 5,

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { DEFAULT_MODEL, createClient } from "@/lib/ai";
 import { db } from "@/lib/db";
+import { applyConfidenceRecalibration } from "@/lib/ai/learning";
 
 const observabilityMetricSchema = z.object({
   route: z.string().min(1),
@@ -295,10 +296,11 @@ export const generateOptimizationRecommendations = async (
     const parsedJson = extractJsonFromMessage(content);
     const parsedRecommendations = recommendationResponseSchema.parse(parsedJson).recommendations;
 
-    return parsedRecommendations.filter((recommendation) => isNonCriticalRoute(recommendation.route));
+    const filtered = parsedRecommendations.filter((recommendation) => isNonCriticalRoute(recommendation.route));
+    return await applyConfidenceRecalibration(filtered);
   } catch (error) {
     console.warn("AI optimizer fallback triggered", error);
-    return buildFallbackRecommendations(parsedMetrics);
+    return await applyConfidenceRecalibration(buildFallbackRecommendations(parsedMetrics));
   }
 };
 
@@ -311,6 +313,9 @@ const toLogEntry = (log: {
   status: OptimizationStatus;
   actor: string;
   notes: string | null;
+  rollback: boolean;
+  deltaImpact: number | null;
+  evalConfidence: number | null;
   createdAt: Date;
   updatedAt: Date;
 }): OptimizationLogEntry => ({
@@ -322,6 +327,9 @@ const toLogEntry = (log: {
   status: log.status,
   actor: log.actor,
   notes: log.notes,
+  rollback: log.rollback,
+  deltaImpact: log.deltaImpact ?? 0,
+  evalConfidence: log.evalConfidence ?? log.confidence,
   createdAt: log.createdAt,
   updatedAt: log.updatedAt,
 });
@@ -331,6 +339,9 @@ export type OptimizationLogEntry = OptimizationRecommendation & {
   status: OptimizationStatus;
   actor: string;
   notes: string | null;
+  rollback: boolean;
+  deltaImpact: number;
+  evalConfidence: number;
   createdAt: Date;
   updatedAt: Date;
 };

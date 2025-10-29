@@ -25,7 +25,7 @@ export function AiTuningConfidenceChart({ history }: AiTuningConfidenceChartProp
         .map((entry, index) => ({
           id: entry.id,
           route: entry.route,
-          confidence: Number(entry.confidence.toFixed(2)),
+          confidence: Number((entry.evalConfidence ?? entry.confidence).toFixed(2)),
           label: `#${index + 1}`,
         })),
     [history],
