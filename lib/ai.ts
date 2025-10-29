@@ -105,7 +105,6 @@ export const createClient = () => {
     // Instantiate and coerce to our minimal client shape. We use `unknown` ->
     // `OpenAIClientLike` cast to avoid introducing `any` while acknowledging
     // the runtime shape may differ between package versions.
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const instance = new (OpenAIClient as unknown as new (opts: { apiKey?: string }) => unknown)({ apiKey: process.env.OPENAI_API_KEY });
     realClient = instance as unknown as OpenAIClientLike;
     return realClient;

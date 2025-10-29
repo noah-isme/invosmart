@@ -99,14 +99,15 @@ export const DashboardContent = () => {
   }, []);
 
   useEffect(() => {
-    void fetchInvoices(filter);
-  }, [fetchInvoices, filter]);
+    void fetchInvoices("ALL");
+  }, [fetchInvoices]);
 
   const handleFilterChange = useCallback(
     (value: InvoiceFilterValue) => {
       setFilter(value);
+      void fetchInvoices(value);
     },
-    [],
+    [fetchInvoices],
   );
 
   const handleUpdateStatus = useCallback(
