@@ -24,6 +24,8 @@ export default defineConfig({
       "posthog-node": path.resolve(__dirname, "test/mocks/posthog-node.ts"),
       "@sentry/nextjs": path.resolve(__dirname, "test/mocks/sentry-nextjs.ts"),
       "@sentry/core": path.resolve(__dirname, "test/mocks/sentry-core.ts"),
+      "reactflow/dist/style.css": path.resolve(__dirname, "test/mocks/empty.css"),
+      reactflow: path.resolve(__dirname, "test/mocks/reactflow.ts"),
     },
   },
   test: {
