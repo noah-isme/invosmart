@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
 import AiTuningClient from "@/app/devtools/ai-tuning/AiTuningClient";
+import { getLatestExplanationsMap } from "@/lib/ai/explain";
 import { getLatestRecommendations, getOptimizationHistory } from "@/lib/ai/optimizer";
+import { getTrustScore } from "@/lib/ai/trustScore";
 import { canViewPerfTools } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
@@ -13,18 +15,30 @@ export default async function AiTuningPage() {
     redirect("/app");
   }
 
-  const [recommendations, history] = await Promise.all([
+  const [recommendations, history, trust] = await Promise.all([
     getLatestRecommendations({ limit: 20 }),
     getOptimizationHistory({ limit: 50 }),
+    getTrustScore(),
   ]);
 
   const actor = session?.user?.email ?? session?.user?.name ?? "admin";
+
+  const recommendationIds = recommendations.map((entry) => entry.id);
+  const explanationsMap = await getLatestExplanationsMap(recommendationIds);
 
   const serialize = (entry: Awaited<ReturnType<typeof getOptimizationHistory>>[number]) => ({
     ...entry,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
   });
+
+  const serializedExplanations = Object.fromEntries(
+    recommendationIds.map((id) => {
+      const explanation = explanationsMap.get(id);
+      if (!explanation) return [id, undefined];
+      return [id, { ...explanation, createdAt: explanation.createdAt.toISOString() }];
+    }),
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-20 pt-12">
@@ -41,6 +55,8 @@ export default async function AiTuningPage() {
         initialRecommendations={recommendations.map(serialize)}
         history={history.map(serialize)}
         actor={actor}
+        explanations={serializedExplanations}
+        trustScore={trust.score}
       />
     </main>
   );
