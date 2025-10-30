@@ -1,5 +1,7 @@
 import { PolicyStatus } from "@prisma/client";
 
+import { dispatchEvent, isOrchestrationEnabled, registerAgent } from "@/lib/ai/orchestrator";
+import { getTrustScore } from "@/lib/ai/trustScore";
 import { captureServerEvent } from "@/lib/server-telemetry";
 
 export type PolicyCategory = "UI" | "API" | "DATA";
@@ -12,6 +14,15 @@ export type PolicyEvaluation = {
   allowAutoApply: boolean;
   category: PolicyCategory;
 };
+
+if (isOrchestrationEnabled()) {
+  registerAgent({
+    agentId: "governance",
+    name: "GovernanceAgent",
+    description: "Mengawasi kepatuhan policy AI dan mengelola trust score.",
+    capabilities: ["policy-evaluation", "conflict-resolution", "trust-update"],
+  });
+}
 
 type PolicyRule = {
   minimumConfidence: number;
@@ -111,5 +122,59 @@ export const notifyPolicyViolation = async (evaluation: PolicyEvaluation & { rou
     status: evaluation.status,
     reasons: evaluation.reasons.join(" | "),
     category: evaluation.category,
+  });
+};
+
+export const recordGovernanceDecision = async ({
+  route,
+  evaluation,
+  recommendationId,
+}: {
+  route: string;
+  evaluation: PolicyEvaluation;
+  recommendationId?: string;
+}) => {
+  if (!isOrchestrationEnabled()) return;
+
+  let trust;
+  try {
+    const { getTrustScore } = await import("@/lib/ai/trustScore");
+    trust = await getTrustScore();
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("Failed to compute trust score", error);
+    }
+    trust = {
+      score: 0,
+      metrics: {
+        successRate: 0,
+        rollbackRate: 0,
+        policyViolationRate: 0,
+        totalRecommendations: 0,
+        applied: 0,
+        violations: 0,
+      },
+    };
+  }
+
+  await dispatchEvent({
+    type: "policy_update",
+    source: "governance",
+    target: "optimizer",
+    payload: {
+      summary: `Governance ${evaluation.status} untuk ${route}`,
+      context: { reasons: evaluation.reasons },
+      recommendationId,
+      route,
+      status: evaluation.status,
+      minimumConfidence: evaluation.minimumConfidence,
+      allowAutoApply: evaluation.allowAutoApply,
+      trustScore: trust.score,
+      trustMetrics: {
+        successRate: trust.metrics.successRate,
+        rollbackRate: trust.metrics.rollbackRate,
+        policyViolationRate: trust.metrics.policyViolationRate,
+      },
+    },
   });
 };

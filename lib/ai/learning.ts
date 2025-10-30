@@ -2,9 +2,11 @@ import { OptimizationStatus, type LearningProfile as LearningProfileModel } from
 import { z } from "zod";
 
 import { DEFAULT_MODEL, createClient } from "@/lib/ai";
-import { db } from "@/lib/db";
+import { dispatchEvent, isOrchestrationEnabled, registerAgent } from "@/lib/ai/orchestrator";
 import type { ObservabilityMetric, OptimizationRecommendation } from "@/lib/ai/optimizer";
 import { processAutoRollback } from "@/lib/ai/rollback";
+import { emitInsightReport } from "@/lib/ai/insightAgent";
+import { db } from "@/lib/db";
 
 const evaluationOptionsSchema = z.object({
   intervalMinutes: z.number().int().min(5).max(24 * 60).default(60),
@@ -22,6 +24,59 @@ const calculatePercentDelta = (previous: number, current: number) => {
   return (previous - current) / previous;
 };
 
+if (isOrchestrationEnabled()) {
+  registerAgent({
+    agentId: "learning",
+    name: "LearningAgent",
+    description: "Mengevaluasi hasil tuning dan mengkaji dampak performa.",
+    capabilities: ["evaluation", "feedback", "correlation-analysis"],
+  });
+}
+
+const determineEvaluationStatus = (evaluation: LearningEvaluation) => {
+  if (evaluation.rollbackTriggered) {
+    return "rejected" as const;
+  }
+  if (evaluation.compositeImpact >= 0) {
+    return "approved" as const;
+  }
+  return "needs_review" as const;
+};
+
+const emitEvaluationEvents = async (evaluations: LearningEvaluation[]) => {
+  if (!isOrchestrationEnabled()) return;
+
+  const tasks = evaluations.flatMap((evaluation) =>
+    evaluation.recommendationsEvaluated.map((recommendationId) =>
+      dispatchEvent({
+        type: "evaluation",
+        source: "learning",
+        target: "governance",
+        payload: {
+          summary: `Evaluasi ${evaluation.route} (${evaluation.compositeImpact.toFixed(3)})`,
+          recommendationId,
+          status: determineEvaluationStatus(evaluation),
+          compositeImpact: evaluation.compositeImpact,
+          rollbackTriggered: evaluation.rollbackTriggered,
+          confidence: evaluation.newConfidence,
+          notes:
+            evaluation.rollbackTriggered
+              ? "Rollback diaktifkan berdasarkan ambang negatif"
+              : undefined,
+          metrics: {
+            deltaLcp: evaluation.deltaLcp,
+            deltaInp: evaluation.deltaInp,
+            deltaLatency: evaluation.deltaLatency,
+            deltaErrorRate: evaluation.deltaErrorRate,
+          },
+        },
+      }),
+    ),
+  );
+
+  await Promise.all(tasks);
+};
+
 const fetchLatestMetrics = async (intervalMinutes: number): Promise<ObservabilityMetric[]> => {
   const optimizerModule = await import("@/lib/ai/optimizer");
   return optimizerModule.fetchMetrics({ intervalMinutes });
@@ -36,7 +91,9 @@ export type LearningEvaluation = {
   compositeImpact: number;
   rollbackTriggered: boolean;
   newConfidence: number;
+  confidenceShift: number;
   logsEvaluated: number;
+  recommendationsEvaluated: string[];
 };
 
 const buildCompositeImpact = (deltaLcp: number, deltaInp: number, deltaLatency: number, deltaErrorRate: number) => {
@@ -158,7 +215,9 @@ const evaluateLogsForRoute = async (
     compositeImpact,
     rollbackTriggered,
     newConfidence,
+    confidenceShift: newConfidence - profile.confidenceWeight,
     logsEvaluated: logs.length,
+    recommendationsEvaluated: appliedLogs.map((log) => log.id),
   };
 };
 
@@ -254,7 +313,19 @@ export const runLearningCycle = async (options?: Partial<z.infer<typeof evaluati
     }
   }
 
+  if (evaluations.length) {
+    await emitEvaluationEvents(evaluations);
+  }
+
   const insight = await summarizeInsights(evaluations, model);
+
+  if (insight || evaluations.length) {
+    await emitInsightReport({
+      insight: insight ?? undefined,
+      evaluations,
+      month: new Date().toISOString().slice(0, 7),
+    });
+  }
 
   return { evaluations, insight };
 };
