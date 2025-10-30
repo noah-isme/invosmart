@@ -70,6 +70,7 @@ const ConfidenceHistoryChart = dynamic(
 );
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
+const formatSignedPercent = (value: number) => `${value >= 0 ? "+" : ""}${Math.round(value * 100)}%`;
 
 const trustBadge = (score: number) => {
   if (score >= 85) return "bg-emerald-500/10 text-emerald-200 border border-emerald-500/30";
@@ -222,12 +223,20 @@ export default function AiLearningClient({ profiles, logs, evaluations, insight,
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
             <p className="text-xs uppercase tracking-[0.28em] text-text/45">Evaluations</p>
             <ul className="mt-3 space-y-2 text-sm text-text/75">
-              {evaluations.map((evaluation) => (
-                <li key={evaluation.route} className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-text">{evaluation.route}</span>
-                  <span>
-                    Impact: {formatPercent(evaluation.compositeImpact)} · Confidence → {formatPercent(evaluation.newConfidence)}
-                  </span>
+              {evaluations.map((evaluation, index) => (
+                <li
+                  key={`${evaluation.route}-${index}`}
+                  className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <span className="block font-medium text-text">{evaluation.route}</span>
+                    <span className="text-xs text-text/60">
+                      Impact: {formatPercent(evaluation.compositeImpact)} · ΔConf: {formatSignedPercent(evaluation.confidenceShift)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-text/65">
+                    Confidence → {formatPercent(evaluation.newConfidence)} · Review {evaluation.recommendationsEvaluated.length} rekomendasi
+                  </div>
                 </li>
               ))}
               {evaluations.length === 0 && (

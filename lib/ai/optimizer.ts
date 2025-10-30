@@ -2,9 +2,21 @@ import { OptimizationStatus, PolicyStatus } from "@prisma/client";
 import { z } from "zod";
 
 import { DEFAULT_MODEL, createClient } from "@/lib/ai";
-import { db } from "@/lib/db";
 import { applyConfidenceRecalibration } from "@/lib/ai/learning";
-import { evaluatePolicy, isGovernanceEnabled, notifyPolicyViolation } from "@/lib/ai/policy";
+import {
+  dispatchEvent,
+  getLatestEvaluationForRecommendation,
+  isOrchestrationEnabled,
+  registerAgent,
+} from "@/lib/ai/orchestrator";
+import {
+  evaluatePolicy,
+  isGovernanceEnabled,
+  notifyPolicyViolation,
+  recordGovernanceDecision,
+  type PolicyEvaluation,
+} from "@/lib/ai/policy";
+import { db } from "@/lib/db";
 
 const observabilityMetricSchema = z.object({
   route: z.string().min(1),
@@ -98,6 +110,35 @@ const parseJsonFromResponse = async (response: Response) => {
   } catch (error) {
     throw new Error(`Failed to parse JSON from ${response.url}: ${(error as Error).message}`);
   }
+};
+
+if (isOrchestrationEnabled()) {
+  registerAgent({
+    agentId: "optimizer",
+    name: "OptimizerAgent",
+    description: "Mengumpulkan metrik performa dan mengusulkan optimasi UI/API.",
+    capabilities: ["metric-aggregation", "recommendation"],
+  });
+}
+
+const emitRecommendationEvent = async (
+  log: OptimizationLogEntry,
+  recommendation: OptimizationRecommendation,
+): Promise<void> => {
+  if (!isOrchestrationEnabled()) return;
+
+  await dispatchEvent({
+    type: "recommendation",
+    source: "optimizer",
+    target: "governance",
+    payload: {
+      summary: `Optimasi ${log.route} dengan confidence ${Math.round(log.confidence * 100)}%`,
+      recommendationId: log.id,
+      route: log.route,
+      confidence: log.confidence,
+      impact: recommendation.impact,
+    },
+  });
 };
 
 const collectPosthogMetrics = async (
@@ -380,6 +421,7 @@ export const saveRecommendations = async (
 
       let policyStatus: PolicyStatus = PolicyStatus.ALLOWED;
       let policyReason: string | null = null;
+      let policyEvaluation: PolicyEvaluation | null = null;
 
       if (governanceEnabled) {
         const evaluation = evaluatePolicy({
@@ -390,6 +432,7 @@ export const saveRecommendations = async (
         policyStatus = evaluation.status;
         policyReason = evaluation.reasons.length ? evaluation.reasons.join(" | ") : null;
         await notifyPolicyViolation({ ...evaluation, route: normalizedRoute });
+        policyEvaluation = evaluation;
       }
 
       const log = await db.optimizationLog.create({
@@ -400,12 +443,21 @@ export const saveRecommendations = async (
         },
       });
 
-      return log;
+      const entry = toLogEntry(log);
+      await emitRecommendationEvent(entry, recommendation);
+      if (policyEvaluation) {
+        await recordGovernanceDecision({
+          route: normalizedRoute,
+          evaluation: policyEvaluation,
+          recommendationId: entry.id,
+        });
+      }
+      return entry;
     }),
   );
 
   const filtered = created.filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  return filtered.map(toLogEntry);
+  return filtered;
 };
 
 export const getLatestRecommendations = async ({ limit = 10 } = {}): Promise<OptimizationLogEntry[]> => {
@@ -444,6 +496,15 @@ export const updateOptimizationStatus = async (
     throw new Error("Rekomendasi tidak ditemukan");
   }
 
+  if (status === OptimizationStatus.APPLIED && isOrchestrationEnabled()) {
+    const evaluation = await getLatestEvaluationForRecommendation(id);
+    if (!evaluation || evaluation.type !== "evaluation" || evaluation.payload.status !== "approved") {
+      throw new Error(
+        "Optimizer membutuhkan feedback positif dari LearningAgent sebelum menerapkan perubahan.",
+      );
+    }
+  }
+
   let policyStatus = existing.policyStatus;
   let policyReason = existing.policyReason;
 
@@ -463,6 +524,11 @@ export const updateOptimizationStatus = async (
 
     policyStatus = evaluation.status;
     policyReason = evaluation.reasons.length ? evaluation.reasons.join(" | ") : null;
+    await recordGovernanceDecision({
+      route: existing.route,
+      evaluation,
+      recommendationId: id,
+    });
   }
 
   const updated = await db.optimizationLog.update({

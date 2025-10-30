@@ -12,6 +12,11 @@ const { policyStatus } = vi.hoisted(() => ({
 
 vi.mock("@prisma/client", () => ({
   PolicyStatus: policyStatus,
+  PrismaClient: class {
+    constructor() {
+      return {} as never;
+    }
+  },
 }));
 
 vi.mock("@/lib/server-telemetry", () => ({ captureServerEvent: vi.fn() }));
