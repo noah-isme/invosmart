@@ -119,7 +119,10 @@ const createRedisStreamClient = (): RedisStreamClient => {
     },
     xlen: client.xlen ? (key) => client.xlen!(key) : undefined,
     xtrim: client.xtrim
-      ? (key, strategy, threshold) => client.xtrim!(key, { strategy, threshold } as any)
+      ? (key, strategy, threshold) => {
+          const normalizedStrategy = strategy === "MINID" ? "MINID" : "MAXLEN";
+          return client.xtrim!(key, { strategy: normalizedStrategy, threshold });
+        }
       : undefined,
     del: client.del ? (key) => client.del!(key) : undefined,
   } satisfies RedisStreamClient;

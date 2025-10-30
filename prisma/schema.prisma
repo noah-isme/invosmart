@@ -134,3 +134,33 @@ model AgentEventLog {
   @@index([traceId])
   @@index([recommendationId])
 }
+
+model AgentPriority {
+  id          String   @id @default(cuid())
+  agent       String
+  weight      Float
+  confidence  Float   @default(0.5)
+  rationale   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([agent])
+  @@unique([agent])
+}
+
+model RecoveryLog {
+  id                String   @id @default(cuid())
+  agent             String
+  action            String
+  reason            String?
+  traceId           String?
+  trustScoreBefore  Float?
+  trustScoreAfter   Float?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([agent])
+  @@index([createdAt])
+}
