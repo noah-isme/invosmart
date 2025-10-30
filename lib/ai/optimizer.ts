@@ -1,9 +1,10 @@
-import { OptimizationStatus } from "@prisma/client";
+import { OptimizationStatus, PolicyStatus } from "@prisma/client";
 import { z } from "zod";
 
 import { DEFAULT_MODEL, createClient } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { applyConfidenceRecalibration } from "@/lib/ai/learning";
+import { evaluatePolicy, isGovernanceEnabled, notifyPolicyViolation } from "@/lib/ai/policy";
 
 const observabilityMetricSchema = z.object({
   route: z.string().min(1),
@@ -316,6 +317,8 @@ const toLogEntry = (log: {
   rollback: boolean;
   deltaImpact: number | null;
   evalConfidence: number | null;
+  policyStatus: PolicyStatus;
+  policyReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): OptimizationLogEntry => ({
@@ -330,6 +333,8 @@ const toLogEntry = (log: {
   rollback: log.rollback,
   deltaImpact: log.deltaImpact ?? 0,
   evalConfidence: log.evalConfidence ?? log.confidence,
+  policyStatus: log.policyStatus,
+  policyReason: log.policyReason ?? undefined,
   createdAt: log.createdAt,
   updatedAt: log.updatedAt,
 });
@@ -342,6 +347,8 @@ export type OptimizationLogEntry = OptimizationRecommendation & {
   rollback: boolean;
   deltaImpact: number;
   evalConfidence: number;
+  policyStatus: PolicyStatus;
+  policyReason?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -350,26 +357,55 @@ export const saveRecommendations = async (
   recommendations: OptimizationRecommendation[],
   { actor = "system" }: { actor?: string } = {},
 ): Promise<OptimizationLogEntry[]> => {
-  const filtered = recommendations.filter((recommendation) => isNonCriticalRoute(recommendation.route));
+  if (!recommendations.length) return [];
 
-  if (!filtered.length) return [];
+  const governanceEnabled = isGovernanceEnabled();
 
   const created = await Promise.all(
-    filtered.map((recommendation) =>
-      db.optimizationLog.create({
-        data: {
-          route: ensureRouteFormat(recommendation.route),
-          change: recommendation.suggestion,
-          impact: recommendation.impact,
+    recommendations.map(async (recommendation) => {
+      const normalizedRoute = ensureRouteFormat(recommendation.route);
+      const baseData = {
+        route: normalizedRoute,
+        change: recommendation.suggestion,
+        impact: recommendation.impact,
+        confidence: recommendation.confidence,
+        actor,
+        status: OptimizationStatus.PENDING,
+      };
+
+      if (!governanceEnabled && !isNonCriticalRoute(normalizedRoute)) {
+        // Skip storing when governance is off and the route is critical.
+        return null;
+      }
+
+      let policyStatus: PolicyStatus = PolicyStatus.ALLOWED;
+      let policyReason: string | null = null;
+
+      if (governanceEnabled) {
+        const evaluation = evaluatePolicy({
+          route: normalizedRoute,
           confidence: recommendation.confidence,
-          actor,
-          status: OptimizationStatus.PENDING,
+          action: "modify",
+        });
+        policyStatus = evaluation.status;
+        policyReason = evaluation.reasons.length ? evaluation.reasons.join(" | ") : null;
+        await notifyPolicyViolation({ ...evaluation, route: normalizedRoute });
+      }
+
+      const log = await db.optimizationLog.create({
+        data: {
+          ...baseData,
+          policyStatus,
+          policyReason,
         },
-      }),
-    ),
+      });
+
+      return log;
+    }),
   );
 
-  return created.map(toLogEntry);
+  const filtered = created.filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  return filtered.map(toLogEntry);
 };
 
 export const getLatestRecommendations = async ({ limit = 10 } = {}): Promise<OptimizationLogEntry[]> => {
@@ -402,12 +438,41 @@ export const updateOptimizationStatus = async (
     notes?: string;
   } = {},
 ): Promise<OptimizationLogEntry> => {
+  const existing = await db.optimizationLog.findUnique({ where: { id } });
+
+  if (!existing) {
+    throw new Error("Rekomendasi tidak ditemukan");
+  }
+
+  let policyStatus = existing.policyStatus;
+  let policyReason = existing.policyReason;
+
+  if (isGovernanceEnabled() && status === OptimizationStatus.APPLIED) {
+    const evaluation = evaluatePolicy({
+      route: existing.route,
+      confidence: existing.confidence,
+      action: "auto-apply",
+    });
+
+    if (!evaluation.allowAutoApply || evaluation.status === PolicyStatus.BLOCKED) {
+      await notifyPolicyViolation({ ...evaluation, route: existing.route });
+      const message =
+        evaluation.reasons.join(" | ") || "Rekomendasi ditolak karena melanggar kebijakan governance";
+      throw new Error(message);
+    }
+
+    policyStatus = evaluation.status;
+    policyReason = evaluation.reasons.length ? evaluation.reasons.join(" | ") : null;
+  }
+
   const updated = await db.optimizationLog.update({
     where: { id },
     data: {
       status,
       actor,
       notes: notes ?? null,
+      policyStatus,
+      policyReason,
     },
   });
 

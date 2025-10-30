@@ -1,7 +1,8 @@
 import { InvoiceStatus } from "@prisma/client";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { InvoiceFilterValue } from "@/app/app/dashboard/components/types";
 import { DashboardContent } from "@/app/app/dashboard/components/DashboardContent";
 
 const invoices = [
@@ -46,6 +47,17 @@ const stats = {
 };
 
 let fetchMock: ReturnType<typeof vi.fn>;
+let triggerFilterChange: ((value: InvoiceFilterValue) => void) | undefined;
+
+vi.mock("@/app/app/dashboard/components/InvoiceFilter", () => ({
+  InvoiceFilter: (props: {
+    value: InvoiceFilterValue;
+    onChange: (value: InvoiceFilterValue) => void;
+  }) => {
+    triggerFilterChange = props.onChange;
+    return <div data-testid="invoice-filter-stub" />;
+  },
+}));
 
 beforeEach(() => {
   fetchMock = vi.fn().mockResolvedValue({
@@ -54,6 +66,7 @@ beforeEach(() => {
   });
 
   global.fetch = fetchMock;
+  triggerFilterChange = undefined;
 });
 
 afterEach(() => {
@@ -95,11 +108,20 @@ describe("DashboardContent", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-    const paidFilter = await screen.findByRole("radio", { name: /^Paid$/i });
-    fireEvent.click(paidFilter);
+    expect(typeof triggerFilterChange).toBe("function");
+
+    await act(async () => {
+      triggerFilterChange?.("PAID");
+    });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/invoices?status=PAID");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/invoices?status=PAID");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Menampilkan invoice dengan status Paid/i)).toBeInTheDocument();
     });
   });
 });

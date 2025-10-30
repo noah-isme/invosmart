@@ -67,14 +67,41 @@ model OptimizationLog {
   rollback   Boolean             @default(false)
   deltaImpact Float              @default(0)
   evalConfidence Float           @default(0.7)
+  policyStatus   PolicyStatus    @default(ALLOWED)
+  policyReason   String?
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
+
+  explanations ExplanationLog[]
 }
 
 enum OptimizationStatus {
   PENDING
   APPLIED
   REJECTED
+}
+
+model ExplanationLog {
+  id                String        @id @default(cuid())
+  recommendationId  String
+  route             String
+  why               String
+  context           String?
+  dataBasis         Json
+  confidence        Float
+  policyStatus      PolicyStatus  @default(ALLOWED)
+  trustScore        Float         @default(0)
+  actor             String        @default("system")
+  createdAt         DateTime      @default(now())
+  metadata          Json?
+
+  recommendation OptimizationLog @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+}
+
+enum PolicyStatus {
+  ALLOWED
+  REVIEW
+  BLOCKED
 }
 
 model LearningProfile {

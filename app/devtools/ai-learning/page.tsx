@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
 import AiLearningClient from "@/app/devtools/ai-learning/AiLearningClient";
+import { getLatestExplanationForRecommendation } from "@/lib/ai/explain";
+import { getTrustScore } from "@/lib/ai/trustScore";
 import { getLearningDashboardData, runLearningCycle } from "@/lib/ai/learning";
 import { canViewPerfTools } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
@@ -13,10 +15,16 @@ export default async function AiLearningPage() {
     redirect("/app");
   }
 
-  const [dashboard, evaluation] = await Promise.all([
+  const [dashboard, evaluation, trust] = await Promise.all([
     getLearningDashboardData(),
     runLearningCycle(),
+    getTrustScore(),
   ]);
+
+  const latestLog = dashboard.logs[0];
+  const latestExplanation = latestLog
+    ? await getLatestExplanationForRecommendation(latestLog.id)
+    : null;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-20 pt-12">
@@ -33,6 +41,8 @@ export default async function AiLearningPage() {
         logs={dashboard.logs}
         evaluations={evaluation.evaluations}
         insight={evaluation.insight}
+        trustScore={trust.score}
+        latestExplanation={latestExplanation}
       />
     </main>
   );

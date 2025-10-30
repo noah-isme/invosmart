@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/context/ToastContext";
+import type { ExplanationPayload } from "@/lib/ai/explain";
 import type { LearningEvaluation } from "@/lib/ai/learning";
 
 import { triggerLearningCycleAction } from "./actions";
@@ -47,6 +48,8 @@ type AiLearningClientProps = {
   logs: SerializableOptimizationLog[];
   evaluations: LearningEvaluation[];
   insight: string | null;
+  trustScore: number;
+  latestExplanation: ExplanationPayload | null;
 };
 
 const LearningCurveChart = dynamic(
@@ -68,7 +71,13 @@ const ConfidenceHistoryChart = dynamic(
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
 
-export default function AiLearningClient({ profiles, logs, evaluations, insight }: AiLearningClientProps) {
+const trustBadge = (score: number) => {
+  if (score >= 85) return "bg-emerald-500/10 text-emerald-200 border border-emerald-500/30";
+  if (score >= 70) return "bg-amber-500/10 text-amber-200 border border-amber-500/30";
+  return "bg-rose-500/10 text-rose-200 border border-rose-500/30";
+};
+
+export default function AiLearningClient({ profiles, logs, evaluations, insight, trustScore, latestExplanation }: AiLearningClientProps) {
   const router = useRouter();
   const { notify } = useToast();
   const [latestInsight, setLatestInsight] = useState(insight ?? null);
@@ -134,6 +143,37 @@ export default function AiLearningClient({ profiles, logs, evaluations, insight 
   return (
     <section className="space-y-8">
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.32em] text-text/50">AI governance</p>
+              <h2 className="text-2xl font-semibold text-text">Trust score {trustScore}</h2>
+            </div>
+            <span className={`rounded-full px-4 py-2 text-sm font-semibold ${trustBadge(trustScore)}`}>
+              {trustScore >= 85 ? "Stabil" : trustScore >= 70 ? "Perlu pemantauan" : "Butuh investigasi"}
+            </span>
+          </div>
+          <p className="mt-3 text-sm text-text/65">
+            Monitoring ini memperhitungkan keberhasilan deploy, rollback otomatis, dan jumlah pelanggaran kebijakan.
+          </p>
+          {latestExplanation ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-xs text-text/75">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-text">Why {latestExplanation.route}</p>
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1">
+                  Confidence {Math.round(latestExplanation.confidence * 100)}%
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-text/80">{latestExplanation.why}</p>
+              {latestExplanation.context && <p className="mt-2 text-[11px] text-text/60">{latestExplanation.context}</p>}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-xs text-text/60">
+              Belum ada explanation log. Jalankan audit atau panggil endpoint /api/ai/explain untuk menghasilkan catatan.
+            </div>
+          )}
+        </div>
+
         <div className="space-y-4 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div>

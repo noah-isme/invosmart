@@ -6,6 +6,11 @@ vi.mock("@prisma/client", () => ({
     APPLIED: "APPLIED",
     REJECTED: "REJECTED",
   },
+  PolicyStatus: {
+    ALLOWED: "ALLOWED",
+    REVIEW: "REVIEW",
+    BLOCKED: "BLOCKED",
+  },
 }));
 
 const createMock = vi.fn();
@@ -76,6 +81,7 @@ describe("ai optimizer", () => {
     delete process.env.SENTRY_AUTH_TOKEN;
     delete process.env.SENTRY_ORG_SLUG;
     delete process.env.SENTRY_PROJECT_SLUG;
+    delete process.env.ENABLE_AI_GOVERNANCE;
   });
 
   it("merges PostHog and Sentry metrics", async () => {
@@ -174,6 +180,8 @@ describe("ai optimizer", () => {
   });
 
   it("persists recommendations to optimization log", async () => {
+    process.env.ENABLE_AI_GOVERNANCE = "false";
+
     createMock.mockResolvedValue({
       id: "rec1",
       route: "/app/dashboard",
@@ -183,6 +191,8 @@ describe("ai optimizer", () => {
       status: "PENDING",
       actor: "system",
       notes: null,
+      policyStatus: "ALLOWED",
+      policyReason: null,
       createdAt: new Date("2024-01-01T00:00:00Z"),
       updatedAt: new Date("2024-01-01T00:00:00Z"),
     });
@@ -207,6 +217,35 @@ describe("ai optimizer", () => {
     expect(records[0]).toMatchObject({ route: "/app/dashboard", status: "PENDING" });
   });
 
+  it("records policy metadata when governance active", async () => {
+    createMock.mockResolvedValue({
+      id: "rec2",
+      route: "/admin/settings",
+      change: "Ubah threshold",
+      impact: "Stabilkan akses",
+      confidence: 0.75,
+      status: "PENDING",
+      actor: "system",
+      notes: null,
+      policyStatus: "BLOCKED",
+      policyReason: "Perubahan pada rute kritis memerlukan peninjauan manual",
+      createdAt: new Date("2024-01-02T00:00:00Z"),
+      updatedAt: new Date("2024-01-02T00:00:00Z"),
+    });
+
+    const records = await saveRecommendations([
+      {
+        route: "/admin/settings",
+        suggestion: "Ubah threshold",
+        impact: "Stabilkan akses",
+        confidence: 0.75,
+      },
+    ]);
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(records[0]).toMatchObject({ policyStatus: "BLOCKED" });
+  });
+
   it("returns pending recommendations", async () => {
     findManyMock.mockResolvedValue([
       {
@@ -218,6 +257,8 @@ describe("ai optimizer", () => {
         status: "PENDING",
         actor: "system",
         notes: null,
+        policyStatus: "ALLOWED",
+        policyReason: null,
         createdAt: new Date("2024-01-01T00:00:00Z"),
         updatedAt: new Date("2024-01-01T00:00:00Z"),
       },
