@@ -45,7 +45,6 @@ beforeAll(async () => {
   // Import the test-time db instance. Tests will call mocked methods on it;
   // cast via `as unknown as PrismaClient` to satisfy typing while keeping
   // runtime behaviour.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   ({ db } = (await import("@/lib/db")) as unknown as { db: PrismaClient });
 });
 

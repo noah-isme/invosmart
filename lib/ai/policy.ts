@@ -1,7 +1,6 @@
 import { PolicyStatus } from "@prisma/client";
 
 import { dispatchEvent, isOrchestrationEnabled, registerAgent } from "@/lib/ai/orchestrator";
-import { getTrustScore } from "@/lib/ai/trustScore";
 import { captureServerEvent } from "@/lib/server-telemetry";
 
 export type PolicyCategory = "UI" | "API" | "DATA";

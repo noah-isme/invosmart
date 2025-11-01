@@ -31,7 +31,7 @@ describe("priority system", () => {
     const learning = result.find((entry) => entry.agent === "learning");
 
     expect(governance?.weight).toBeGreaterThan(learning?.weight ?? 0);
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
   });
 
   it("persists priorities and returns summary", async () => {
@@ -74,6 +74,16 @@ describe("priority system", () => {
         updatedAt: now,
       }),
     );
+    upsertMock.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: "5",
+        agent: "federation",
+        weight: 0.08,
+        confidence: 0.7,
+        rationale: "FederationAgent menyelaraskan prioritas lintas instance untuk menjaga konsistensi global.",
+        updatedAt: now,
+      }),
+    );
 
     const { updateAgentPriorities } = await import("@/lib/ai/priority");
     const response = await updateAgentPriorities({
@@ -83,7 +93,7 @@ describe("priority system", () => {
       errorRate: 0.05,
     });
 
-    expect(upsertMock).toHaveBeenCalledTimes(4);
+    expect(upsertMock).toHaveBeenCalledTimes(5);
     expect(response.summary).toContain("Prioritas agen diperbarui");
   });
 });

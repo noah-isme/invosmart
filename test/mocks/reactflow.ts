@@ -1,6 +1,8 @@
+import { createElement } from "react";
 import type { FC, ReactNode } from "react";
 
-const ReactFlow: FC<{ children?: ReactNode }> = ({ children }) => <div data-testid="reactflow">{children}</div>;
+const ReactFlow: FC<{ children?: ReactNode }> = ({ children }) =>
+  createElement("div", { "data-testid": "reactflow" }, children);
 
 export const Background: FC = () => null;
 export const Controls: FC = () => null;

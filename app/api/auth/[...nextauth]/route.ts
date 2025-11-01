@@ -1,8 +1,4 @@
 import NextAuth from "next-auth";
-import type { NextRequest } from "next/server";
-
-import { enforceHttps } from "@/lib/security";
-import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 
 const handler = NextAuth(authOptions);

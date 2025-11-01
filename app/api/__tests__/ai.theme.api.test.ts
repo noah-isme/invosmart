@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildCacheKey, setCachedThemeSuggestion } from "@/lib/cache/theme-suggestions";

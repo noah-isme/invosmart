@@ -10,8 +10,6 @@ type WebVitalMetric = {
   rating?: string;
 };
 
-type WebVitalCallback = (metric: WebVitalMetric) => void;
-
 const BOT_PATTERN = /bot|crawler|spider|crawling/i;
 const DEFAULT_SAMPLE_RATE = 0.2;
 

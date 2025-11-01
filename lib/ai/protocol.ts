@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const agentRoleSchema = z.enum(["optimizer", "learning", "governance", "insight"]);
+export const agentRoleSchema = z.enum(["optimizer", "learning", "governance", "insight", "federation"]);
 export type AgentRole = z.infer<typeof agentRoleSchema>;
 
 export const mapEventTypeSchema = z.enum([
@@ -16,11 +16,14 @@ export const optimizerPriority = 75;
 export const learningPriority = 60;
 export const insightPriority = 45;
 
+export const federationPriority = 35;
+
 export const agentPriority: Record<AgentRole, number> = {
   governance: governancePriority,
   optimizer: optimizerPriority,
   learning: learningPriority,
   insight: insightPriority,
+  federation: federationPriority,
 };
 
 const basePayloadSchema = z.object({
@@ -167,6 +170,7 @@ export const AGENT_NAMES: Record<AgentRole, string> = {
   learning: "LearningAgent",
   governance: "GovernanceAgent",
   insight: "InsightAgent",
+  federation: "FederationAgent",
 };
 
 export const EVENT_STREAM_KEY = "ai:orchestrator:events" as const;
