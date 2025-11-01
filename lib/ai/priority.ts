@@ -19,10 +19,11 @@ export type AgentPrioritySnapshot = {
 const AGENT_ROLES = agentRoleSchema.options;
 
 const BASE_WEIGHTS: Record<AgentRole, number> = {
-  governance: 0.3,
-  optimizer: 0.28,
-  learning: 0.24,
-  insight: 0.18,
+  governance: 0.28,
+  optimizer: 0.26,
+  learning: 0.22,
+  insight: 0.16,
+  federation: 0.08,
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -61,7 +62,9 @@ export const calculatePriorityWeights = (signal: PrioritySignal): AgentPriorityS
           ? base * (0.6 * (1 - successModifier) + 0.4 * trustModifier)
           : agent === "insight"
             ? base * (0.5 * (1 - loadModifier) + 0.5 * trustModifier)
-            : base * (0.5 * trustModifier + 0.5 * (1 - errorPenalty));
+            : agent === "federation"
+              ? base * (0.6 * trustModifier + 0.4 * (1 - errorPenalty))
+              : base * (0.5 * trustModifier + 0.5 * (1 - errorPenalty));
 
     acc[agent] = dynamicWeight;
     return acc;
@@ -79,7 +82,9 @@ export const calculatePriorityWeights = (signal: PrioritySignal): AgentPriorityS
           ? "LearningAgent diperkuat untuk mengimbangi area yang belum optimal."
           : agent === "governance"
             ? "Governance memastikan kepatuhan saat skor kepercayaan turun."
-            : "InsightAgent membantu mendeteksi pola anomali dan peluang baru.";
+            : agent === "insight"
+              ? "InsightAgent membantu mendeteksi pola anomali dan peluang baru."
+              : "FederationAgent menyelaraskan prioritas lintas instance untuk menjaga konsistensi global.";
 
     return {
       agent,

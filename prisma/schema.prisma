@@ -164,3 +164,25 @@ model RecoveryLog {
   @@index([agent])
   @@index([createdAt])
 }
+
+model FederationMetrics {
+  id                   String   @id @default(cuid())
+  cycleId              String
+  tenantId             String
+  participants         Int
+  averageTrust         Float
+  medianTrust          Float
+  trustStdDeviation    Float
+  highestTenant        String?
+  highestTrust         Float?
+  lowestTenant         String?
+  lowestTrust          Float?
+  averageLatencyMs     Float?
+  aggregatedPriorities Json
+  summary              String?
+  networkHealth        String  @default("healthy")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([cycleId, tenantId])
+}

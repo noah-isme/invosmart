@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { __resetTelemetryForTests, initTelemetry, trackEvent } from "@/lib/telemetry";
 import posthog from "posthog-js";
