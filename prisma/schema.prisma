@@ -186,3 +186,116 @@ model FederationMetrics {
 
   @@unique([cycleId, tenantId])
 }
+
+enum ExperimentAxis {
+  HOOK
+  CAPTION
+  CTA
+  SCHEDULE
+}
+
+enum ExperimentStatus {
+  running
+  paused
+  stopped
+  completed
+}
+
+enum AutoActionType {
+  AUTOPUBLISH
+  SCHEDULE_UPDATE
+  AUTO_REVERT
+  AUTO_CTA_TUNE
+}
+
+enum AutoActionStatus {
+  applied
+  reverted
+  failed
+}
+
+model ContentExperiment {
+  id              Int               @id @default(autoincrement())
+  organizationId  String?
+  contentId       Int
+  axis            ExperimentAxis
+  status          ExperimentStatus  @default(running)
+  startAt         DateTime          @default(now())
+  endAt           DateTime?
+  winnerVariantId Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  variants        ContentVariant[]
+  winnerVariant   ContentVariant?   @relation("ExperimentWinner", fields: [winnerVariantId], references: [id])
+  autoActions     AiAutoAction[]    @relation("ExperimentAutoActions")
+
+  @@index([organizationId, contentId, axis])
+}
+
+model ContentVariant {
+  id             Int                @id @default(autoincrement())
+  experimentId   Int
+  variantKey     String
+  payload        Json
+  aiExplanation  String?
+  confidence     Float?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  experiment      ContentExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  metrics         VariantMetric[]
+  autoActions     AiAutoAction[]    @relation("VariantAutoActions")
+  wonExperiments  ContentExperiment[] @relation("ExperimentWinner")
+
+  @@index([experimentId])
+  @@unique([experimentId, variantKey])
+}
+
+model VariantMetric {
+  id          Int             @id @default(autoincrement())
+  variantId   Int
+  impressions Int             @default(0)
+  clicks      Int             @default(0)
+  conversions Int             @default(0)
+  dwellMs     Int             @default(0)
+  ctr         Float           @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  variant     ContentVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+}
+
+model AiAutoAction {
+  id             Int                  @id @default(autoincrement())
+  organizationId String?
+  actionType     AutoActionType
+  contentId      Int?
+  experimentId   Int?
+  variantId      Int?
+  reason         String?
+  confidence     Float?
+  status         AutoActionStatus     @default(applied)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  experiment     ContentExperiment?   @relation("ExperimentAutoActions", fields: [experimentId], references: [id])
+  variant        ContentVariant?      @relation("VariantAutoActions", fields: [variantId], references: [id])
+
+  @@index([organizationId, actionType, createdAt])
+}
+
+model GlobalContentSignal {
+  id             Int              @id @default(autoincrement())
+  organizationId String?
+  axis           ExperimentAxis
+  window         String
+  signal         Json
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId, axis, window])
+  @@unique([organizationId, axis, window], map: "organizationId_axis_window")
+}
