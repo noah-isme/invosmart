@@ -1,12 +1,21 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const db = new PrismaClient();
 
 async function main() {
+  const hashedPassword = await bcrypt.hash("demo123", 10);
+  
   const user = await db.user.upsert({
     where: { email: "demo@invosmart.dev" },
-    update: {},
-    create: { email: "demo@invosmart.dev", name: "Demo User" },
+    update: {
+      password: hashedPassword
+    },
+    create: { 
+      email: "demo@invosmart.dev", 
+      name: "Demo User",
+      password: hashedPassword
+    },
   });
 
   const existingInvoice = await db.invoice.findUnique({

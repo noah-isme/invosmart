@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgres"
   url      = env("DATABASE_URL")
 }
 
@@ -45,6 +45,8 @@ model Invoice {
 
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  
+  payments  Payment[]
 }
 
 enum InvoiceStatus {
@@ -299,3 +301,56 @@ model GlobalContentSignal {
   @@index([organizationId, axis, window])
   @@unique([organizationId, axis, window], map: "organizationId_axis_window")
 }
+
+model Payment {
+  id           String    @id @default(cuid())
+  invoiceId    String
+  paidAmount   Int
+  paidCurrency String    @default("IDR")
+  paidAt       DateTime
+  method       String?
+  note         String?
+  createdAt    DateTime  @default(now())
+  
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receipts     Receipt[]
+  
+  @@index([invoiceId])
+}
+
+enum ReceiptPosition {
+  bottom_left
+  bottom_right
+  center
+}
+
+model Receipt {
+  id                      String          @id @default(cuid())
+  paymentId               String
+  receiptNo               String          @unique
+  verifyToken             String          @db.VarChar(64)
+  positionPreset          ReceiptPosition
+  stampCompanySealEnabled Boolean         @default(false)
+  stampPaidEnabled        Boolean         @default(true)
+  signatureEnabled        Boolean         @default(false)
+  createdAt               DateTime        @default(now())
+  
+  payment                 Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  audits                  ReceiptAuditLog[]
+  
+  @@index([paymentId])
+}
+
+model ReceiptAuditLog {
+  id        String   @id @default(cuid())
+  receiptId String
+  action    String
+  actor     String
+  meta      Json?
+  createdAt DateTime @default(now())
+  
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  
+  @@index([receiptId])
+}
+

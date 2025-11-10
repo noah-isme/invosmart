@@ -25,20 +25,21 @@ export const createClient = () => {
       chat: {
         completions: {
           create: async ({ model, messages, temperature }: { model: string; messages: Message[]; temperature?: number }) => {
-            // Prefer the v1beta2 generateText endpoint. We send a simple prompt
-            // body; the actual Google API supports richer message formats but
-            // this keeps integration lightweight.
-            const prompt = buildGeminiPrompt(messages || []);
+            // Use the v1beta generateContent endpoint (current stable API)
+            const contents = messages.map((msg) => ({
+              role: msg.role === "system" || msg.role === "user" ? "user" : "model",
+              parts: [{ text: msg.content }],
+            }));
 
-            const url = `https://generativelanguage.googleapis.com/v1beta2/models/${encodeURIComponent(model)}:generateText?key=${encodeURIComponent(key)}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
 
             const body: Record<string, unknown> = {
-              prompt: { text: prompt },
+              contents,
+              generationConfig: {
+                temperature: temperature ?? 0.7,
+                maxOutputTokens: 2048,
+              },
             };
-
-            if (typeof temperature === "number") {
-              (body as Record<string, unknown>).temperature = temperature;
-            }
 
             const res = await fetch(url, {
               method: "POST",
@@ -53,15 +54,10 @@ export const createClient = () => {
 
             const data = await res.json();
 
-            // The generative API has changed shapes over time. Try a few common
-            // locations for the generated text and fall back to a JSON dump.
+            // Extract text from Gemini response format
             const candidateText =
-              data?.candidates?.[0]?.content?.[0]?.text ||
-              data?.candidates?.[0]?.content?.text ||
-              data?.candidates?.[0]?.output ||
-              data?.output?.[0]?.content?.text ||
+              data?.candidates?.[0]?.content?.parts?.[0]?.text ||
               data?.candidates?.[0]?.text ||
-              data?.text ||
               JSON.stringify(data);
 
             return { choices: [{ message: { content: String(candidateText) } }] };

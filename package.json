@@ -41,7 +41,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^10.2.1",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^16.1.0",
     "@types/bcrypt": "^5.0.2",
@@ -54,9 +54,9 @@
     "jsdom": "^27.0.1",
     "prisma": "^6.1.0",
     "semantic-release": "^23.0.0",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.1.17",
     "ts-node": "^10.9.2",
-    "typescript": "^5",
+    "typescript": "5.9.3",
     "vitest": "^2.1.8"
   }
 }

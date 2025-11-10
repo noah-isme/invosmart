@@ -44,10 +44,10 @@ export default function AppShell({ children }: AppShellProps) {
         />
       ) : null}
 
-      <div className="relative mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-16 lg:flex-row lg:gap-12">
+      <div className="relative mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 pb-16 pt-16 lg:flex-row lg:gap-6">
         <Sidebar isMobileOpen={isMobileNavOpen} onMobileClose={closeMobileNav} />
         <main
-          className="relative z-[1] flex-1 pb-16 lg:pb-24"
+          className="relative z-[1] min-w-0 flex-1 pb-16 lg:pb-24"
           onClick={() => {
             if (isMobileNavOpen) {
               closeMobileNav();

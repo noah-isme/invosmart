@@ -37,9 +37,8 @@ const loadPosthogModule = (): PosthogModule | Promise<PosthogModule> => {
       if (maybeRequire) {
         return maybeRequire("posthog-js") as PosthogModule;
       }
-      const evaluatedRequire = new Function("return require") as () => NodeRequire;
-      const resolvedRequire = evaluatedRequire();
-      return resolvedRequire("posthog-js") as PosthogModule;
+      // Skip dynamic require in test mode if not available
+      // Fall back to dynamic import
     } catch {
       // fall back to dynamic import
     }
