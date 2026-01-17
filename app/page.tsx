@@ -1,13 +1,13 @@
+'use client';
+
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   BellRing,
   BrainCircuit,
   CheckCircle2,
-  Circle,
   CreditCard,
-  FileText,
-  Flag,
   LineChart,
   MessageSquare,
   Printer,
@@ -37,558 +37,409 @@ type Insight = {
   description: string;
 };
 
-type SprintTask = {
+type Metric = {
+  label: string;
+  value: string;
+  detail: string;
+};
+
+type ExperienceHighlight = {
+  tag: string;
   title: string;
   description: string;
-  status: "done" | "pending";
+  accent: string;
 };
 
-type Sprint = {
-  badge: string;
-  title: string;
-  objective: string;
-  tasks: SprintTask[];
+type Testimonial = {
+  quote: string;
+  author: string;
+  role: string;
 };
 
-const mvpFeatures: Feature[] = [
+const viewport = { once: true, amount: 0.25 };
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 36 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } },
+};
+
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.92 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.7, ease: "easeOut" } },
+};
+
+const blurIn = {
+  hidden: { opacity: 0, filter: "blur(6px)", y: 20 },
+  visible: { opacity: 1, filter: "blur(0px)", y: 0, transition: { duration: 0.9, ease: "easeOut" } },
+};
+
+const heroStats: Metric[] = [
+  { label: "Invoice diproses", value: "12K+", detail: "per bulan" },
+  { label: "Nilai transaksi", value: "$8.2M", detail: "nilai tahunan" },
+  { label: "Skor kepuasan", value: "4.9/5", detail: "420+ bisnis" },
+];
+
+const premiumFeatures: Feature[] = [
   {
-    title: "Autentikasi & Otorisasi",
+    title: "AI Invoice Composer",
     description:
-      "Login & Register aman dengan email/password, dukungan Google OAuth, dan sesi berbasis JWT.",
-    icon: ShieldCheck,
-    highlight: "Google OAuth + JWT",
-  },
-  {
-    title: "Dashboard Invoice",
-    description:
-      "Pantau semua invoice dalam satu tempat dengan filter status, quick stats, dan highlight invoice terbaru.",
-    icon: LineChart,
-    highlight: "Paid / Unpaid / Draft",
-  },
-  {
-    title: "AI Invoice Generator",
-    description:
-      "Konversi instruksi natural language menjadi invoice profesional lengkap dengan detail klien dan perhitungan otomatis.",
+      "Masukkan perintah natural, InvoSmart menyusun invoice dengan detail klien, termin, dan multi-item otomatis.",
     icon: BrainCircuit,
-    highlight: "GPT-4 powered",
+    highlight: "GPT-4 native",
   },
   {
-    title: "Manual Invoice Form",
+    title: "Live Cashflow Board",
     description:
-      "Alternatif pembuatan invoice manual dengan validasi menyeluruh dan perhitungan subtotal, pajak, serta total otomatis.",
-    icon: FileText,
+      "Dashboard signature menampilkan paid, overdue, dan proyeksi kas nyata agar keputusan finansial makin cepat.",
+    icon: LineChart,
+    highlight: "Realtime",
   },
   {
-    title: "Export ke PDF",
+    title: "Signature PDF Export",
     description:
-      "Template modern dan customizable siap dikirim dengan opsi download atau preview sebelum kirim ke klien.",
+      "Template premium dengan logo, tipografi, dan cover letter elegan siap dikirim dalam sekali klik.",
     icon: Printer,
+    highlight: "Brand kit",
   },
   {
-    title: "Manajemen Status",
+    title: "Smart Reminder Engine",
     description:
-      "Atur status invoice dari draft hingga paid dengan reminder otomatis untuk invoice overdue.",
+      "Rangkaian reminder otomatis via email & WhatsApp menjaga cashflow tanpa perlu mengejar manual.",
     icon: BellRing,
+    highlight: "Auto follow-up",
+  },
+  {
+    title: "Payment-ready Links",
+    description:
+      "Lampirkan tautan Stripe, Midtrans, atau VA sehingga klien dapat langsung membayar dari invoice.",
+    icon: CreditCard,
+    highlight: "Instant pay",
+  },
+  {
+    title: "Role-based Workspace",
+    description:
+      "Kelola akses finance, partner, hingga legal dengan audit trail detail untuk setiap perubahan.",
+    icon: Users,
+    highlight: "Team mode",
   },
 ];
 
-const workflow: WorkflowStep[] = [
+const experienceHighlights: ExperienceHighlight[] = [
   {
-    title: "Input & Parsing",
+    tag: "Brand layer",
+    title: "Template signature siap tayang",
     description:
-      "Pengguna memasukkan instruksi teks atau form manual, sistem memvalidasi dan mem-parsing detail invoice.",
+      "Cuplikan invoice tampil seperti dek presentasi: cover hero, palet warna eksklusif, dan tipografi custom.",
+    accent: "bg-emerald-500/15 text-emerald-200",
+  },
+  {
+    tag: "Smart fields",
+    title: "Dynamic data binding",
+    description:
+      "Field otomatis menarik histori klien, termin, pajak, dan mata uang sesuai konteks tanpa copy–paste.",
+    accent: "bg-cyan-500/15 text-cyan-200",
+  },
+  {
+    tag: "Audit trail",
+    title: "Timeline status transparan",
+    description:
+      "Pantau siapa yang membuka, menyetujui, dan membayar invoice secara real-time langsung dari dashboard.",
+    accent: "bg-violet-500/15 text-violet-200",
+  },
+];
+
+const automationFlow: WorkflowStep[] = [
+  {
+    title: "Input & intent",
+    description:
+      "Pengguna menulis instruksi natural atau mengisi form elegan, AI memahami konteks proyek dan termin.",
     icon: MessageSquare,
-    detail: "Natural language → structured data",
+    detail: "Bahasa natural → data rapi",
   },
   {
-    title: "Generasi & Review",
+    title: "Compose & approve",
     description:
-      "AI menyusun invoice, menghitung total, dan menyiapkan template; pengguna dapat melakukan edit lanjutan.",
+      "Draft lengkap beserta angka dan brand kit otomatis siap direview, diedit, lalu dikunci dengan signature.",
     icon: Sparkles,
-    detail: "Auto-fill form + AI suggestion",
+    detail: "AI drafting + human review",
   },
   {
-    title: "Distribusi & Tracking",
+    title: "Publish & track",
     description:
-      "Invoice disimpan di dashboard, dapat diunduh sebagai PDF, dan status pembayaran dipantau otomatis.",
+      "Invoice dikirim bersama tautan pembayaran, reminder aktif, dan analitik pembayaran real-time.",
     icon: TrendingUp,
-    detail: "Reminder & analytics ready",
+    detail: "Reminder + insight",
   },
 ];
 
-const insights: Insight[] = [
+const insightModules: Insight[] = [
   {
-    title: "Insight Pembayaran",
+    title: "Insight pembayaran",
     description:
-      "Identifikasi klien yang paling cepat membayar dan invoice yang sering terlambat untuk strategi tindak lanjut.",
+      "Identifikasi klien yang cepat, lambat, hingga churn risk dengan satu tatapan di cashflow board.",
   },
   {
-    title: "Analitik Pendapatan",
+    title: "Forecast pendapatan",
     description:
-      "Lihat tren pendapatan bulanan/tahunan, kategori layanan terbanyak, dan perbandingan periode otomatis.",
+      "Proyeksi bulanan dan tahunan otomatis membantu Anda merencanakan hiring atau investasi berikutnya.",
   },
   {
     title: "Rekomendasi AI",
     description:
-      "AI memberikan rekomendasi aksi seperti menghubungi klien tertentu, optimasi harga, hingga peluang upsell.",
+      "Mesin rekomendasi memberi saran kapan follow-up, menawar ulang harga, atau upsell layanan.",
   },
 ];
 
-const successMetrics: Insight[] = [
+const guaranteePoints: Insight[] = [
   {
-    title: "< 2s page load",
-    description: "Optimasi performa front-end untuk pengalaman responsif di perangkat apa pun.",
+    title: "< 2 detik",
+    description: "Halaman dimuat super cepat dengan optimasi streaming & image delivery terbaru.",
   },
   {
-    title: "> 90 accessibility score",
-    description: "Komitmen terhadap aksesibilitas dengan audit rutin Lighthouse dan praktik terbaik UI.",
+    title: "> 90 skor aksesibilitas",
+    description: "Kontras, keyboard navigation, dan audit rutin memastikan semua user nyaman.",
   },
   {
-    title: "> 80% test coverage",
-    description: "Pipeline CI memastikan regressions tertangkap sejak awal melalui test dan lint otomatis.",
+    title: "> 80% coverage",
+    description: "Unit & e2e test menjaga fitur kritikal tetap stabil sebelum menyentuh produksi.",
   },
   {
     title: "Zero critical bugs",
-    description: "Monitoring real-time dan review code ketat menjaga kualitas produksi.",
+    description: "Observability real-time + alerting memastikan isu krusial tertangani < 30 menit.",
   },
 ];
 
-const futureHighlights: Feature[] = [
+const testimonials: Testimonial[] = [
   {
-    title: "AI Chat Assistant",
-    description:
-      "Assistant percakapan untuk menjawab pertanyaan bisnis seperti status pembayaran dan performa klien.",
-    icon: MessageSquare,
-    highlight: "Phase 2",
+    quote:
+      "InvoSmart menggantikan tiga tools berbeda. Invoice kami sekarang menyerupai coffee table book sekaligus bisa dibayar langsung.",
+    author: "Nadya Putri",
+    role: "Founder, Atelier Nord",
   },
   {
-    title: "Payment Integration",
-    description:
-      "Integrasi Stripe & Midtrans untuk penerimaan pembayaran langsung dari invoice.",
-    icon: CreditCard,
-    highlight: "Phase 2",
-  },
-  {
-    title: "Team Collaboration",
-    description:
-      "Kelola multi-user, akses role-based, dan kolaborasi tim pada invoice & klien.",
-    icon: Users,
-    highlight: "Phase 3",
+    quote:
+      "Dashboard-nya seperti wealth report pribadi. Reminder otomatisnya membuat kami berhenti mengirim chat penagihan manual.",
+    author: "Arsen Pratama",
+    role: "Finance Lead, SCALE Digital",
   },
 ];
-
-const sprintPhaseOne: {
-  title: string;
-  objective: string;
-  sprints: Sprint[];
-  deliverables: string[];
-} = {
-  title: "Phase 1 — MVP Development Sprint Plan",
-  objective:
-    "Tujuan: memastikan setiap dev environment, API, dan lint/test pipeline konsisten.",
-  sprints: [
-    {
-      badge: "🗂️",
-      title: "Sprint 0 — Persiapan & Fondasi Teknis",
-      objective:
-        "Tujuan: memastikan setiap dev environment, API, dan lint/test pipeline konsisten.",
-      tasks: [
-        {
-          title: "Setup .env lokal",
-          description:
-            "Variabel: NEXT_PUBLIC_API_URL, JWT_SECRET, OPENAI_API_KEY, GEMINI_API_KEY",
-          status: "pending",
-        },
-        {
-          title: "Konfigurasi API Routes",
-          description: "/api/auth, /api/invoices, /api/users",
-          status: "pending",
-        },
-        {
-          title: "Setup ORM (Prisma / Drizzle)",
-          description: "Skema awal: User, Invoice",
-          status: "pending",
-        },
-        {
-          title: "Tambahkan seed & mock data",
-          description: "Data dummy invoice untuk pengujian UI",
-          status: "pending",
-        },
-        {
-          title: "Perbarui CI lint/test/build",
-          description: "Pastikan pipeline masih hijau",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "🔐",
-      title: "Sprint 1 — Authentication & Authorization",
-      objective:
-        "Tujuan: user dapat login, register, dan mengakses dashboard dengan session aman.",
-      tasks: [
-        {
-          title: "Register & Login",
-          description: "Email–password (NextAuth/Supabase Auth)",
-          status: "pending",
-        },
-        {
-          title: "JWT & Refresh Token",
-          description: "Middleware auth di server routes",
-          status: "pending",
-        },
-        {
-          title: "Google OAuth",
-          description: "Integrasi via NextAuth Google provider",
-          status: "pending",
-        },
-        {
-          title: "Protected Routes",
-          description: "Redirect otomatis bila belum login",
-          status: "pending",
-        },
-        {
-          title: "Profile Page (optional)",
-          description: "Menampilkan nama & email user aktif",
-          status: "pending",
-        },
-        {
-          title: "Testing",
-          description: "Unit + integration (Vitest)",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "💼",
-      title: "Sprint 2 — Dashboard & Invoice CRUD",
-      objective:
-        "Tujuan: user bisa melihat, membuat, dan mengelola invoice manual.",
-      tasks: [
-        {
-          title: "Dashboard utama",
-          description: "Statistik: total pendapatan, unpaid, overdue",
-          status: "pending",
-        },
-        {
-          title: "Daftar invoice",
-          description: "Filter berdasarkan status: Paid / Unpaid / Draft",
-          status: "pending",
-        },
-        {
-          title: "Form manual invoice",
-          description: "Validasi Zod/Valibot, auto subtotal & pajak",
-          status: "pending",
-        },
-        {
-          title: "CRUD operasi",
-          description: "Buat, edit, hapus, ubah status invoice",
-          status: "pending",
-        },
-        {
-          title: "Invoice detail view",
-          description: "Halaman detail dengan metadata lengkap",
-          status: "pending",
-        },
-        {
-          title: "Testing",
-          description: "Unit test form & API routes",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "🤖",
-      title: "Sprint 3 — AI Invoice Generator",
-      objective:
-        "Tujuan: user bisa membuat invoice melalui natural language (GPT-4 integration).",
-      tasks: [
-        {
-          title: "Input prompt",
-          description: "Textarea input: “buat invoice 2 juta …”",
-          status: "pending",
-        },
-        {
-          title: "Parsing via GPT-4 API",
-          description: "Generate JSON draft (client, amount, desc)",
-          status: "pending",
-        },
-        {
-          title: "Review & edit hasil",
-          description: "Form preview editable sebelum submit",
-          status: "pending",
-        },
-        {
-          title: "Validasi hasil",
-          description: "Pastikan hasil GPT sesuai schema invoice",
-          status: "pending",
-        },
-        {
-          title: "Testing",
-          description: "Mock OpenAI responses di Vitest",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "🧾",
-      title: "Sprint 4 — Export & Branding",
-      objective:
-        "Tujuan: user bisa mengekspor invoice profesional.",
-      tasks: [
-        {
-          title: "Export ke PDF",
-          description: "Gunakan pdf-lib / jsPDF",
-          status: "pending",
-        },
-        {
-          title: "Custom branding",
-          description: "Logo, warna, font milik user",
-          status: "pending",
-        },
-        {
-          title: "Preview invoice",
-          description: "Modal preview sebelum download",
-          status: "pending",
-        },
-        {
-          title: "Nomor invoice otomatis",
-          description: "Format: INV-{tahun}{bulan}{seq}",
-          status: "pending",
-        },
-        {
-          title: "Testing",
-          description: "Snapshot PDF output",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "📊",
-      title: "Sprint 5 — Insight & Analytics",
-      objective:
-        "Tujuan: menampilkan statistik sederhana berbasis data invoice.",
-      tasks: [
-        {
-          title: "Pendapatan bulanan",
-          description: "Grafik bar/line (Recharts)",
-          status: "pending",
-        },
-        {
-          title: "Invoice overdue",
-          description: "Reminder & highlight warna",
-          status: "pending",
-        },
-        {
-          title: "Insight AI sederhana",
-          description: "Misal “klien ABC sering telat bayar”",
-          status: "pending",
-        },
-        {
-          title: "Testing",
-          description: "Mock dataset analytics",
-          status: "pending",
-        },
-      ],
-    },
-    {
-      badge: "🧹",
-      title: "Sprint 6 — QA & Hardening",
-      objective:
-        "Tujuan: memastikan performa & kualitas produksi siap.",
-      tasks: [
-        {
-          title: "Lint/Test/Build",
-          description: "Semua pipeline hijau",
-          status: "pending",
-        },
-        {
-          title: "Responsiveness",
-          description: "Uji di mobile/tablet/desktop",
-          status: "pending",
-        },
-        {
-          title: "Accessibility",
-          description: "Lighthouse > 90",
-          status: "pending",
-        },
-        {
-          title: "Performance",
-          description: "Page load < 2 detik",
-          status: "pending",
-        },
-        {
-          title: "Security",
-          description: "Rate limit, sanitize input, HTTPS only",
-          status: "pending",
-        },
-      ],
-    },
-  ],
-  deliverables: [
-    "Auth & Dashboard berfungsi penuh.",
-    "CRUD invoice + AI generator dasar.",
-    "Export PDF siap digunakan.",
-    "Insight sederhana tampil.",
-    "Pipeline CI stabil.",
-  ],
-};
 
 export default function Home() {
   return (
-    <div className="relative flex min-h-screen flex-col">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_transparent_55%),_radial-gradient(circle_at_bottom,_rgba(59,130,246,0.15),_transparent_60%)]" />
-      <header className="border-b border-slate-800/60 bg-slate-950/70 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 py-20 md:px-10 md:py-24 lg:px-16">
-          <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex max-w-2xl flex-col gap-6">
-              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-1 text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                Smart Invoice Assistant
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_55%),_radial-gradient(circle_at_bottom,_rgba(14,165,233,0.16),_transparent_50%)]" />
+      <div className="absolute -left-20 top-24 -z-10 h-72 w-72 rounded-full bg-cyan-500/20 blur-[120px]" aria-hidden="true" />
+      <div className="absolute bottom-0 right-0 -z-10 h-80 w-80 rounded-full bg-violet-600/10 blur-[140px]" aria-hidden="true" />
+
+      <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-24 px-6 py-16 md:px-10 lg:px-16">
+        <motion.header
+          className="relative isolate overflow-hidden rounded-[40px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-6 py-16 shadow-[0_40px_120px_rgba(15,23,42,0.7)] md:px-12"
+          initial={{ opacity: 0, y: 48 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        >
+          <div className="grid gap-12 lg:grid-cols-2">
+            <div className="space-y-8">
+              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/5 px-5 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-slate-200">
+                InvoSmart OS 02
               </span>
-              <h1 className="text-4xl font-semibold leading-tight text-slate-50 sm:text-5xl">
-                Buat, kelola, dan analisis invoice profesional dalam hitungan detik.
-              </h1>
-              <p className="text-lg text-slate-300 md:text-xl">
-                InvoSmart menggabungkan AI, automasi, dan analitik bisnis untuk membantu freelancer serta bisnis kecil menyederhanakan arus kas dan meningkatkan profesionalitas.
-              </p>
+              <div className="space-y-6">
+                <h1 className="text-4xl font-semibold leading-tight text-slate-50 sm:text-5xl">
+                  Suite invoicing premium yang terasa seperti concierge pribadi.
+                </h1>
+                <p className="text-lg text-slate-300">
+                  Kombinasi AI, automasi pembayaran, dan desain editorial menjadikan setiap invoice terasa eksklusif—tanpa meninggalkan efisiensi operasional.
+                </p>
+              </div>
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Link
-                  href="#mvp"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-500 px-6 py-3 text-base font-semibold text-slate-950 transition hover:bg-cyan-400"
+                  href="#experience"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-400/90 px-6 py-3 text-base font-semibold text-slate-950 transition hover:bg-cyan-300"
                 >
-                  Lihat MVP
+                  Mulai demo
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="#roadmap"
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-700 px-6 py-3 text-base font-semibold text-slate-100 transition hover:border-cyan-500 hover:text-cyan-200"
+                  href="#features"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 px-6 py-3 text-base font-semibold text-slate-100 transition hover:border-cyan-400"
                 >
-                  Baca Roadmap Teknis
+                  Jelajahi produk
                 </Link>
               </div>
-            </div>
-            <div className="grid gap-4 rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-900/70 p-4">
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">AI generated</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-50">Invoice <span className="text-cyan-300">98%</span> lebih cepat</p>
-              </div>
-              <div className="rounded-2xl bg-slate-900/70 p-4">
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Reminder otomatis</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-50">Kurangi tagihan terlambat hingga <span className="text-cyan-300">45%</span></p>
-              </div>
-              <div className="rounded-2xl bg-slate-900/70 p-4 md:col-span-2">
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Insight real-time</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-50">Pantau pendapatan & kesehatan bisnis secara otomatis</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-24 px-6 py-20 md:px-10 lg:px-16">
-        <section id="plan" className="space-y-12">
-          <div className="flex flex-col gap-3">
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
-              🧭 Phase 1
-            </span>
-            <h2 className="text-3xl font-semibold text-slate-50 md:text-4xl">
-              {sprintPhaseOne.title}
-            </h2>
-            <p className="max-w-3xl text-lg text-slate-300">{sprintPhaseOne.objective}</p>
-          </div>
-          <div className="flex flex-col gap-6">
-            {sprintPhaseOne.sprints.map((sprint) => (
-              <div
-                key={sprint.title}
-                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <span aria-hidden="true" className="text-2xl">
-                        {sprint.badge}
-                      </span>
-                      <h3 className="text-xl font-semibold text-slate-50 md:text-2xl">
-                        {sprint.title}
-                      </h3>
+              <div className="grid gap-4 text-sm text-slate-300 sm:grid-cols-2">
+                {["AI invoice composer", "PDF elegan siap kirim", "Insight cashflow real-time", "Payment link terpasang"].map(
+                  (item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+                      <span>{item}</span>
                     </div>
-                    <p className="max-w-3xl text-sm text-slate-300 md:text-base">
-                      {sprint.objective}
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-300 md:self-center">
-                    <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
-                    Backlog siap
-                  </span>
-                </div>
-                <ul className="mt-6 space-y-4">
-                  {sprint.tasks.map((task) => (
-                    <li key={task.title} className="flex items-start gap-3">
-                      <span className="mt-1 flex h-6 w-6 items-center justify-center">
-                        {task.status === "done" ? (
-                          <CheckCircle2 className="h-5 w-5 text-cyan-300" aria-hidden="true" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-slate-600" aria-hidden="true" />
-                        )}
-                        <span className="sr-only">
-                          {task.status === "done" ? "Selesai" : "Belum selesai"}
-                        </span>
-                      </span>
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-100 md:text-base">
-                          {task.title}
-                        </p>
-                        <p className="text-xs text-slate-400 md:text-sm">{task.description}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                  ),
+                )}
               </div>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 rounded-[32px] bg-gradient-to-br from-cyan-500/30 via-white/5 to-transparent blur-3xl" aria-hidden="true" />
+              <motion.div
+                className="relative rounded-[32px] border border-white/10 bg-white/5 p-8 backdrop-blur"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, ease: "easeOut", delay: 0.15 }}
+                whileHover={{ y: -4 }}
+              >
+                <p className="text-sm uppercase tracking-[0.35em] text-slate-300">Luxury control board</p>
+                <p className="mt-4 text-4xl font-semibold text-slate-50">Kas bersih +48%</p>
+                <p className="mt-2 text-sm text-slate-300">Automasi reminder & payment link aktif.</p>
+                <div className="mt-8 space-y-5">
+                  <motion.div
+                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+                    animate={{ opacity: [0.6, 1, 0.6] }}
+                    transition={{ duration: 6, repeat: Infinity, repeatType: "mirror" }}
+                  >
+                    <div className="flex items-center justify-between text-sm text-slate-300">
+                      <span>Auto reminder</span>
+                      <span className="text-cyan-300">On schedule</span>
+                    </div>
+                    <div className="mt-3 h-2 rounded-full bg-slate-800">
+                      <div className="h-2 w-3/4 rounded-full bg-gradient-to-r from-cyan-400 to-violet-400" />
+                    </div>
+                  </motion.div>
+                  <motion.div
+                    className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{ duration: 5, repeat: Infinity, repeatType: "mirror" }}
+                  >
+                    <div className="flex items-center justify-between text-sm text-slate-300">
+                      <span>Designer PDF</span>
+                      <span className="text-cyan-300">Ready</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-3 text-xs text-slate-400">
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.25em] text-slate-400">Palette</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-50">Noir</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.25em] text-slate-400">Typeface</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-50">Clash</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.25em] text-slate-400">Seal</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-50">Digital</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+          <div className="mt-12 grid gap-4 border-t border-white/5 pt-10 sm:grid-cols-3">
+            {heroStats.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={viewport}
+                transition={{ delay: 0.15 * index, duration: 0.65, ease: "easeOut" }}
+              >
+                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{stat.label}</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-50">{stat.value}</p>
+                <p className="text-sm text-slate-400">{stat.detail}</p>
+              </motion.div>
             ))}
           </div>
-          <div className="rounded-3xl border border-cyan-500/40 bg-cyan-500/10 p-6">
-            <div className="flex items-start gap-4">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-900">
-                <Flag className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-slate-50 md:text-xl">
-                  🚀 Deliverables Akhir Phase 1
-                </h3>
-                <ul className="space-y-2 text-sm text-slate-100 md:text-base">
-                  {sprintPhaseOne.deliverables.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-cyan-300" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+        </motion.header>
+
+        <motion.section
+          id="experience"
+          className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <motion.div
+            className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/5 p-10"
+            variants={blurIn}
+            viewport={viewport}
+            whileHover={{ borderColor: "rgba(255,255,255,0.35)" }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-violet-500/10" aria-hidden="true" />
+            <div className="relative z-10 space-y-6">
+              <p className="text-sm uppercase tracking-[0.4em] text-slate-300">Experience layer</p>
+              <h2 className="text-3xl font-semibold text-slate-50">Invoice yang terasa seperti presentasi executive.</h2>
+              <p className="text-lg text-slate-300">
+                Kustomisasi menyeluruh tanpa kompleksitas: highlight proyek, section ringkasan, hingga CTA pembayaran menyatu dalam satu kanvas elegan.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-5">
+                  <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Mode</p>
+                  <p className="mt-2 text-2xl font-semibold">Client ready</p>
+                  <p className="text-sm text-slate-400">Checklist legal, PPN, dan data bank otomatis.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-5">
+                  <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Signature</p>
+                  <p className="mt-2 text-2xl font-semibold">E-sign locked</p>
+                  <p className="text-sm text-slate-400">Audit trail menunjukkan waktu & perangkat.</p>
+                </div>
               </div>
             </div>
+          </motion.div>
+          <div className="grid gap-6">
+            {experienceHighlights.map((highlight) => (
+              <motion.div
+                key={highlight.title}
+                className="rounded-[28px] border border-white/10 bg-slate-950/60 p-6"
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={viewport}
+                whileHover={{ y: -6, borderColor: "rgba(255,255,255,0.4)" }}
+              >
+                <span className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] ${highlight.accent}`}>
+                  {highlight.tag}
+                </span>
+                <h3 className="mt-4 text-xl font-semibold text-slate-50">{highlight.title}</h3>
+                <p className="mt-2 text-sm text-slate-300">{highlight.description}</p>
+              </motion.div>
+            ))}
           </div>
-        </section>
-        <section id="mvp" className="space-y-10">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold text-slate-50">Fitur MVP InvoSmart</h2>
+        </motion.section>
+
+        <motion.section
+          id="features"
+          className="space-y-8"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <div className="space-y-4">
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200">Premium capabilities</p>
+            <h2 className="text-3xl font-semibold text-slate-50">Satu platform untuk membuat, mengirim, hingga menutup invoice.</h2>
             <p className="max-w-3xl text-lg text-slate-300">
-              Fokus awal kami adalah menghadirkan pengalaman pembuatan invoice yang lengkap: autentikasi aman, dashboard komprehensif, hingga generator AI dan ekspor PDF profesional.
+              Setiap fitur dirancang menyerupai fintech kelas atas: aksen halus, transisi lembut, dan fokus pada detail bisnis kritikal.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            {mvpFeatures.map((feature) => (
-              <div
+            {premiumFeatures.map((feature) => (
+              <motion.div
                 key={feature.title}
-                className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40 p-6 transition hover:border-cyan-500/60 hover:bg-slate-900/70"
+                className="group relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-950/60 via-slate-900/40 to-slate-950/60 p-6"
+                variants={scaleIn}
+                initial="hidden"
+                whileInView="visible"
+                viewport={viewport}
+                whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.35)" }}
               >
                 <div className="flex items-start gap-4">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-cyan-300">
                     <feature.icon className="h-6 w-6" />
                   </span>
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-3">
                       <h3 className="text-xl font-semibold text-slate-50">{feature.title}</h3>
                       {feature.highlight ? (
-                        <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200">
                           {feature.highlight}
                         </span>
                       ) : null}
@@ -596,117 +447,166 @@ export default function Home() {
                     <p className="text-sm leading-relaxed text-slate-300">{feature.description}</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        <section className="space-y-10">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold text-slate-50">Alur Kerja Otomatis</h2>
+        <motion.section
+          className="space-y-8"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <div className="space-y-3">
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200">Automation DNA</p>
+            <h2 className="text-3xl font-semibold text-slate-50">Workflow otomasi yang menjaga pengalaman premium.</h2>
             <p className="max-w-3xl text-lg text-slate-300">
-              Proses end-to-end memastikan invoice siap dikirim dalam tiga langkah utama—mulai dari input perintah hingga analitik pembayaran.
+              Mulai dari brief singkat hingga invoice lunas, setiap langkah dibantu AI namun tetap menyisakan sentuhan manusia untuk akurasi.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {workflow.map((step) => (
-              <div
+            {automationFlow.map((step) => (
+              <motion.div
                 key={step.title}
-                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
+                className="rounded-[28px] border border-white/10 bg-slate-950/60 p-6"
+                variants={scaleIn}
+                initial="hidden"
+                whileInView="visible"
+                viewport={viewport}
+                whileHover={{ y: -4, borderColor: "rgba(255,255,255,0.35)" }}
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-cyan-300">
                   <step.icon className="h-6 w-6" />
                 </span>
                 <h3 className="mt-4 text-lg font-semibold text-slate-50">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-300">{step.description}</p>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                  {step.detail}
-                </p>
-              </div>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.35em] text-cyan-200">{step.detail}</p>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        <section className="space-y-10">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold text-slate-50">Insight & Analitik AI</h2>
-            <p className="max-w-3xl text-lg text-slate-300">
-              Insight otomatis membantu Anda mengambil keputusan bisnis yang lebih cepat, mulai dari analisa cashflow hingga rekomendasi tindak lanjut.
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {insights.map((insight) => (
-              <div
-                key={insight.title}
-                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
-              >
-                <h3 className="text-lg font-semibold text-slate-50">{insight.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-slate-300">{insight.description}</p>
+        <motion.section
+          className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <motion.div className="space-y-6" variants={fadeUp}>
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200">Insight & intelligence</p>
+            <h2 className="text-3xl font-semibold text-slate-50">Analitik dan rekomendasi yang siap ditindaklanjuti.</h2>
+            <div className="grid gap-6 md:grid-cols-2">
+              {insightModules.map((insight) => (
+                <motion.div
+                  key={insight.title}
+                  className="rounded-[26px] border border-white/10 bg-slate-950/60 p-6"
+                  variants={scaleIn}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={viewport}
+                >
+                  <h3 className="text-lg font-semibold text-slate-50">{insight.title}</h3>
+                  <p className="mt-3 text-sm text-slate-300">{insight.description}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+          <motion.div
+            className="rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-950/60 via-slate-900/50 to-slate-950/60 p-8"
+            variants={blurIn}
+            viewport={viewport}
+          >
+            <div className="flex items-center gap-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-cyan-300">
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Quality pledge</p>
+                <h3 className="text-xl font-semibold text-slate-50">Stabil, aman, dan siap produksi.</h3>
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
+            <ul className="mt-8 space-y-5 text-sm text-slate-300">
+              {guaranteePoints.map((point) => (
+                <li key={point.title} className="flex gap-3">
+                  <CheckCircle2 className="mt-1 h-4 w-4 text-cyan-300" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-slate-50">{point.title}</p>
+                    <p>{point.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        </motion.section>
 
-        <section className="space-y-10">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold text-slate-50">Key Success Metrics</h2>
-            <p className="max-w-3xl text-lg text-slate-300">
-              Deliverable teknis dan kualitas produk dipantau terus-menerus untuk memastikan pengalaman kelas profesional bagi pengguna akhir.
-            </p>
+        <motion.section
+          className="space-y-8"
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <div className="space-y-3">
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200">Trusted voices</p>
+            <h2 className="text-3xl font-semibold text-slate-50">Dirancang untuk studio kreatif, konsultan, hingga venture-backed startup.</h2>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            {successMetrics.map((metric) => (
-              <div
-                key={metric.title}
-                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
+            {testimonials.map((testimonial) => (
+              <motion.div
+                key={testimonial.author}
+                className="rounded-[28px] border border-white/10 bg-slate-950/60 p-6"
+                variants={scaleIn}
+                initial="hidden"
+                whileInView="visible"
+                viewport={viewport}
               >
-                <h3 className="text-lg font-semibold text-slate-50">{metric.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-slate-300">{metric.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="roadmap" className="space-y-10">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold text-slate-50">Roadmap Lanjutan</h2>
-            <p className="max-w-3xl text-lg text-slate-300">
-              Setelah MVP, roadmap fokus pada otomatisasi lebih dalam, kolaborasi tim, hingga integrasi pembayaran untuk ekosistem invoicing end-to-end.
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {futureHighlights.map((item) => (
-              <div
-                key={item.title}
-                className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6"
-              >
-                <div className="flex items-start gap-4">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
-                    <item.icon className="h-6 w-6" />
-                  </span>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-semibold text-slate-50">{item.title}</h3>
-                      {item.highlight ? (
-                        <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                          {item.highlight}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-sm leading-relaxed text-slate-300">{item.description}</p>
-                  </div>
+                <p className="text-lg leading-relaxed text-slate-200">“{testimonial.quote}”</p>
+                <div className="mt-4 text-sm text-slate-400">
+                  <p className="font-semibold text-slate-50">{testimonial.author}</p>
+                  <p>{testimonial.role}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
+
+        <motion.section
+          className="rounded-[36px] border border-white/10 bg-gradient-to-r from-cyan-500/20 via-violet-500/20 to-cyan-500/20 px-8 py-12 text-center backdrop-blur"
+          variants={blurIn}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewport}
+        >
+          <p className="text-sm uppercase tracking-[0.4em] text-slate-200">Ready to elevate</p>
+          <h2 className="mt-4 text-3xl font-semibold text-slate-50">Bawa pengalaman invoice premium ke semua klien Anda.</h2>
+          <p className="mt-3 text-lg text-slate-200">
+            Mulai dengan demo terpandu atau langsung hubungkan workspace Anda dan rasakan alur baru yang lebih elegan.
+          </p>
+          <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-center">
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-semibold text-slate-900 transition hover:bg-slate-100"
+            >
+              Masuk Workspace
+            </Link>
+            <Link
+              href="mailto:hello@invosmart.app"
+              className="inline-flex items-center justify-center rounded-full border border-white/40 px-6 py-3 text-base font-semibold text-white transition hover:border-white"
+            >
+              Hubungi konsultan
+            </Link>
+          </div>
+        </motion.section>
       </main>
 
-      <footer className="border-t border-slate-800/60 bg-slate-950/70">
+      <footer className="border-t border-white/10 bg-slate-950/70">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-12 text-sm text-slate-400 md:flex-row md:items-center md:justify-between md:px-10 lg:px-16">
-          <p>&copy; {new Date().getFullYear()} InvoSmart. Dibangun dengan ❤️ untuk freelancer dan bisnis kecil.</p>
-          <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.18em]">
-            <span>AI powered automation</span>
+          <p>&copy; {new Date().getFullYear()} InvoSmart. Crafted for mereka yang menghargai detail.</p>
+          <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.25em]">
+            <span>AI concierge</span>
             <span>Secure by design</span>
             <span>Insight driven</span>
           </div>

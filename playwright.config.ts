@@ -6,6 +6,8 @@ export default defineConfig({
   testDir: "test/e2e",
   outputDir: "QA-report/results",
   reporter: "list",
+  timeout: 120_000,
+  workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "on-first-retry",

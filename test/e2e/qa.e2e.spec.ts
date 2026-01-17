@@ -6,7 +6,7 @@ test.describe("InvoSmart launch smoke", () => {
   test("renders launch banner on home page", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("banner")).toBeVisible();
-    await expect(page.getByText(/InvoSmart/)).toBeVisible();
+    await expect(page.getByRole("banner").getByText(/InvoSmart/)).toBeVisible();
     await page.screenshot({ path: `${screenshotDir}/home.png`, fullPage: true });
   });
 

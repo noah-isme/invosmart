@@ -51,7 +51,7 @@ export async function GET(
       { size: pdfBuffer.length }
     );
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="receipt-${receipt.receiptNo}.pdf"`,

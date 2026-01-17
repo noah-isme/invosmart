@@ -6,9 +6,7 @@ import { authOptions } from '@/server/auth';
 
 // Build the Prisma where clause for payments list (PAID invoices only)
 function buildPaymentsWhere(q?: string) {
-  const where: {
-    invoice: { status: string; OR?: Array<Record<string, { contains: string; mode: 'insensitive' }>> };
-  } = {
+  const where: any = {
     invoice: { status: 'PAID' },
   };
   if (q && q.trim().length > 0) {
