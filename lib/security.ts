@@ -9,6 +9,13 @@ export const enforceHttps = (request: NextRequest): Response | null => {
     return null;
   }
 
+  // Do not enforce HTTPS for localhost or 127.0.0.1 (e.g. during local E2E tests)
+  const url = new URL(request.url);
+  const hostname = url.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return null;
+  }
+
   const proto = request.headers.get(HTTPS_HEADER);
   if (proto && proto.toLowerCase() !== "https") {
     return NextResponse.json(

@@ -1,5 +1,43 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { generateReceiptPdf } from '@/lib/receipts/pdf';
+import zlib from 'zlib';
+
+function getPdfTextContent(buffer: Buffer): string {
+  const streams: string[] = [];
+  let pos = 0;
+  
+  while (true) {
+    const streamStart = buffer.indexOf('stream', pos);
+    if (streamStart === -1) break;
+    
+    const streamEnd = buffer.indexOf('endstream', streamStart);
+    if (streamEnd === -1) break;
+    
+    let dataStart = streamStart + 6;
+    if (buffer[dataStart] === 13) dataStart++;
+    if (buffer[dataStart] === 10) dataStart++;
+    
+    let dataEnd = streamEnd;
+    if (buffer[dataEnd - 1] === 10) dataEnd--;
+    if (buffer[dataEnd - 1] === 13) dataEnd--;
+    
+    const streamContent = buffer.subarray(dataStart, dataEnd);
+    try {
+      const decompressed = zlib.inflateSync(streamContent);
+      streams.push(decompressed.toString('utf8'));
+    } catch (e) {
+      try {
+        const decompressed = zlib.inflateRawSync(streamContent);
+        streams.push(decompressed.toString('utf8'));
+      } catch (err) {
+        // ignore
+      }
+    }
+    
+    pos = streamEnd + 9;
+  }
+  return streams.join('\n');
+}
 
 describe('receipts-pdf', () => {
   const mockReceipt = {
@@ -65,14 +103,16 @@ describe('receipts-pdf', () => {
 
   it('PDF contains receipt number marker', async () => {
     const buffer = await generateReceiptPdf(mockReceipt);
-    const pdfString = buffer.toString('latin1');
-    expect(pdfString).toContain('RCP-202501-0001');
+    const content = getPdfTextContent(buffer);
+    const hexMarker = Buffer.from('RCP-202501-0001').toString('hex').toUpperCase();
+    expect(content).toContain(hexMarker);
   });
 
   it('PDF contains company name', async () => {
     const buffer = await generateReceiptPdf(mockReceipt);
-    const pdfString = buffer.toString('latin1');
-    expect(pdfString).toContain('Test Company');
+    const content = getPdfTextContent(buffer);
+    const hexMarker = Buffer.from('Test Company').toString('hex').toUpperCase();
+    expect(content).toContain(hexMarker);
   });
 
   it('handles signature enabled flag', async () => {

@@ -8,29 +8,29 @@ describe("Home page", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /buat, kelola, dan analisis invoice profesional dalam hitungan detik/i,
+        name: /suite invoicing premium yang terasa seperti concierge pribadi/i,
       }),
     ).toBeInTheDocument();
 
     expect(
       screen.getByRole("link", {
-        name: /lihat mvp/i,
+        name: /mulai demo/i,
       }),
-    ).toHaveAttribute("href", "#mvp");
+    ).toHaveAttribute("href", "#experience");
 
     expect(
       screen.getByRole("link", {
-        name: /baca roadmap teknis/i,
+        name: /jelajahi produk/i,
       }),
-    ).toHaveAttribute("href", "#roadmap");
+    ).toHaveAttribute("href", "#features");
   });
 
-  it("menampilkan daftar fitur MVP sesuai README", () => {
+  it("menampilkan daftar fitur premium", () => {
     render(<Home />);
 
     const featureSection = screen.getByRole("heading", {
       level: 2,
-      name: /fitur mvp invosmart/i,
+      name: /satu platform untuk membuat, mengirim, hingga menutup invoice/i,
     }).closest("section");
 
     expect(featureSection).toBeInTheDocument();
@@ -42,12 +42,12 @@ describe("Home page", () => {
     expect(featureList).toHaveLength(6);
 
     const expectedFeatures = [
-      /autentikasi & otorisasi/i,
-      /dashboard invoice/i,
-      /ai invoice generator/i,
-      /manual invoice form/i,
-      /export ke pdf/i,
-      /manajemen status/i,
+      /ai invoice composer/i,
+      /live cashflow board/i,
+      /signature pdf export/i,
+      /smart reminder engine/i,
+      /payment-ready links/i,
+      /role-based workspace/i,
     ];
 
     expectedFeatures.forEach((feature) => {
@@ -58,45 +58,5 @@ describe("Home page", () => {
         }),
       ).toBeInTheDocument();
     });
-  });
-
-  it("menampilkan rencana sprint phase 1 lengkap", () => {
-    render(<Home />);
-
-    const planHeading = screen.getByRole("heading", {
-      level: 2,
-      name: /phase 1 — mvp development sprint plan/i,
-    });
-
-    const planSection = planHeading.closest("section");
-
-    expect(planSection).toBeInTheDocument();
-
-    const sprintTitles = [
-      "Sprint 0 — Persiapan & Fondasi Teknis",
-      "Sprint 1 — Authentication & Authorization",
-      "Sprint 2 — Dashboard & Invoice CRUD",
-      "Sprint 3 — AI Invoice Generator",
-      "Sprint 4 — Export & Branding",
-      "Sprint 5 — Insight & Analytics",
-      "Sprint 6 — QA & Hardening",
-    ];
-
-    sprintTitles.forEach((title) => {
-      expect(
-        within(planSection as HTMLElement).getByRole("heading", {
-          level: 3,
-          name: new RegExp(title, "i"),
-        }),
-      ).toBeInTheDocument();
-    });
-
-    expect(
-      within(planSection as HTMLElement).getByText(/setup \.env lokal/i),
-    ).toBeInTheDocument();
-
-    expect(
-      within(planSection as HTMLElement).getByText(/export pdf siap digunakan\./i),
-    ).toBeInTheDocument();
   });
 });

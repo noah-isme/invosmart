@@ -13,7 +13,8 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const id = resolved.id;
   const cookieHeader = cookies().toString();
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/invoices/${id}`, {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://127.0.0.1:3000";
+  const response = await fetch(`${baseUrl}/api/invoices/${id}`, {
     headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     cache: "no-store",
   });

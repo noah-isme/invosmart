@@ -42,14 +42,14 @@ test.describe("Invoice Management Flow", () => {
     await page.getByRole("button", { name: "Kirim Invoice" }).click();
 
     await expect(page).toHaveURL(/\/app\/invoices\/.+/);
-    await expect(page.getByText("Detail Invoice")).toBeVisible();
-    await expect(page.getByText("Test Client " + timestamp)).toBeVisible();
+    await expect(page.getByText("Detail Invoice").first()).toBeVisible();
+    await expect(page.getByText("Test Client " + timestamp).first()).toBeVisible();
 
     await page.goto("/app/dashboard");
-    await expect(page.getByText("Test Client " + timestamp)).toBeVisible();
+    await expect(page.getByText("Test Client " + timestamp).first()).toBeVisible();
 
-    await page.getByText("Test Client " + timestamp).click();
-    await page.getByRole("button", { name: "Hapus Invoice" }).click();
+    await page.getByText("Test Client " + timestamp).first().click();
+    await page.getByRole("button", { name: "Hapus Invoice" }).first().click();
     
     await page.getByRole("button", { name: "Hapus", exact: true }).click();
 

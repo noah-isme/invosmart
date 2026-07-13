@@ -3,21 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { authOptions } from '@/server/auth';
+import { buildPaymentsWhere } from '@/lib/receipts/utils';
 
-// Build the Prisma where clause for payments list (PAID invoices only)
-function buildPaymentsWhere(q?: string) {
-  const where: any = {
-    invoice: { status: 'PAID' },
-  };
-  if (q && q.trim().length > 0) {
-    const query = q.trim();
-    where.invoice.OR = [
-      { number: { contains: query, mode: 'insensitive' } },
-      { client: { contains: query, mode: 'insensitive' } },
-    ];
-  }
-  return where;
-}
 
 const QuerySchema = z.object({
   status: z.string().optional(), // ignored; we always enforce PAID

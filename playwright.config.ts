@@ -23,6 +23,9 @@ export default defineConfig({
   webServer: {
     command: "npm run start",
     port: PORT,
+    env: {
+      NEXTAUTH_URL: `http://127.0.0.1:${PORT}`,
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

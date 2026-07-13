@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import type { DashboardInvoice } from "./types";
@@ -73,8 +74,18 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
     <tr className="transition hover:bg-white/[0.02]">
       <td className="px-6 py-5 align-top">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-text">{invoice.number}</p>
-          <p className="text-xs text-text/55">{invoice.client}</p>
+          <Link
+            href={`/app/invoices/${invoice.id}`}
+            className="text-sm font-semibold text-text hover:text-primary transition-colors duration-150"
+          >
+            {invoice.number}
+          </Link>
+          <Link
+            href={`/app/invoices/${invoice.id}`}
+            className="text-xs text-text/55 hover:text-primary transition-colors duration-150 block"
+          >
+            {invoice.client}
+          </Link>
         </div>
       </td>
       <td className="px-6 py-5 align-top">

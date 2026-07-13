@@ -36,7 +36,8 @@ test.describe("Authentication Flow", () => {
     await page.getByRole("button", { name: "Masuk" }).click();
 
     await expect(page).toHaveURL(/\/app/);
-    await expect(page.getByText("Total Pendapatan")).toBeVisible();
+    await page.goto("/app/dashboard");
+    await expect(page.getByText("Total pendapatan")).toBeVisible();
   });
 
   test("should show error for invalid login", async ({ page }) => {

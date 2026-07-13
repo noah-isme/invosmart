@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET, buildPaymentsWhere } from '@/app/api/payments/route';
+import { GET } from '@/app/api/payments/route';
+import { buildPaymentsWhere } from '@/lib/receipts/utils';
 import { NextRequest } from 'next/server';
 
 // Mock auth session
