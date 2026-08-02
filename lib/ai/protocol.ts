@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const agentRoleSchema = z.enum(["optimizer", "learning", "governance", "insight", "federation"]);
+export const agentRoleSchema = z.enum(["optimizer", "learning", "governance", "insight", "recovery", "federation"]);
 export type AgentRole = z.infer<typeof agentRoleSchema>;
 
 export const mapEventTypeSchema = z.enum([
@@ -8,10 +8,12 @@ export const mapEventTypeSchema = z.enum([
   "evaluation",
   "policy_update",
   "insight_report",
+  "recovery_action",
 ]);
 export type MapEventType = z.infer<typeof mapEventTypeSchema>;
 
 export const governancePriority = 90;
+export const recoveryPriority = 85;
 export const optimizerPriority = 75;
 export const learningPriority = 60;
 export const insightPriority = 45;
@@ -20,6 +22,7 @@ export const federationPriority = 35;
 
 export const agentPriority: Record<AgentRole, number> = {
   governance: governancePriority,
+  recovery: recoveryPriority,
   optimizer: optimizerPriority,
   learning: learningPriority,
   insight: insightPriority,
@@ -93,6 +96,15 @@ const insightPayloadSchema = basePayloadSchema.extend({
   month: z.string().optional(),
 });
 
+const recoveryActionPayloadSchema = basePayloadSchema.extend({
+  agent: agentRoleSchema,
+  action: z.enum(["noop", "rollback", "reevaluate"]),
+  reason: z.string().min(1),
+  trustScoreBefore: z.number().min(0).max(100),
+  trustScoreAfter: z.number().min(0).max(100),
+  regressionDetected: z.boolean(),
+});
+
 const baseEventSchema = z.object({
   traceId: z.string().min(1),
   type: mapEventTypeSchema,
@@ -118,6 +130,10 @@ export const mapEventSchema = z.discriminatedUnion("type", [
   baseEventSchema.extend({
     type: z.literal("insight_report"),
     payload: insightPayloadSchema,
+  }),
+  baseEventSchema.extend({
+    type: z.literal("recovery_action"),
+    payload: recoveryActionPayloadSchema,
   }),
 ]);
 
@@ -169,6 +185,7 @@ export const AGENT_NAMES: Record<AgentRole, string> = {
   optimizer: "OptimizerAgent",
   learning: "LearningAgent",
   governance: "GovernanceAgent",
+  recovery: "RecoveryAgent",
   insight: "InsightAgent",
   federation: "FederationAgent",
 };
