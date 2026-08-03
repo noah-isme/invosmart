@@ -26,20 +26,35 @@ Semua agen berkomunikasi secara tidak langsung melalui broker pesan sentral di [
 ### Skema Event MAP (Zod)
 Setiap pesan divalidasi menggunakan skema Zod di [lib/ai/protocol.ts](file:///home/noah/project/invosmart/lib/ai/protocol.ts):
 ```typescript
-export const AgentEventSchema = z.object({
-  traceId: z.string(),
-  type: z.enum(['recommendation', 'evaluation', 'policy_update', 'insight_report', 'telemetry_sync', 'model_update']),
-  source: z.enum(['optimizer', 'learning', 'governance', 'insight', 'recovery', 'federation']),
-  target: z.string().optional(),
-  priority: z.number().min(0).max(100),
-  timestamp: z.date(),
-  payload: z.any(),
-});
+export const agentRoleSchema = z.enum(['optimizer', 'learning', 'governance', 'insight', 'recovery', 'federation']);
+export const mapEventTypeSchema = z.enum(['recommendation', 'evaluation', 'policy_update', 'insight_report', 'recovery_action']);
+
+export const agentPriority: Record<AgentRole, number> = {
+  governance: 90,
+  recovery: 85,
+  optimizer: 75,
+  learning: 60,
+  insight: 45,
+  federation: 35,
+};
+```
+
+Setiap event memiliki struktur dasar:
+```typescript
+{
+  traceId: string,
+  type: 'recommendation' | 'evaluation' | 'policy_update' | 'insight_report' | 'recovery_action',
+  source: AgentRole,
+  target?: AgentRole,
+  priority: number (1-100),
+  timestamp: ISO8601 string,
+  payload: { summary, context, ... }
+}
 ```
 
 ### Resolusi Konflik Prioritas
 Jika terjadi konflik instruksi antara agen, Orchestrator memutus keputusan berdasarkan bobot prioritas dinamis:
-$$\text{Priority Order: } \text{Governance} > \text{Optimizer} > \text{Learning} > \text{Insight}$$
+$$\text{Priority Order: } \text{Governance (90)} > \text{Recovery (85)} > \text{Optimizer (75)} > \text{Learning (60)} > \text{Insight (45)} > \text{Federation (35)}$$
 
 ---
 
@@ -59,20 +74,24 @@ Recovery Sweep (Verify regression & run Rollback)
 Event Dispatching (Update DB & Redis Streams)
 ```
 
-1. **Sampling Metrik**: Membaca metrik performa p95 LCP, INP, dan latensi API.
-2. **Prioritization**: Memperbarui bobot agen di tabel `AgentPriority` berbasis beban kerja sistem.
-3. **Scaling**: Modul [lib/ai/scaler.ts](file:///home/noah/project/invosmart/lib/ai/scaler.ts) menghitung frekuensi interval baru agar sistem hemat daya saat idle dan agresif saat sibuk.
-4. **Recovery Sweep**: `RecoveryAgent` memverifikasi apakah ada optimasi bermasalah lalu memicu rollback.
+1. **Sampling Metrik**: Membaca metrik performa p95 LCP, INP, dan latensi API. Setiap telemetri melacak `regressionDetected`, `recoveryAction`, dan `rollbackCount` untuk trend analysis.
+2. **Prioritization**: Memperbarui bobot agen di tabel `AgentPriority` berbasis beban kerja sistem melalui `PrioritySignal`.
+3. **Scaling**: Modul [lib/ai/scaler.ts](file:///home/noah/project/invosmart/lib/ai/scaler.ts) menghitung frekuensi interval baru agar sistem hemat daya saat idle dan agresif saat sibuk berdasarkan latency, backlog, dan trust score.
+4. **Recovery Sweep**: `RecoveryAgent` memverifikasi apakah ada optimasi bermasalah dengan menganalisis regresi kepercayaan (>10%) atau error rate (>15%), lalu memicu action (noop/rollback/reevaluate). Recovery event didispatch ke stream agar agen lain dapat bereaksi.
+5. **Event Dispatching**: Semua events (recommendation, evaluation, policy_update, insight_report, recovery_action) dipersistensi ke DB dan Redis stream untuk audit trail dan cross-agent visibility.
 
 ---
 
 ## 4. Instruksi Pengembangan bagi Developer
 
 ### Menambahkan Agen Baru
-1. Daftarkan tipe agen baru di skema `AgentEventSchema` pada berkas [lib/ai/protocol.ts](file:///home/noah/project/invosmart/lib/ai/protocol.ts).
-2. Buat kelas/modul agen baru di direktori `lib/ai/` (contoh: `myAgent.ts`).
-3. Daftarkan agen pada registry Orchestrator di [lib/ai/orchestrator.ts](file:///home/noah/project/invosmart/lib/ai/orchestrator.ts).
-4. Buat file pengujian di bawah `lib/__tests__/` untuk memverifikasi fungsionalitas logika agen.
+1. Daftarkan tipe agen baru di `agentRoleSchema` enum pada berkas [lib/ai/protocol.ts](file:///home/noah/project/invosmart/lib/ai/protocol.ts).
+2. Tambahkan prioritas agen ke `agentPriority` record (1-100, sesuaikan dengan hierarki sistem).
+3. Tambahkan entry ke `AGENT_NAMES` map untuk UI labeling.
+4. Buat kelas/modul agen baru di direktori `lib/ai/` (contoh: `myAgent.ts`).
+5. Call `registerAgent()` pada module load untuk mendaftarkan ke Orchestrator registry.
+6. Implementasikan dispatch event melalui `dispatchEvent()` untuk komunikasi antar-agen.
+7. Buat file pengujian di bawah `lib/__tests__/` untuk memverifikasi fungsionalitas logika agen dan event dispatch.
 
 ### Menjalankan Uji Mutu (Lint & Test)
 Pastikan semua kode mematuhi standar kualitas sebelum melakukan commit:
@@ -103,7 +122,22 @@ AI_SA_MAX_AUTOPUBLISH_PER_DAY=2
 
 ---
 
-## 5. Rencana Iterasi Berikutnya (Task Checklist)
+## 5. Status Integrasi Recovery Agent
+
+**Status**: ✅ COMPLETED (2026-08-02)
+
+Recovery Agent kini fully integrated ke dalam MAP protocol dengan:
+- ✅ Registered di `agentRoleSchema` dengan priority 85
+- ✅ Event type `recovery_action` di `mapEventTypeSchema`
+- ✅ `runRecoverySweep()` dispatches recovery events ke orchestrator
+- ✅ Loop telemetry tracks `regressionDetected`, `recoveryAction`, `rollbackCount`
+- ✅ Documentation: `.omo/plans/recovery-agent-integration.md`
+
+Lihat [.omo/plans/recovery-agent-integration.md](./.omo/plans/recovery-agent-integration.md) untuk detail implementasi dan roadmap lanjutan.
+
+---
+
+## 6. Rencana Iterasi Berikutnya (Task Checklist)
 
 Berikut adalah beberapa tugas pengembangan agen yang akan datang:
 - [ ] Migrasi dari local template-based bandit model ke contextual bandit model penuh di `lib/ai/content-local-optimizer.ts`.

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { type AgentRole, agentRoleSchema } from "./protocol";
+import { dispatchEvent, isOrchestrationEnabled, registerAgent } from "./orchestrator";
 import { getTrustScore } from "./trustScore";
 
 export type RecoverySignal = {
@@ -95,7 +96,30 @@ export const runRecoverySweep = async (signal?: Partial<RecoverySignal>): Promis
   });
 
   const record = await persistRecoveryAction(action);
-  return { ...action, createdAt: record.createdAt } satisfies RecoveryResult;
+  const result = { ...action, createdAt: record.createdAt } satisfies RecoveryResult;
+
+  // Dispatch recovery action event to orchestrator
+  if (isOrchestrationEnabled()) {
+    try {
+      await dispatchEvent({
+        type: "recovery_action",
+        source: "recovery",
+        payload: {
+          summary: action.reason,
+          agent: action.agent,
+          action: action.action,
+          reason: action.reason,
+          trustScoreBefore: action.trustScoreBefore,
+          trustScoreAfter: action.trustScoreAfter,
+          regressionDetected: action.action !== "noop",
+        },
+      });
+    } catch (error) {
+      console.warn("Failed to dispatch recovery event", error);
+    }
+  }
+
+  return result;
 };
 
 export const listRecoveryLog = async ({ limit = 20 } = {}) => {
@@ -111,3 +135,13 @@ export const listRecoveryLog = async ({ limit = 20 } = {}) => {
     traceId: entry.traceId ?? undefined,
   }));
 };
+
+// Initialize Recovery Agent registration
+if (isOrchestrationEnabled()) {
+  registerAgent({
+    agentId: "recovery",
+    name: "RecoveryAgent",
+    description: "Monitors system anomalies and triggers rollback/re-evaluation on performance regression",
+    capabilities: ["anomaly_detection", "rollback", "reevaluation", "trust_score_analysis"],
+  });
+}

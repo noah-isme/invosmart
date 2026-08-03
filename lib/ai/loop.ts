@@ -14,6 +14,9 @@ export type LoopTelemetry = {
   successRate: number;
   errorRate: number;
   avgLatencyMs: number;
+  regressionDetected: boolean;
+  recoveryAction: "noop" | "rollback" | "reevaluate";
+  rollbackCount: number;
 };
 
 export type LoopRunResult = {
@@ -83,6 +86,7 @@ const dispatchLoopEvent = async (result: LoopRunResult) => {
     await dispatchEvent({
       type: "insight_report",
       source: "insight",
+      priority: result.telemetry.regressionDetected ? 85 : 50,
       payload: {
         summary: result.summary,
         correlations: [],
@@ -91,6 +95,8 @@ const dispatchLoopEvent = async (result: LoopRunResult) => {
           scaling: result.scaling.status,
           intervalMs: result.intervalMs,
           recoveryAction: result.recovery.action,
+          regressionDetected: result.telemetry.regressionDetected,
+          rollbackCount: result.telemetry.rollbackCount,
         },
       },
     });
@@ -125,15 +131,18 @@ export const runLoop = async (overrides?: {
         trustScoreAfter: 0,
         createdAt: new Date(),
       },
-      telemetry: {
-        timestamp: new Date().toISOString(),
-        load: 0,
-        backlogSize: 0,
-        trustScore: 0,
-        successRate: 0,
-        errorRate: 0,
-        avgLatencyMs: 0,
-      },
+       telemetry: {
+         timestamp: new Date().toISOString(),
+         load: 0,
+         backlogSize: 0,
+         trustScore: 0,
+         successRate: 0,
+         errorRate: 0,
+         avgLatencyMs: 0,
+         regressionDetected: false,
+         recoveryAction: "noop",
+         rollbackCount: 0,
+       },
       summary: "Loop otonom dinonaktifkan",
       history: [...runtimeState.history],
     } satisfies LoopRunResult;
@@ -160,6 +169,9 @@ export const runLoop = async (overrides?: {
     successRate: overrides?.telemetry?.successRate ?? trust.metrics.successRate,
     errorRate: overrides?.telemetry?.errorRate ?? trust.metrics.policyViolationRate,
     avgLatencyMs: overrides?.telemetry?.avgLatencyMs ?? 250,
+    regressionDetected: overrides?.telemetry?.regressionDetected ?? false,
+    recoveryAction: overrides?.telemetry?.recoveryAction ?? "noop",
+    rollbackCount: overrides?.telemetry?.rollbackCount ?? 0,
   } satisfies LoopTelemetry;
 
   captureTelemetry(telemetry);
@@ -185,6 +197,12 @@ export const runLoop = async (overrides?: {
   runtimeState.intervalMs = adaptiveInterval(telemetry, scalingDecision.state.intervalMs);
 
   const recovery = await runRecoverySweep({ errorRate: telemetry.errorRate });
+
+  telemetry.regressionDetected = recovery.action !== "noop";
+  telemetry.recoveryAction = recovery.action;
+  if (recovery.action === "rollback") {
+    telemetry.rollbackCount += 1;
+  }
 
   const summary = `${describeScalingDecision(scalingDecision)} | Prioritas: ${priorityResult.summary} | Recovery: ${recovery.action.toUpperCase()}`;
 
