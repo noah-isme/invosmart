@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google";
 import { db } from "@/lib/db";
 import { verify } from "@/lib/hash";
 import { LoginSchema } from "@/lib/schemas";
+import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
 const providers: NextAuthOptions["providers"] = [
   Credentials({
@@ -20,6 +21,11 @@ const providers: NextAuthOptions["providers"] = [
       });
 
       if (!parsed.success) {
+        void logAuditEvent({
+          action: AuditAction.AUTH_LOGIN_FAILURE,
+          entity: AuditEntity.AUTH,
+          details: { reason: "invalid_input", email: credentials?.email ?? null },
+        });
         return null;
       }
 
@@ -30,11 +36,22 @@ const providers: NextAuthOptions["providers"] = [
       });
 
       if (!user || !user.password) {
+        void logAuditEvent({
+          action: AuditAction.AUTH_LOGIN_FAILURE,
+          entity: AuditEntity.AUTH,
+          details: { reason: "user_not_found", email },
+        });
         return null;
       }
 
       const valid = await verify(password, user.password);
       if (!valid) {
+        void logAuditEvent({
+          userId: user.id,
+          action: AuditAction.AUTH_LOGIN_FAILURE,
+          entity: AuditEntity.AUTH,
+          details: { reason: "invalid_password", email },
+        });
         return null;
       }
 
@@ -62,6 +79,31 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/login",
     error: "/auth/login",
+  },
+  events: {
+    async signIn({ user, account }) {
+      void logAuditEvent({
+        userId: user?.id ?? null,
+        action: AuditAction.AUTH_LOGIN_SUCCESS,
+        entity: AuditEntity.AUTH,
+        details: {
+          provider: account?.provider ?? "credentials",
+          email: user?.email ?? null,
+        },
+      });
+    },
+    async signOut({ token, session }) {
+      const userId = token?.sub ?? (session as { user?: { id?: string } })?.user?.id ?? null;
+      const email = token?.email ?? (session as { user?: { email?: string } })?.user?.email ?? null;
+      void logAuditEvent({
+        userId,
+        action: AuditAction.AUTH_LOGOUT,
+        entity: AuditEntity.AUTH,
+        details: {
+          email,
+        },
+      });
+    },
   },
   callbacks: {
     async signIn({ user, account }) {

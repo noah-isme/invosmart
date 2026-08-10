@@ -5,6 +5,7 @@ import { hash } from "@/lib/hash";
 import { RegisterSchema } from "@/lib/schemas";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
+import { logAuditEvent, getClientIp, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
 export async function POST(request: NextRequest) {
   const httpsCheck = enforceHttps(request);
@@ -53,12 +54,24 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hash(password);
 
-    await db.user.create({
+    const user = await db.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
       },
+    });
+
+    void logAuditEvent({
+      userId: user.id,
+      action: AuditAction.AUTH_REGISTER,
+      entity: AuditEntity.USER,
+      entityId: user.id,
+      details: {
+        email: user.email,
+        name: user.name,
+      },
+      ipAddress: getClientIp(request),
     });
 
     return NextResponse.json({ ok: true }, { status: 201 });

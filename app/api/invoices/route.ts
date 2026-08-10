@@ -16,6 +16,7 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { withSpan } from "@/lib/tracing";
+import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -180,6 +181,25 @@ const createInvoice = async (request: NextRequest) => {
     invoiceId: invoice.id,
     status,
     amount: Number(invoice.total ?? 0),
+  });
+
+  void logAuditEvent({
+    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    userId: session.user.id,
+    action: AuditAction.INVOICE_CREATE,
+    entity: AuditEntity.INVOICE,
+    entityId: invoice.id,
+    details: {
+      number: invoice.number,
+      client: invoice.client,
+      total: Number(invoice.total ?? 0),
+      subtotal: Number(invoice.subtotal ?? 0),
+      tax: Number(invoice.tax ?? 0),
+      status: invoice.status,
+      dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
+      itemCount: Array.isArray(items) ? items.length : 0,
+    },
+    ipAddress: getClientIp(request),
   });
 
   return NextResponse.json({ data: invoice }, { status: 201 });

@@ -5,6 +5,7 @@ import Link from "next/link";
 const navItems = [
   { href: "/app/admin/experiments", label: "Eksperimen" },
   { href: "/app/admin/auto-actions", label: "AUTO Log" },
+  { href: "/app/admin/audit-logs", label: "Audit Logs" },
 ];
 
 type AdminLayoutProps = {

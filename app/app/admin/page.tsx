@@ -11,11 +11,16 @@ const sections = [
     description: "Audit trail autopublish, schedule update, dan revert.",
     href: "/app/admin/auto-actions",
   },
+  {
+    title: "Audit Logs System",
+    description: "Audit trail aktivitas invoice, autentikasi user, dan AI auto-actions.",
+    href: "/app/admin/audit-logs",
+  },
 ];
 
 export default function AdminHomePage() {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-3">
       {sections.map((section) => (
         <Link
           key={section.href}

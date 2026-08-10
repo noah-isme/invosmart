@@ -15,6 +15,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
+import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -74,6 +75,21 @@ const getInvoiceHandler = async (request: NextRequest, context: RouteContext) =>
     });
     void captureServerEvent("invoice_status_auto_overdue", {
       invoiceId: id,
+    });
+    void logAuditEvent({
+      tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+      userId: session.user.id,
+      action: AuditAction.INVOICE_AUTO_OVERDUE,
+      entity: AuditEntity.INVOICE,
+      entityId: id,
+      details: {
+        number: invoice.number,
+        previousStatus: invoice.status,
+        nextStatus: InvoiceStatusEnum.enum.OVERDUE,
+        dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
+        trigger: "lazy_get_evaluation",
+      },
+      ipAddress: getClientIp(request),
     });
     return NextResponse.json({ data: updated });
   }
@@ -210,6 +226,26 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
     });
   }
 
+  void logAuditEvent({
+    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    userId: session.user.id,
+    action: AuditAction.INVOICE_UPDATE,
+    entity: AuditEntity.INVOICE,
+    entityId: updated.id,
+    details: {
+      number: existing.number,
+      client: updated.client,
+      previousStatus,
+      nextStatus: updated.status,
+      total: Number(updated.total ?? 0),
+      subtotal: Number(updated.subtotal ?? 0),
+      tax: Number(updated.tax ?? 0),
+      paidAt: updated.paidAt ? updated.paidAt.toISOString() : null,
+      statusChanged: previousStatus !== updated.status,
+    },
+    ipAddress: getClientIp(request),
+  });
+
   return NextResponse.json({ data: updated });
 };
 
@@ -248,6 +284,21 @@ const deleteInvoiceHandler = async (request: NextRequest, context: RouteContext)
 
   void captureServerEvent("invoice_deleted", {
     invoiceId: id,
+  });
+
+  void logAuditEvent({
+    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    userId: session.user.id,
+    action: AuditAction.INVOICE_DELETE,
+    entity: AuditEntity.INVOICE,
+    entityId: id,
+    details: {
+      number: existing.number,
+      client: existing.client,
+      status: existing.status,
+      total: Number(existing.total ?? 0),
+    },
+    ipAddress: getClientIp(request),
   });
 
   return new NextResponse(null, { status: 204 });
