@@ -121,4 +121,46 @@ describe("FederationAgent", () => {
     expect(agent.getTrustHistory().length).toBeGreaterThan(0);
     expect(agent.getModelHistory().length).toBeGreaterThan(0);
   });
+
+  it("operates with asymmetrically signed FederationBus", async () => {
+    const keys = (await import("@/lib/federation/bus")).generateFederationKeyPair();
+    const asymBus = new FederationBus({
+      tenantId: "tenant-a",
+      privateKey: keys.privateKey,
+      publicKey: keys.publicKey,
+      enabled: true,
+    });
+
+    const persistMetrics = vi.fn().mockResolvedValue({
+      ...buildInsight(),
+      averageLatencyMs: 100,
+      highestTenant: { tenantId: "tenant-a", trustScore: 85 },
+      lowestTenant: { tenantId: "tenant-a", trustScore: 85 },
+    });
+
+    const agent = new FederationAgent({
+      bus: asymBus,
+      dependencies: {
+        fetchTrustScore: async () => ({
+          score: 85,
+          metrics: {
+            successRate: 0.9,
+            rollbackRate: 0.05,
+            policyViolationRate: 0.01,
+            totalRecommendations: 20,
+            applied: 18,
+            violations: 0,
+          },
+        }),
+        fetchPriorities: async () => [
+          { agent: "optimizer", weight: 0.5, confidence: 0.9, rationale: "Opt" },
+        ],
+        persistMetrics,
+      },
+    });
+
+    const result = await agent.broadcastLocalSnapshot();
+    expect(result?.event?.signatureAlgorithm).toBe("rsa-sha256");
+    expect(persistMetrics).toHaveBeenCalledTimes(1);
+  });
 });

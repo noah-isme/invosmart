@@ -104,3 +104,17 @@ vi.mock("framer-motion", () => {
     motion,
   };
 });
+
+// Clear module-level caches between tests to prevent state leakage
+import { afterEach } from "vitest";
+afterEach(async () => {
+  // Reset trustScore TTL cache so each test gets fresh DB mock values
+  try {
+    const mod = await import("@/lib/ai/trustScore");
+    if ("_resetCacheForTesting" in mod && typeof mod._resetCacheForTesting === "function") {
+      mod._resetCacheForTesting();
+    }
+  } catch {
+    // Module may not be loaded in this test context — safe to ignore
+  }
+});

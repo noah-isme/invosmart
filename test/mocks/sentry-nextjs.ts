@@ -10,6 +10,7 @@ let activeSpan = createMockSpan();
 
 export const init = vi.fn();
 export const captureException = vi.fn();
+export const captureMessage = vi.fn();
 export const startSpan = vi.fn((_, callback: (span: ReturnType<typeof createMockSpan>) => unknown) => {
   activeSpan = createMockSpan();
   const result = callback(activeSpan);

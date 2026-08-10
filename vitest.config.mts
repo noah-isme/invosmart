@@ -16,6 +16,10 @@ export default defineConfig({
         __dirname,
         "test/mocks/next-auth-google.ts",
       ),
+      "next-auth/middleware": path.resolve(
+        __dirname,
+        "test/mocks/next-auth-middleware.ts",
+      ),
       "next-auth": path.resolve(__dirname, "test/mocks/next-auth.ts"),
       "@prisma/client": path.resolve(__dirname, "test/mocks/prisma-client.ts"),
       bcrypt: path.resolve(__dirname, "test/mocks/bcrypt.ts"),
@@ -33,7 +37,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: true,
-    exclude: ["test/e2e/**", "**/node_modules/**", "**/dist/**"],
+    exclude: ["test/e2e/**/*.spec.ts", "**/node_modules/**", "**/dist/**"],
     sequence: {
       concurrent: false,
     },
