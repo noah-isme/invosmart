@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgres"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -24,6 +24,7 @@ model User {
   updatedAt DateTime  @updatedAt
 
   invoices  Invoice[]
+  auditLogs AuditLog[]
 }
 
 model Invoice {
@@ -352,5 +353,25 @@ model ReceiptAuditLog {
   receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   
   @@index([receiptId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }
 
