@@ -1,349 +1,249 @@
-# InvoSmart – Smart Invoice Assistant
+# 🚀 InvoSmart
 
-> Aplikasi web Next.js untuk freelancer dan bisnis kecil yang membantu membuat, mengelola, dan menganalisis invoice secara otomatis berbasis AI.
+> **Smart AI Invoice & Insight Platform**
 
----
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
 
-## 🎨 Tampilan Baru 2026
-
-Antarmuka InvoSmart kini hadir dengan gaya high-end SaaS: sidebar glassmorphism, kartu statistik bercahaya, dan form minimalis yang mendukung fokus pengguna. Lihat pratinjau dashboard terbaru berikut ini:
-
-![Pratinjau UI InvoSmart bergaya modern](https://dummyimage.com/1600x900/0e1016/ffffff&text=InvoSmart+Modern+Dashboard)
-
-> **Catatan:** Gunakan screenshot aktual dari lingkungan produksi saat melakukan dokumentasi resmi.
+Welcome to **InvoSmart**, a premium, developer-friendly platform for managing invoices and gaining insights powered by AI.
 
 ---
 
-## 🚀 Getting Started
+## 🛠 Tech Stack
 
-### Prasyarat
-- **Node.js 18.18+** atau **Node.js 20+**
-- **npm 9+** (dibundel bersama Node.js)
-
-### Instalasi & Pengembangan Lokal
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-2. **Siapkan environment**
-   Salin berkas contoh dan isi kredensial Anda:
-   ```bash
-   cp .env.example .env
-   ```
-   Nilai yang wajib diisi minimal:
-   - `NEXTAUTH_SECRET` → gunakan string acak yang kuat.
-   - `DATABASE_URL` → `file:./dev.db` sudah cukup untuk pengembangan lokal (SQLite). Ganti ke URL Postgres saat deploy.
-   - `NEXTAUTH_URL` → alamat dasar aplikasi (default `http://localhost:1234`).
-   Google OAuth bersifat opsional; cukup tambahkan `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET` ketika ingin mengaktifkan login Google.
-3. **Jalankan pemeriksaan kualitas**
-   ```bash
-   npm run lint
-   npm run test
-   npm run build
-   ```
-   Ketiga perintah di atas mencerminkan pipeline CI utama (_lint → test → build_) yang harus lulus sebelum fitur dianggap siap.
-4. **Mulai server pengembangan**
-   ```bash
-   npm run dev
-   ```
-5. Buka `http://localhost:1234` untuk melihat antarmuka awal InvoSmart.
-
-### Scripts
-- `npm run dev` – Menjalankan Next.js dalam mode pengembangan dengan HMR.
-- `npm run lint` – Menjalankan ESLint (`eslint.config.mjs`) untuk memastikan kualitas kode App Router.
-- `npm run test` – Menjalankan Vitest + Testing Library untuk menguji komponen App Router.
-- `npm run build` – Membuat build produksi Next.js.
-- `npm start` – Menjalankan server produksi setelah build.
-- `npm run qa:lighthouse` – Menjalankan Lighthouse CI lokal untuk memverifikasi performa, aksesibilitas, dan SEO.
-
-## 📊 Insight & QA Finalization
-- New endpoint: `/api/insight/revenue`
-- Dashboard charts: Monthly Revenue & Paid/Overdue distribution
-- Performance target: Lighthouse ≥90
-- Security: Rate limiting + headers + input sanitization
-
-### API Reference – Invoice CRUD
-| Method | Endpoint | Deskripsi |
-| --- | --- | --- |
-| GET | `/api/invoices` | Mengambil 20 invoice terbaru milik pengguna. Gunakan query `?status=PAID` untuk filter. |
-| POST | `/api/invoices` | Membuat invoice baru dengan nomor otomatis (format `INV-YYYYMM-SEQ`). |
-| GET | `/api/invoices/:id` | Mendapatkan detail invoice tertentu dan memperbarui status overdue secara otomatis. |
-| PUT | `/api/invoices/:id` | Memperbarui data invoice (client, item, status). Status PAID menambahkan `paidAt`, status SENT mengubah `issuedAt`. |
-| DELETE | `/api/invoices/:id` | Menghapus invoice milik pengguna aktif. |
-
-## 📄 Export & Branding
-- Unduh invoice sebagai PDF melalui endpoint `GET /api/invoices/[id]/pdf` atau tombol **Download PDF** di halaman detail invoice.
-- Setiap file PDF memuat logo, warna utama, dan font sesuai pengaturan branding pengguna serta menyertakan watermark "InvoSmart".
-- Kelola preferensi branding di `/app/settings/branding` untuk mengunggah URL logo, memilih warna utama, dan font (sans/serif/mono).
-- Preferensi tersimpan per pengguna di database dan otomatis diterapkan pada generator PDF berikutnya.
+- **Framework:** Next.js 15 (App Router)
+- **Language:** TypeScript 5.9
+- **Library:** React 18
+- **Styling:** Tailwind CSS v4
+- **Database ORM:** Prisma ORM
+- **Caching/Redis:** Upstash Redis
 
 ---
 
-## 🔑 Authentication
+## 📋 Prerequisites
 
-### Alur Register & Login
-1. Buka `/auth/register` untuk membuat akun baru. Masukkan nama lengkap, email, dan password minimal 6 karakter.
-2. Setelah registrasi berhasil Anda akan diarahkan ke halaman login (`/auth/login`) dengan pesan sukses.
-3. Login menggunakan kredensial yang baru dibuat atau klik **“Lanjutkan dengan Google”** jika sudah mengaktifkan OAuth.
-4. Setelah login sukses pengguna akan diarahkan ke dashboard utama di `/app`.
-5. Semua halaman di bawah `/app/**` diproteksi oleh middleware NextAuth. Gunakan tombol **Keluar** pada dashboard atau profil untuk mengakhiri sesi dengan aman.
+Before you begin, ensure you have met the following requirements:
 
-### Konfigurasi Google OAuth
-1. Buka [Google Cloud Console](https://console.cloud.google.com/) dan buat project baru (atau gunakan yang sudah ada).
-2. Aktifkan **OAuth consent screen** dan tambahkan domain `http://localhost:1234` (atau domain produksi) sebagai authorized domain.
-3. Buat kredensial **OAuth Client ID** dengan tipe **Web application**.
-4. Tambahkan `http://localhost:1234/api/auth/callback/google` sebagai **Authorized redirect URI** (ganti domain sesuai nilai `NEXTAUTH_URL` saat deploy).
-5. Salin `Client ID` dan `Client Secret` lalu isi ke variabel `.env`:
-   ```bash
-   GOOGLE_CLIENT_ID=your_client_id
-   GOOGLE_CLIENT_SECRET=your_client_secret
-   ```
-6. Simpan berkas `.env` dan restart server pengembangan agar NextAuth memuat konfigurasi baru.
+- **Node.js**: 18.18+ or 20+
+- **npm**: 9+
+- **Database**: PostgreSQL (managed via Prisma ORM, see `docs/DATABASE.md`)
+- **Optional**: 
+  - Upstash Redis account
+  - OpenAI API key
+  - Google OAuth credentials
+  - PostHog account (Analytics)
+  - Sentry account (Error Tracking)
 
-## 📊 Invoice Dashboard & API
+---
 
-Dashboard baru tersedia di `/app/dashboard` setelah login. Modul ini mencakup:
+## ⚡ Quick Start
 
-- **Tabel Invoice** – daftar 20 invoice terbaru lengkap dengan nomor, klien, nilai, status, dan jatuh tempo.
-- **Filter Status** – tombol All/Draft/Sent/Paid/Unpaid/Overdue yang melakukan fetch ulang ke `/api/invoices` dengan query `status`.
-- **Aksi Cepat** – ubah status langsung dari tabel (update ke API) dan hapus invoice.
-- **Widget Statistik** – ringkasan total pendapatan (status PAID), jumlah invoice unpaid, serta overdue.
-- **Auto status** – nomor invoice otomatis `INV-{YYYY}{MM}-{SEQ}`, status berubah ke OVERDUE bila melewati `dueAt`, perubahan ke SENT mengisi `issuedAt`, dan PAID mencatat `paidAt`.
+Follow these steps to get the project up and running locally on dev port **1234**:
 
-Contoh payload `POST /api/invoices`:
-
-```json
-{
-  "client": "PT Kreatif Nusantara",
-  "items": [
-    { "name": "UI Design", "qty": 2, "price": 750000 },
-    { "name": "UX Research", "qty": 1, "price": 500000 }
-  ],
-  "taxRate": 0.1,
-  "dueAt": "2024-11-30T00:00:00.000Z"
-}
-```
-
-Respons berisi detail lengkap invoice dengan nomor otomatis, subtotal, total, dan metadata status.
-
-Contoh payload `PUT /api/invoices/:id` (update status):
-
-```json
-{
-  "id": "inv-1",
-  "client": "PT Kreatif Nusantara",
-  "items": [{ "name": "UI Design", "qty": 2, "price": 750000 }],
-  "subtotal": 1500000,
-  "tax": 150000,
-  "total": 1650000,
-  "status": "PAID",
-  "issuedAt": "2024-11-01T00:00:00.000Z",
-  "dueAt": "2024-11-15T00:00:00.000Z",
-  "taxRate": 0.1
-}
+```bash
+git clone <repo>
+cd invosmart
+npm install
+cp .env.example .env
+# Edit .env with your specific values
+npx prisma migrate dev  # Run Prisma migrations
+npm run db:seed         # Optional: seed sample data
+npm run dev      # → http://localhost:1234
 ```
 
 ---
 
-## 💼 Invoice Form & Detail Workflow
+## 📜 Scripts
 
-- `/app/invoices/new` → formulir invoice manual dengan perhitungan subtotal, pajak 10%, dan total secara real-time.
-- `/app/invoices/[id]` → halaman detail lengkap untuk melihat metadata invoice, mengirim, menandai lunas, atau menghapus.
-- Validasi Zod berjalan di klien & server. Nilai subtotal/tax/total dihitung ulang di server agar aman dari manipulasi.
-- Aksi status dilindungi dialog konfirmasi dan otomatis memperbarui `issuedAt`/`paidAt` sesuai transisi.
-
-Contoh payload form yang lolos validasi:
-
-```json
-{
-  "client": "PT Kreatif Nusantara",
-  "items": [
-    { "name": "UI Design", "qty": 2, "price": 750000 },
-    { "name": "UX Research", "qty": 1, "price": 500000 }
-  ],
-  "taxRate": 0.1,
-  "dueAt": "2024-11-30T00:00:00.000Z",
-  "status": "SENT"
-}
-```
-
-Contoh payload update status yang valid:
-
-```json
-{
-  "id": "inv-1",
-  "client": "PT Kreatif Nusantara",
-  "items": [{ "name": "UI Design", "qty": 2, "price": 750000 }],
-  "subtotal": 1500000,
-  "tax": 150000,
-  "total": 1650000,
-  "status": "PAID",
-  "issuedAt": "2024-11-01T00:00:00.000Z",
-  "dueAt": "2024-11-15T00:00:00.000Z",
-  "taxRate": 0.1
-}
-```
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `npm run dev` | Start dev server on port 1234 |
+| `build` | `npm run build` | Production build |
+| `start` | `npm start` | Start production server |
+| `lint` | `npm run lint` | ESLint check |
+| `test` | `npm run test` | Vitest unit tests |
+| `test:e2e` | `npm run test:e2e` | Playwright E2E tests |
+| `db:push` | `npm run db:push` | Push Prisma schema to database |
+| `db:studio` | `npm run db:studio` | Open Prisma Studio GUI |
+| `db:seed` | `npm run db:seed` | Seed database |
+| `qa:lighthouse` | `npm run qa:lighthouse` | Run Lighthouse audit |
+| `release` | `npm run release` | Trigger semantic release |
 
 ---
 
-## 🤖 AI Invoice Generator
+## 🔐 Environment Variables
 
-- **Endpoint**: `POST /api/invoices/ai`
-- **Input**: `{ "prompt": string }`
-- **Output**: `{ "data": { client, items[], dueAt?, notes? } }` – seluruh payload sudah divalidasi Zod sebelum dikirim ke frontend.
-- **Frontend**: `/app/ai-invoice` menampilkan textarea prompt, preview hasil AI, serta form edit penuh.
-- **Kegunaan**: Mengubah instruksi natural language menjadi draft invoice yang siap disimpan sebagai draft maupun dikirim.
+Ensure the following environment variables are correctly configured in your `.env` file:
 
-Contoh request:
+### App
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+- `NEXT_PUBLIC_APP_VERSION`
 
-```http
-POST /api/invoices/ai
-Content-Type: application/json
+### Observability
+- `ENABLE_TELEMETRY`
+- `NEXT_PUBLIC_ENABLE_TELEMETRY`
 
-{
-  "prompt": "Buat invoice 2.5 juta untuk desain logo dan brand guide klien PT Alpha due 14 hari"
-}
-```
+### Analytics
+- `NEXT_PUBLIC_POSTHOG_KEY`
+- `POSTHOG_API_KEY`
+- `SENTRY_DSN`
 
-Contoh respons sukses:
+### OAuth
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
-```json
-{
-  "data": {
-    "client": "PT Alpha",
-    "items": [
-      { "name": "Desain Logo", "qty": 1, "price": 1500000 },
-      { "name": "Brand Guidelines", "qty": 1, "price": 1000000 }
-    ],
-    "dueAt": "2024-06-15T00:00:00.000Z",
-    "notes": "Pembayaran maksimal 14 hari setelah invoice diterima."
-  }
-}
-```
+### Database
+- `DATABASE_URL`
 
-Jika AI gagal mengembalikan struktur valid, endpoint merespons `400` dengan pesan ramah pengguna dan payload `fallback` berisi draft kosong agar pengguna dapat melanjutkan secara manual.
+### AI
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
+
+### AI Agents
+- `ENABLE_AI_OPTIMIZER`
+- `ENABLE_AI_LEARNING`
+- `ENABLE_AI_GOVERNANCE`
+- `ENABLE_AI_AUTONOMY`
+- `ENABLE_AI_FEDERATION`
+- `AI_SA_MAX_AUTOPUBLISH_PER_DAY`
+
+### Media
+- `CLOUDINARY_URL`
+
+### Deployment
+- `VERCEL_TOKEN`
 
 ---
 
-## 🧱 Arsitektur & Stack
+## 📁 Project Structure
 
-| Layer | Teknologi | Highlight |
-| --- | --- | --- |
-| Front-end | [Next.js 15 (App Router)](https://nextjs.org/) | SSR & SSG siap, integrasi API Routes untuk MVP. |
-| Styling | [Tailwind CSS v4](https://tailwindcss.com/) | Utility-first dengan konfigurasi minimal dan desain gelap modern. |
-| Bahasa | TypeScript | Type-safety untuk komponen UI & utilitas. |
-| Testing | [Vitest](https://vitest.dev/) + Testing Library | Pengujian React Server Component dengan environment JSDOM. |
-| Ikon | [lucide-react](https://lucide.dev/) | Ikon outline ringan dan konsisten. |
-
-Struktur direktori utama:
-```
-app/
-  ├─ layout.tsx      → Global layout & metadata
-  ├─ page.tsx        → Landing page sesuai roadmap README
-  ├─ globals.css     → Styling global Tailwind v4
-  └─ __tests__/      → Unit test Vitest
-public/              → Asset statis (favicon, logo, dll.)
-vitest.config.mts     → Konfigurasi Vitest + alias Next.js
-eslint.config.mjs    → Konfigurasi lint Next.js core web vitals
+```text
+invosmart/
+├── app/                  # Next.js App Router pages & API routes
+│   ├── api/             # REST API endpoints
+│   ├── app/             # Authenticated app pages
+│   ├── auth/            # Login/register pages
+│   ├── devtools/        # AI monitoring dashboards
+│   └── receipts/        # Receipt verification
+├── components/          # React UI components
+│   ├── auth/           # Auth components
+│   ├── invoices/       # Invoice form components
+│   ├── layout/         # Shell, sidebar, topbar
+│   ├── telemetry/      # Analytics provider
+│   └── ui/             # Reusable UI primitives
+├── context/            # React contexts (theme, toast, AI)
+├── hooks/              # Custom React hooks
+├── lib/                # Core business logic
+│   ├── ai/            # AI agent modules (20 files)
+│   ├── cache/         # Redis/memory cache
+│   ├── federation/    # Cross-tenant FDP protocol
+│   ├── receipts/      # Receipt service
+│   └── stats/         # Statistical utilities
+├── middleware/         # Request middleware
+├── prisma/            # Database schema & seeds
+├── server/            # Server-side auth config
+├── types/             # TypeScript declarations
+├── test/              # Test files
+├── docs/              # Documentation
+└── public/            # Static assets
 ```
 
 ---
 
-## 🎯 Fokus MVP (3–4 Minggu Pertama)
+## ✨ Key Features
 
-1. **Autentikasi & Otorisasi**
-   - Login/Register email & password.
-   - Integrasi Google OAuth.
-   - Session management dengan JWT & refresh token aman.
-2. **Dashboard Invoice**
-   - Daftar invoice dengan filter status: **Paid / Unpaid / Draft**.
-   - Quick stats: total pendapatan, invoice pending, overdue highlight.
-3. **AI Invoice Generator**
-   - Input natural language (contoh: _"buat invoice 2 juta untuk desain logo klien ABC"_).
-   - Parsing GPT-4 untuk mengisi form otomatis.
-   - Review manual sebelum publish.
-4. **Manual Invoice Form**
-   - Form lengkap dengan validasi & auto-calculation subtotal/pajak/total.
-5. **Export ke PDF**
-   - Template profesional, opsi download & preview.
-   - Custom branding (logo, warna, font).
-6. **Manajemen Status Invoice**
-   - Alur status: Draft → Sent → Paid/Unpaid.
-   - Timestamp otomatis + reminder invoice overdue.
+- 🧾 **Invoice CRUD**: Seamless creation and management with auto-numbering.
+- 🤖 **AI Invoice Composer**: Convert natural language directly into structured invoices.
+- 📸 **AI Receipt Scanner**: Extract structured data from receipt images effortlessly.
+- 📄 **PDF Export**: Generate professional invoices with custom branding.
+- 📊 **Dashboard**: Comprehensive revenue analytics and insights.
+- 🧠 **AI Optimization**: Advanced 6-agent AI system for intelligent automation.
+- 🎨 **Modern Design**: Sleek dark/light glassmorphism UI.
+- 🔒 **Authentication**: Secure NextAuth integration with Google OAuth.
+- 📈 **Observability**: Built-in Sentry error tracking and PostHog analytics.
+- 🚀 **CI/CD**: Streamlined Vercel deployment pipeline.
 
 ---
 
-## 🤖 Insight & Analitik
-- Insight pembayaran: klien tercepat, invoice sering terlambat.
-- Analitik pendapatan: tren bulanan/tahunan, kategori layanan, perbandingan periode.
-- Rekomendasi AI: aksi proaktif (follow up, upsell, optimasi harga).
+## 🌐 API Reference
+
+| Domain | Endpoint | Method | Description |
+|--------|----------|--------|-------------|
+| **Auth** | `/api/auth/[...nextauth]` | GET/POST | NextAuth endpoints |
+| **Invoices** | `/api/invoices` | GET/POST | List or create invoices |
+| | `/api/invoices/[id]` | GET/PUT/DELETE | Invoice CRUD |
+| **AI** | `/api/ai/composer` | POST | Natural language to invoice |
+| | `/api/ai/scanner` | POST | Receipt image parsing |
+| **Telemetry** | `/api/telemetry` | POST | Capture custom analytics |
 
 ---
 
-## 🗺️ Roadmap Lanjutan
+## 🔐 Authentication
 
-### Phase 2 – Setelah MVP
-- AI Chat Assistant untuk query bisnis natural language.
-- Dashboard analytics lanjutan dan insight otomatis.
-- Integrasi pembayaran Stripe & Midtrans.
-- Email automation dengan template kustom dan reminder.
-- Multi-template invoice & custom branding lanjutan.
-- Client management (contact details, riwayat invoice, notes/tags).
-- Recurring invoices & subscription billing.
-
-### Phase 3 – Visi Jangka Panjang
-- Mobile app (React Native) & multi-language support.
-- Multi-currency & third-party API integration.
-- Advanced reporting & custom dashboards.
-- Team collaboration & role-based access control.
-- Expense tracking, inventory integration, predictive analytics.
-- Notifikasi multi-channel (WhatsApp/Telegram), marketplace freelancer, dan resource edukatif.
+InvoSmart uses [NextAuth.js](https://next-auth.js.org/) for robust and secure authentication. 
+- **Flow**: Session-based authentication integrated tightly with Next.js App Router.
+- **Route Protection**: Middleware ensures that `/app/*`, `/devtools/*`, and `/receipts/*` routes are protected.
+- **Providers**: Out-of-the-box support for Google OAuth. Configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to enable social login.
 
 ---
 
-## 📊 Success Metrics
-- ⚡ **Page load < 2 detik**.
-- 📱 **100% responsive** di device utama.
-- ♿ **Accessibility score > 90** (Lighthouse).
-- 🐛 **Zero critical bugs** di produksi.
-- ✅ **Test coverage > 80%** dengan lint/test/build otomatis.
+## 🧠 AI Agent System
+
+The core intelligence of InvoSmart is driven by a sophisticated 6-agent AI architecture designed to optimize, learn, govern, and federate tasks autonomously. 
+For a deep dive into the AI mechanics, refer to the following documentation:
+- [Architecture Details](docs/ARCHITECTURE.md)
+- [Agent Specifications](AGENTS.md)
 
 ---
 
-## 🔐 Keamanan
-- JWT dengan expiration & refresh token.
-- Password hashing bcrypt (salt 10).
-- Validasi & sanitasi input (Zod/Valibot).
-- Rate limiting untuk endpoint sensitif.
-- CORS terkendali & HTTPS only di produksi.
-- Pencegahan SQL/NoSQL injection (ORM/ODM).
-- Proteksi XSS & header keamanan standar.
+## 🧪 Testing
+
+We ensure reliability through comprehensive testing:
+- **Unit Tests**: Powered by Vitest. Run using `npm run test`.
+- **E2E Tests**: Powered by Playwright. Run using `npm run test:e2e`.
+- **Coverage**: We maintain high coverage expectations across core business logic (`lib/`) and UI components (`components/`).
 
 ---
 
-## 🤝 Kontribusi
-1. Fork repository ini.
-2. Buat branch fitur: `git checkout -b feature/nama-fitur`.
-3. Luluskan pipeline lokal: `npm run lint && npm run test && npm run build`.
-4. Commit perubahan Anda dan push branch.
-5. Buka Pull Request dengan deskripsi detail fitur/bugfix.
+## 🚀 Deployment
 
-Panduan tambahan tersedia di `CONTRIBUTING.md` (coming soon).
+InvoSmart is optimized for deployment on Vercel:
+- **Pipeline**: GitHub Actions triggers formatting, linting, and tests on PRs.
+- **Deployment**: Seamless Vercel integration handles preview deployments and production builds.
+- **Setup**: Ensure all necessary environment variables are loaded into the Vercel project settings prior to deployment.
 
 ---
 
-## 📄 Lisensi
-Project ini dirilis dengan lisensi **MIT**. Lihat berkas `LICENSE` untuk detail.
+## 🤝 Contributing
+
+We welcome contributions! Please review our standard PR process:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes.
+4. Push to the branch.
+5. Open a Pull Request.
+
+Make sure to run `npm run lint` and `npm run test` before submitting!
 
 ---
 
-## 📞 Support
-- 🐛 Laporkan issue melalui GitHub Issues.
-- 📧 Email: your.email@example.com.
-- 💬 Discord Community: _coming soon_.
+## 📚 Documentation Index
+
+Explore our comprehensive documentation suite:
+
+- 📄 [Product Requirements Document (PRD)](docs/PRD.md)
+- 🏗️ [Architecture Overview](docs/ARCHITECTURE.md)
+- 🎨 [Design Specifications](docs/DESIGN.md)
+- 🗺️ [Project Roadmap](docs/ROADMAP.md)
+- ⚖️ [Architecture Decision Records (ADRs)](docs/adr/)
+- 🤖 [AI Agents Guide](AGENTS.md)
+- 🔄 [Changelog](CHANGELOG.md)
 
 ---
 
-<div align="center">
-  <strong>Dibangun dengan ❤️ untuk freelancer dan bisnis kecil</strong>
-</div>
+## 📄 License
+
+This project is licensed under the **MIT** License.

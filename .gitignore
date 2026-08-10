@@ -44,3 +44,14 @@ next-env.d.ts
 
 /app/generated/prisma
 prisma/dev.db
+
+# Graphify knowledge graph output (generated, large binary/json files)
+graphify-out/cache/
+graphify-out/2*/
+graphify-out/graph.html
+
+# Teamwork agent scaffolding (runtime artifacts, not source)
+.codex/
+.agents/teamwork_*/
+.agents/explorer_*/
+.agents/orchestrator_*/

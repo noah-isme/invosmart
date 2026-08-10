@@ -60,7 +60,7 @@ ENABLE_AI_OPTIMIZER=true \
 ENABLE_AI_LEARNING=true \
 ENABLE_AI_GOVERNANCE=true \
 ENABLE_AI_ORCHESTRATION=true \
-DATABASE_URL="file:./dev.db" \
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/invosmart?schema=public" \
 REDIS_URL="redis://localhost:6379" \
 npm run lint && npm run test && CI=1 npm run build
 ```

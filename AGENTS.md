@@ -139,7 +139,27 @@ Lihat [.omo/plans/recovery-agent-integration.md](./.omo/plans/recovery-agent-int
 
 ## 6. Rencana Iterasi Berikutnya (Task Checklist)
 
-Berikut adalah beberapa tugas pengembangan agen yang akan datang:
-- [ ] Migrasi dari local template-based bandit model ke contextual bandit model penuh di `lib/ai/content-local-optimizer.ts`.
-- [ ] Integrasi webhook Discord/Slack pada `ai_auto_actions` agar admin mendapatkan alert real-time.
-- [ ] Menambahkan dukungan enkripsi asimetris tambahan untuk payload bus data Federation di `lib/federation/bus.ts`.
+Berikut adalah beberapa tugas pengembangan agen yang telah selesai (Phase 1) dan yang akan datang:
+
+**✅ Phase 1 — Selesai (2026-08-11)**
+- [x] Migrasi dari local template-based bandit model ke **contextual bandit model (LinUCB)** penuh di `lib/ai/content-local-optimizer.ts`.
+- [x] Integrasi webhook Discord/Slack pada `ai_auto_actions` agar admin mendapatkan alert real-time (`lib/ai/webhooks.ts`).
+- [x] Menambahkan dukungan enkripsi asimetris RSA-2048/AES-256-GCM untuk payload bus data Federation di `lib/federation/bus.ts`.
+- [x] Migrasi database ke PostgreSQL dengan `prisma migrate dev` dan dokumentasi di `docs/DATABASE.md`.
+- [x] Implementasi CSRF protection (Double Submit Cookie) dan Content-Security-Policy di `middleware.ts` dan `next.config.ts`.
+- [x] Implementasi audit logging komprehensif (`lib/audit/auditLogger.ts`) untuk invoice, auth, dan AI auto-actions, dengan admin UI di `/app/admin/audit-logs`.
+
+**📅 Phase 2 — Berikutnya**
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
