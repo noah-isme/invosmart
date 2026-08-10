@@ -151,9 +151,12 @@ const inverseCumulativeStandardNormal = (p: number) => {
 export const summariseVariantPerformance = (performance: VariantPerformance) => {
   const parsed = variantPerformanceSchema.parse(performance);
   const score = computeEngagementScore(parsed);
+  const ctr = parsed.impressions > 0 ? parsed.clicks / parsed.impressions : 0;
 
   return {
     ...parsed,
+    ctr,
+    totalImpressions: parsed.impressions,
     score,
   };
 };

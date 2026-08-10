@@ -146,7 +146,230 @@ const SCHEDULE_WINDOWS = [
   { label: "Malam Tenang", hour: 20 },
 ];
 
-const synthesiseVariantPayload = (
+export const BANDIT_DIM = 8;
+export const ALPHA = 0.5;
+
+export interface BanditState {
+  A: number[][];
+  b: number[];
+  sampleCount: number;
+}
+
+export function createIdentityMatrix(dim = BANDIT_DIM): number[][] {
+  const matrix: number[][] = [];
+  for (let i = 0; i < dim; i++) {
+    const row = new Array(dim).fill(0);
+    row[i] = 1.0;
+    matrix.push(row);
+  }
+  return matrix;
+}
+
+export function createZeroVector(dim = BANDIT_DIM): number[] {
+  return new Array(dim).fill(0);
+}
+
+export function dotProduct(a: number[], b: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) {
+    sum += a[i] * b[i];
+  }
+  return sum;
+}
+
+export function matrixVectorMultiply(matrix: number[][], vector: number[]): number[] {
+  const result = new Array(matrix.length).fill(0);
+  for (let i = 0; i < matrix.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < vector.length; j++) {
+      sum += matrix[i][j] * vector[j];
+    }
+    result[i] = sum;
+  }
+  return result;
+}
+
+export function outerProduct(v: number[]): number[][] {
+  const dim = v.length;
+  const result: number[][] = [];
+  for (let i = 0; i < dim; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < dim; j++) {
+      row[j] = v[i] * v[j];
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+export function matrixAdd(A: number[][], B: number[][]): number[][] {
+  const rows = A.length;
+  const cols = A[0].length;
+  const result: number[][] = [];
+  for (let i = 0; i < rows; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < cols; j++) {
+      row[j] = A[i][j] + B[i][j];
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+export function vectorAdd(a: number[], b: number[]): number[] {
+  return a.map((val, i) => val + b[i]);
+}
+
+export function vectorScale(v: number[], scalar: number): number[] {
+  return v.map((val) => val * scalar);
+}
+
+export function invertMatrix(A: number[][]): number[][] {
+  const n = A.length;
+  const aug: number[][] = A.map((row, i) => {
+    const newRow = new Array(2 * n).fill(0);
+    for (let j = 0; j < n; j++) {
+      newRow[j] = row[j];
+    }
+    newRow[n + i] = 1.0;
+    return newRow;
+  });
+
+  for (let k = 0; k < n; k++) {
+    let maxRow = k;
+    let maxVal = Math.abs(aug[k][k]);
+    for (let i = k + 1; i < n; i++) {
+      if (Math.abs(aug[i][k]) > maxVal) {
+        maxVal = Math.abs(aug[i][k]);
+        maxRow = i;
+      }
+    }
+
+    if (maxVal < 1e-12) {
+      return createIdentityMatrix(n);
+    }
+
+    if (maxRow !== k) {
+      const temp = aug[k];
+      aug[k] = aug[maxRow];
+      aug[maxRow] = temp;
+    }
+
+    const pivot = aug[k][k];
+    for (let j = 0; j < 2 * n; j++) {
+      aug[k][j] /= pivot;
+    }
+
+    for (let i = 0; i < n; i++) {
+      if (i !== k) {
+        const factor = aug[i][k];
+        for (let j = 0; j < 2 * n; j++) {
+          aug[i][j] -= factor * aug[k][j];
+        }
+      }
+    }
+  }
+
+  const inv: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < n; j++) {
+      row[j] = aug[i][n + j];
+    }
+    inv.push(row);
+  }
+  return inv;
+}
+
+const clamp = (val: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, Number.isFinite(val) ? val : min));
+
+export function extractFeatureVector({
+  impressions = 0,
+  clicks = 0,
+  conversions = 0,
+  dwellMs = 0,
+  axis = "HOOK",
+  tone = "bold",
+  targetMetric = "ctr",
+}: {
+  impressions?: number;
+  clicks?: number;
+  conversions?: number;
+  dwellMs?: number;
+  axis?: ExperimentAxis | string;
+  tone?: "bold" | "curious" | "urgent" | string;
+  targetMetric?: "ctr" | "conversions" | "dwell" | string;
+}): number[] {
+  const safeImpressions = Math.max(0, impressions);
+  const safeClicks = Math.max(0, clicks);
+  const safeConversions = Math.max(0, conversions);
+  const safeDwellMs = Math.max(0, dwellMs);
+
+  const denom = Math.max(safeImpressions, 1);
+
+  const x0 = 1.0;
+  const x1 = clamp(safeClicks / denom, 0, 1);
+  const x2 = clamp(safeConversions / denom, 0, 1);
+  const x3 = clamp(safeDwellMs / denom / 60000, 0, 1);
+  const x4 = clamp(Math.log10(safeImpressions + 1) / 4.0, 0, 1);
+
+  let x5 = 0.5;
+  const axisStr = String(axis);
+  if (axisStr === "HOOK") x5 = 1.0;
+  else if (axisStr === "CAPTION") x5 = 0.75;
+  else if (axisStr === "CTA") x5 = 0.50;
+  else if (axisStr === "SCHEDULE") x5 = 0.25;
+
+  let x6 = 0.50;
+  if (tone === "bold") x6 = 1.0;
+  else if (tone === "curious") x6 = 0.66;
+  else if (tone === "urgent") x6 = 0.33;
+
+  let x7 = DEFAULT_ENGAGEMENT_WEIGHTS.ctr;
+  if (targetMetric === "ctr") x7 = DEFAULT_ENGAGEMENT_WEIGHTS.ctr;
+  else if (targetMetric === "conversions") x7 = DEFAULT_ENGAGEMENT_WEIGHTS.conversions;
+  else if (targetMetric === "dwell") x7 = DEFAULT_ENGAGEMENT_WEIGHTS.dwell;
+
+  return [x0, x1, x2, x3, x4, x5, x6, x7];
+}
+
+export function createInitialBanditState(): BanditState {
+  return {
+    A: createIdentityMatrix(BANDIT_DIM),
+    b: createZeroVector(BANDIT_DIM),
+    sampleCount: 0,
+  };
+}
+
+export function computeLinUCBScore(
+  featureVector: number[],
+  state: BanditState = createInitialBanditState(),
+  alpha = ALPHA,
+): {
+  ucbScore: number;
+  predictedReward: number;
+  uncertainty: number;
+  confidence: number;
+} {
+  const A_inv = invertMatrix(state.A);
+  const theta = matrixVectorMultiply(A_inv, state.b);
+  const predictedReward = dotProduct(theta, featureVector);
+
+  const A_inv_x = matrixVectorMultiply(A_inv, featureVector);
+  const variance = dotProduct(featureVector, A_inv_x);
+  const uncertainty = Math.sqrt(Math.max(0, variance));
+
+  const ucbScore = predictedReward + alpha * uncertainty;
+
+  const u2 = uncertainty * uncertainty;
+  const rawConfidence = 0.50 + 0.45 * (1.0 - u2 / (1.0 + u2));
+  const confidence = clamp(rawConfidence, 0.50, 0.95);
+
+  return { ucbScore, predictedReward, uncertainty, confidence };
+}
+
+export const synthesiseVariantPayload = (
   axis: ExperimentAxis,
   baseline: VariantPayload,
   variantIndex: number,
@@ -154,6 +377,8 @@ const synthesiseVariantPayload = (
     tone?: "bold" | "curious" | "urgent";
     targetMetric?: "ctr" | "conversions" | "dwell";
     globalSignal?: string;
+    metrics?: VariantPerformance;
+    banditState?: BanditState;
   } = {},
 ) => {
   const result = { ...baseline } as VariantPayload;
@@ -189,9 +414,24 @@ const synthesiseVariantPayload = (
     emphasis === "urgent" ? "sense of urgency" : emphasis === "curious" ? "rasa penasaran" : "penekanan nilai";
   const metricLabel = metric === "ctr" ? "CTR" : metric === "conversions" ? "konversi" : "dwell time";
 
+  const featureVector = extractFeatureVector({
+    impressions: options.metrics?.impressions ?? 0,
+    clicks: options.metrics?.clicks ?? 0,
+    conversions: options.metrics?.conversions ?? 0,
+    dwellMs: options.metrics?.dwellMs ?? 0,
+    axis,
+    tone: emphasis,
+    targetMetric: metric,
+  });
+
+  const state = options.banditState ?? createInitialBanditState();
+  const { ucbScore, confidence } = computeLinUCBScore(featureVector, state);
+
   return {
     payload: result,
     explanation: `Disetel dengan ${emphasisLabel} untuk meningkatkan ${metricLabel}${options.globalSignal ? ` (terinspirasi sinyal global: ${options.globalSignal})` : ""}.`,
+    confidence,
+    ucbScore,
   } as const;
 };
 
@@ -296,14 +536,29 @@ export const startExperiment = async ({
   });
 
   const parsedBaseline = variantPayloadSchema.parse(baseline);
+  const baselineFeature = extractFeatureVector({
+    axis,
+    tone: "bold",
+    targetMetric: "ctr",
+  });
+  const baselineBanditState = createInitialBanditState();
+  const { confidence: initialConfidence } = computeLinUCBScore(baselineFeature, baselineBanditState);
+
+  const baselinePayloadWithMeta: VariantPayload = {
+    ...parsedBaseline,
+    metadata: {
+      ...(parsedBaseline.metadata || {}),
+      banditState: baselineBanditState,
+    },
+  };
 
   await db.contentVariant.create({
     data: {
       experimentId: experiment.id,
       variantKey: "baseline",
-      payload: serializePayload(parsedBaseline),
+      payload: serializePayload(baselinePayloadWithMeta),
       aiExplanation: "Baseline konten", // manual baseline
-      confidence: 0.7,
+      confidence: initialConfidence,
     },
   });
 
@@ -336,21 +591,31 @@ export const generateVariant = async ({
 
   const baselinePayload = variantPayloadSchema.parse((baselineVariant?.payload ?? {}) as VariantPayload);
 
-  const { payload, explanation } = synthesiseVariantPayload(
+  const { payload, explanation, confidence } = synthesiseVariantPayload(
     experiment.axis,
     baselinePayload,
     experiment.variants.length,
     { tone, targetMetric, globalSignal },
   );
 
+  const banditState = createInitialBanditState();
   const variantKey = determineVariantKey(experiment);
-  const confidence = Math.min(0.9, 0.68 + experiment.variants.length * 0.04);
+
+  const payloadWithMeta: VariantPayload = {
+    ...payload,
+    metadata: {
+      ...(payload.metadata || {}),
+      tone: tone ?? "bold",
+      targetMetric: targetMetric ?? "ctr",
+      banditState,
+    },
+  };
 
   await db.contentVariant.create({
     data: {
       experimentId: experiment.id,
       variantKey,
-      payload: serializePayload(payload),
+      payload: serializePayload(payloadWithMeta),
       aiExplanation: explanation,
       confidence,
     },
@@ -369,10 +634,18 @@ export const recordVariantPerformance = async ({
   dwellMs,
 }: VariantPerformance & { variantId: number }) => {
   const parsed = variantPerformanceSchema.parse({ impressions, clicks, conversions, dwellMs });
+  
+  const variantRecord = await db.contentVariant.findUnique({
+    where: { id: variantId },
+    include: { experiment: true, metrics: true },
+  });
+
   const existing = await db.variantMetric.findFirst({ where: { variantId } });
 
+  let updatedMetric: { impressions: number; clicks: number; conversions: number; dwellMs: number };
+
   if (!existing) {
-    await db.variantMetric.create({
+    updatedMetric = await db.variantMetric.create({
       data: {
         variantId,
         impressions: parsed.impressions,
@@ -382,29 +655,88 @@ export const recordVariantPerformance = async ({
         ctr: parsed.impressions ? parsed.clicks / parsed.impressions : 0,
       },
     });
-    return summariseVariantPerformance(parsed);
+  } else {
+    updatedMetric = await db.variantMetric.update({
+      where: { id: existing.id },
+      data: {
+        impressions: existing.impressions + parsed.impressions,
+        clicks: existing.clicks + parsed.clicks,
+        conversions: existing.conversions + parsed.conversions,
+        dwellMs: existing.dwellMs + parsed.dwellMs,
+        ctr:
+          existing.impressions + parsed.impressions > 0
+            ? (existing.clicks + parsed.clicks) / (existing.impressions + parsed.impressions)
+            : 0,
+      },
+    });
   }
 
-  const updated = await db.variantMetric.update({
-    where: { id: existing.id },
-    data: {
-      impressions: existing.impressions + parsed.impressions,
-      clicks: existing.clicks + parsed.clicks,
-      conversions: existing.conversions + parsed.conversions,
-      dwellMs: existing.dwellMs + parsed.dwellMs,
-      ctr:
-        existing.impressions + parsed.impressions > 0
-          ? (existing.clicks + parsed.clicks) / (existing.impressions + parsed.impressions)
-          : 0,
-    },
-  });
+  const totalPerf = {
+    impressions: updatedMetric.impressions,
+    clicks: updatedMetric.clicks,
+    conversions: updatedMetric.conversions,
+    dwellMs: updatedMetric.dwellMs,
+  };
 
-  return summariseVariantPerformance({
-    impressions: updated.impressions,
-    clicks: updated.clicks,
-    conversions: updated.conversions,
-    dwellMs: updated.dwellMs,
-  });
+  const engagement = computeEngagementScore(totalPerf, DEFAULT_ENGAGEMENT_WEIGHTS);
+  const reward = engagement.score;
+
+  if (variantRecord) {
+    const rawPayload = (variantRecord.payload ?? {}) as Record<string, any>;
+    const metadata = (rawPayload.metadata ?? {}) as Record<string, any>;
+
+    let state: BanditState =
+      metadata.banditState && Array.isArray(metadata.banditState.A)
+        ? (metadata.banditState as BanditState)
+        : createInitialBanditState();
+
+    const axis = variantRecord.experiment?.axis ?? "HOOK";
+    const tone = metadata.tone ?? "bold";
+    const targetMetric = metadata.targetMetric ?? "ctr";
+
+    const x_a = extractFeatureVector({
+      impressions: totalPerf.impressions,
+      clicks: totalPerf.clicks,
+      conversions: totalPerf.conversions,
+      dwellMs: totalPerf.dwellMs,
+      axis,
+      tone,
+      targetMetric,
+    });
+
+    const outer = outerProduct(x_a);
+    const A_new = matrixAdd(state.A, outer);
+
+    const r_xa = vectorScale(x_a, reward);
+    const b_new = vectorAdd(state.b, r_xa);
+
+    const updatedState: BanditState = {
+      A: A_new,
+      b: b_new,
+      sampleCount: (state.sampleCount || 0) + 1,
+    };
+
+    const { confidence: newConfidence, ucbScore } = computeLinUCBScore(x_a, updatedState);
+
+    const updatedPayload = {
+      ...rawPayload,
+      metadata: {
+        ...metadata,
+        banditState: updatedState,
+        ucbScore,
+      },
+    };
+
+    await db.contentVariant.update({
+      where: { id: variantId },
+      data: {
+        payload: serializePayload(updatedPayload),
+        confidence: newConfidence,
+      },
+    });
+  }
+
+  return summariseVariantPerformance(totalPerf);
 };
 
 export const chooseWinner = async ({ experimentId, variantId }: { experimentId: number; variantId: number }) => {

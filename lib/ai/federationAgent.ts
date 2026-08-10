@@ -96,10 +96,18 @@ export class FederationAgent {
     }
 
     this.unsubscribers.push(
-      this.deps.bus.subscribe("telemetry_sync", (event) => this.handleTelemetry(event.payload, event.timestamp)),
-      this.deps.bus.subscribe("priority_share", (event) => this.handlePriorityShare(event.payload, event.timestamp)),
-      this.deps.bus.subscribe("trust_aggregate", (event) => this.handleTrustAggregate(event.payload, event.timestamp)),
-      this.deps.bus.subscribe("model_update", (event) => this.handleModelUpdate(event.payload, event.timestamp)),
+      this.deps.bus.subscribe("telemetry_sync", (event) => {
+        if (event.payload) this.handleTelemetry(event.payload, event.timestamp);
+      }),
+      this.deps.bus.subscribe("priority_share", (event) => {
+        if (event.payload) this.handlePriorityShare(event.payload, event.timestamp);
+      }),
+      this.deps.bus.subscribe("trust_aggregate", (event) => {
+        if (event.payload) this.handleTrustAggregate(event.payload, event.timestamp);
+      }),
+      this.deps.bus.subscribe("model_update", (event) => {
+        if (event.payload) this.handleModelUpdate(event.payload, event.timestamp);
+      }),
     );
   }
 

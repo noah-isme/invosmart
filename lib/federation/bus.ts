@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
+import crypto, { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 
 import {
@@ -6,6 +6,7 @@ import {
   type FederationEvent,
   type FederationEventInput,
   type FederationEventType,
+  type SignatureAlgorithm,
   federationEventSchema,
   validateFederationEvent,
   type PreparedFederationEvent,
@@ -13,9 +14,22 @@ import {
 
 const DEFAULT_RECENT_LIMIT = 25;
 
+export const generateFederationKeyPair = (): { publicKey: string; privateKey: string } => {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+  return { publicKey, privateKey };
+};
+
 export type FederationBusOptions = {
   tenantId?: string;
   secret?: string;
+  privateKey?: string;
+  publicKey?: string;
+  keyId?: string;
+  peerPublicKeys?: Record<string, string>;
   endpoints?: string[];
   enabled?: boolean;
   recentLimit?: number;
@@ -50,6 +64,10 @@ export class FederationBus {
   private readonly emitter = new EventEmitter();
   private readonly tenantId: string;
   private readonly secret: string;
+  private readonly privateKey?: string;
+  private readonly publicKey?: string;
+  private readonly keyId?: string;
+  private readonly peerPublicKeys: Record<string, string>;
   private readonly endpoints: string[];
   private readonly recentLimit: number;
   private readonly fetchImpl?: typeof fetch;
@@ -60,6 +78,10 @@ export class FederationBus {
   constructor(options?: FederationBusOptions) {
     this.tenantId = options?.tenantId ?? process.env.FEDERATION_TENANT_ID ?? "local";
     this.secret = options?.secret ?? process.env.FEDERATION_TOKEN_SECRET ?? "";
+    this.privateKey = options?.privateKey ?? process.env.FEDERATION_PRIVATE_KEY;
+    this.publicKey = options?.publicKey ?? process.env.FEDERATION_PUBLIC_KEY;
+    this.keyId = options?.keyId ?? process.env.FEDERATION_KEY_ID;
+    this.peerPublicKeys = options?.peerPublicKeys ?? {};
     this.endpoints = options?.endpoints ?? toEndpointList(process.env.FEDERATION_ENDPOINTS);
     this.recentLimit = options?.recentLimit ?? DEFAULT_RECENT_LIMIT;
     this.fetchImpl = options?.fetchImpl ?? (typeof fetch === "function" ? fetch : undefined);
@@ -71,7 +93,10 @@ export class FederationBus {
   }
 
   get isEnabled() {
-    return this.enabled && Boolean(this.secret);
+    return (
+      this.enabled &&
+      (Boolean(this.secret) || Boolean(this.privateKey) || Boolean(this.publicKey))
+    );
   }
 
   getTenantId() {
@@ -97,16 +122,129 @@ export class FederationBus {
     }
   }
 
-  private sign(prepared: PreparedFederationEvent) {
-    const payload = JSON.stringify({
+  private getSignableString(
+    prepared: { type: string; tenantId: string; timestamp: string; payload?: unknown },
+    encryptedFields?: { encryptedPayload?: string; encryptedKey?: string; iv?: string },
+  ): string {
+    if (encryptedFields?.encryptedPayload) {
+      return JSON.stringify({
+        type: prepared.type,
+        tenantId: prepared.tenantId,
+        timestamp: prepared.timestamp,
+        encryptedPayload: encryptedFields.encryptedPayload,
+        encryptedKey: encryptedFields.encryptedKey,
+        iv: encryptedFields.iv,
+      });
+    }
+    return JSON.stringify({
       type: prepared.type,
       tenantId: prepared.tenantId,
       timestamp: prepared.timestamp,
       payload: prepared.payload,
     });
+  }
+
+  private sign(signableString: string): {
+    signature: string;
+    signatureAlgorithm: SignatureAlgorithm;
+  } {
+    if (this.privateKey) {
+      const signer = crypto.createSign("SHA256");
+      signer.update(signableString);
+      signer.end();
+      const signature = signer.sign(this.privateKey, "hex");
+      return { signature, signatureAlgorithm: "rsa-sha256" };
+    }
     const hmac = createHmac("sha256", this.secret);
-    hmac.update(payload);
-    return hmac.digest("hex");
+    hmac.update(signableString);
+    return { signature: hmac.digest("hex"), signatureAlgorithm: "hmac-sha256" };
+  }
+
+  private encryptPayload(
+    payload: unknown,
+    recipientPublicKey: string,
+  ): { encryptedPayload: string; encryptedKey: string; iv: string } {
+    const aesKey = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(12);
+
+    const cipher = crypto.createCipheriv("aes-256-gcm", aesKey, iv);
+    let cipherText = cipher.update(JSON.stringify(payload), "utf8");
+    cipherText = Buffer.concat([cipherText, cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    const combinedPayloadBuffer = Buffer.concat([cipherText, authTag]);
+    const encryptedPayload = combinedPayloadBuffer.toString("base64");
+
+    const encryptedKeyBuffer = crypto.publicEncrypt(
+      {
+        key: recipientPublicKey,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256",
+      },
+      aesKey,
+    );
+    const encryptedKey = encryptedKeyBuffer.toString("base64");
+
+    return {
+      encryptedPayload,
+      encryptedKey,
+      iv: iv.toString("hex"),
+    };
+  }
+
+  private decryptPayload(
+    encryptedPayloadBase64: string,
+    encryptedKeyBase64: string,
+    ivHex: string,
+  ): unknown {
+    if (!this.privateKey) {
+      throw new Error("Cannot decrypt event: Private key missing");
+    }
+
+    let aesKey: Buffer;
+    try {
+      const encryptedKeyBuffer = Buffer.from(encryptedKeyBase64, "base64");
+      aesKey = crypto.privateDecrypt(
+        {
+          key: this.privateKey,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        },
+        encryptedKeyBuffer,
+      );
+    } catch (error) {
+      throw new Error(
+        `Payload decryption failed: ${error instanceof Error ? error.message : "Invalid key"}`,
+      );
+    }
+
+    const combinedPayloadBuffer = Buffer.from(encryptedPayloadBase64, "base64");
+    const AUTH_TAG_LENGTH = 16;
+    if (combinedPayloadBuffer.length < AUTH_TAG_LENGTH) {
+      throw new Error("Corrupted encrypted payload: buffer too short");
+    }
+
+    const cipherText = combinedPayloadBuffer.subarray(
+      0,
+      combinedPayloadBuffer.length - AUTH_TAG_LENGTH,
+    );
+    const authTag = combinedPayloadBuffer.subarray(
+      combinedPayloadBuffer.length - AUTH_TAG_LENGTH,
+    );
+    const iv = Buffer.from(ivHex, "hex");
+
+    try {
+      const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, iv);
+      decipher.setAuthTag(authTag);
+      let decryptedText = decipher.update(cipherText, undefined, "utf8");
+      decryptedText += decipher.final("utf8");
+
+      return JSON.parse(decryptedText);
+    } catch (error) {
+      throw new Error(
+        `Payload decryption failed: ${error instanceof Error ? error.message : "Ciphertext corruption"}`,
+      );
+    }
   }
 
   private buildEvent<TType extends FederationEventType>(
@@ -114,14 +252,37 @@ export class FederationBus {
   ): FederationEvent<TType> {
     const prepared = validateFederationEvent(input);
     const id = randomUUID();
-    const signature = this.sign(prepared);
 
-    const event = federationEventSchema.parse({
+    let encryptedFields:
+      | { encryptedPayload: string; encryptedKey: string; iv: string }
+      | undefined;
+
+    if (input.recipientPublicKey) {
+      encryptedFields = this.encryptPayload(prepared.payload, input.recipientPublicKey);
+    }
+
+    const signableString = this.getSignableString(prepared, encryptedFields);
+    const { signature, signatureAlgorithm } = this.sign(signableString);
+
+    const rawEvent: Record<string, unknown> = {
       id,
+      type: prepared.type,
+      tenantId: prepared.tenantId,
+      timestamp: prepared.timestamp,
       signature,
-      ...prepared,
-    }) as FederationEvent<TType>;
+      signatureAlgorithm,
+      keyId: this.keyId || undefined,
+    };
 
+    if (encryptedFields) {
+      rawEvent.encryptedPayload = encryptedFields.encryptedPayload;
+      rawEvent.encryptedKey = encryptedFields.encryptedKey;
+      rawEvent.iv = encryptedFields.iv;
+    } else {
+      rawEvent.payload = prepared.payload;
+    }
+
+    const event = federationEventSchema.parse(rawEvent) as FederationEvent<TType>;
     return event;
   }
 
@@ -199,15 +360,43 @@ export class FederationBus {
     return () => this.emitter.off(type, wrapped);
   }
 
-  private verifySignature(event: FederationEvent) {
+  private verifySignature(event: FederationEvent): boolean {
+    const signableString = event.encryptedPayload
+      ? JSON.stringify({
+          type: event.type,
+          tenantId: event.tenantId,
+          timestamp: event.timestamp,
+          encryptedPayload: event.encryptedPayload,
+          encryptedKey: event.encryptedKey,
+          iv: event.iv,
+        })
+      : JSON.stringify({
+          type: event.type,
+          tenantId: event.tenantId,
+          timestamp: event.timestamp,
+          payload: event.payload,
+        });
+
+    const senderPublicKey = this.peerPublicKeys[event.tenantId] ?? this.publicKey;
+
+    if (
+      event.signatureAlgorithm === "rsa-sha256" ||
+      (senderPublicKey && event.signatureAlgorithm !== "hmac-sha256")
+    ) {
+      if (!senderPublicKey) return false;
+      try {
+        const verifier = crypto.createVerify("SHA256");
+        verifier.update(signableString);
+        verifier.end();
+        return verifier.verify(senderPublicKey, Buffer.from(event.signature, "hex"));
+      } catch {
+        return false;
+      }
+    }
+
+    // Fallback to HMAC-SHA256
     if (!this.secret) return false;
-    const payload = JSON.stringify({
-      type: event.type,
-      tenantId: event.tenantId,
-      timestamp: event.timestamp,
-      payload: event.payload,
-    });
-    const expected = createHmac("sha256", this.secret).update(payload).digest();
+    const expected = createHmac("sha256", this.secret).update(signableString).digest();
     const provided = Buffer.from(event.signature, "hex");
 
     if (expected.length !== provided.length) return false;
@@ -226,6 +415,15 @@ export class FederationBus {
     if (parsed.tenantId === this.tenantId) {
       // Ignore echoes of our own events.
       return false;
+    }
+
+    if (parsed.encryptedPayload && parsed.encryptedKey && parsed.iv) {
+      const decryptedPayload = this.decryptPayload(
+        parsed.encryptedPayload,
+        parsed.encryptedKey,
+        parsed.iv,
+      );
+      parsed.payload = decryptedPayload as typeof parsed.payload;
     }
 
     this.recordEvent(parsed);

@@ -89,31 +89,63 @@ const payloadMap: Record<FederationEventType, z.ZodTypeAny> = {
   model_update: modelUpdatePayloadSchema,
 };
 
-export const federationEventSchema = z.object({
-  id: z.string().min(1),
-  type: federationEventTypeSchema,
-  tenantId: tenantIdSchema,
-  timestamp: z.string().datetime(),
-  signature: z.string().min(10),
-  payload: z.union([
-    telemetrySyncPayloadSchema,
-    prioritySharePayloadSchema,
-    trustAggregatePayloadSchema,
-    modelUpdatePayloadSchema,
-  ]),
-});
+export const signatureAlgorithmSchema = z
+  .enum(["hmac-sha256", "rsa-sha256", "ed25519"])
+  .default("hmac-sha256");
 
-export type FederationEvent<TType extends FederationEventType = FederationEventType> = z.infer<
-  typeof federationEventSchema
-> & {
+export type SignatureAlgorithm = z.infer<typeof signatureAlgorithmSchema>;
+
+export const federationEventSchema = z
+  .object({
+    id: z.string().min(1),
+    type: federationEventTypeSchema,
+    tenantId: tenantIdSchema,
+    timestamp: z.string().datetime(),
+    signature: z.string().min(10),
+    signatureAlgorithm: signatureAlgorithmSchema.optional(),
+    keyId: z.string().optional(),
+    payload: z
+      .union([
+        telemetrySyncPayloadSchema,
+        prioritySharePayloadSchema,
+        trustAggregatePayloadSchema,
+        modelUpdatePayloadSchema,
+      ])
+      .optional(),
+    encryptedPayload: z.string().optional(),
+    encryptedKey: z.string().optional(),
+    iv: z.string().optional(),
+  })
+  .refine(
+    (data) =>
+      data.payload !== undefined ||
+      (data.encryptedPayload !== undefined &&
+        data.encryptedKey !== undefined &&
+        data.iv !== undefined),
+    {
+      message:
+        "Federation event must contain either a plaintext payload or valid encryptedPayload, encryptedKey, and iv",
+    },
+  );
+
+export type FederationEvent<TType extends FederationEventType = FederationEventType> = {
+  id: string;
   type: TType;
-  payload: TType extends "telemetry_sync"
+  tenantId: string;
+  timestamp: string;
+  signature: string;
+  signatureAlgorithm?: SignatureAlgorithm;
+  keyId?: string;
+  payload?: TType extends "telemetry_sync"
     ? TelemetrySyncPayload
     : TType extends "priority_share"
       ? PrioritySharePayload
       : TType extends "trust_aggregate"
         ? TrustAggregatePayload
         : ModelUpdatePayload;
+  encryptedPayload?: string;
+  encryptedKey?: string;
+  iv?: string;
 };
 
 export type FederationEventInput<TType extends FederationEventType = FederationEventType> = {
@@ -121,6 +153,7 @@ export type FederationEventInput<TType extends FederationEventType = FederationE
   tenantId?: string;
   timestamp?: string;
   payload: FederationEvent<TType>["payload"];
+  recipientPublicKey?: string;
 };
 
 export type FederationEndpointStatus = {
@@ -173,7 +206,7 @@ export const validateFederationEvent = <TType extends FederationEventType>(
   input: FederationEventInput<TType>,
 ): PreparedFederationEvent<TType> => {
   const schema = payloadMap[input.type];
-  const payload = schema.parse(sanitizeMetadata(input.payload));
+  const payload = schema.parse(sanitizeMetadata(input.payload ?? {}));
   const tenantId = input.tenantId ?? payload.tenantId;
   const timestamp = input.timestamp ?? new Date().toISOString();
 

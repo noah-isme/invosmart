@@ -1,5 +1,4 @@
 import { OptimizationStatus, type OptimizationLog } from "@prisma/client";
-import * as Sentry from "@sentry/nextjs";
 
 import { db } from "@/lib/db";
 
@@ -27,8 +26,10 @@ export const processAutoRollback = async (
     compositeImpact * 100
   ).toFixed(2)}%`;
 
-  const captureMessage = (Sentry as unknown as { captureMessage?: (msg: string, context?: unknown) => void }).captureMessage;
-  captureMessage?.(message, {
+  const sentry = await import("@sentry/nextjs").catch(() => null) as
+    | { captureMessage?: (msg: string, ctx?: unknown) => void }
+    | null;
+  sentry?.captureMessage?.(message, {
     level: "info",
     extra: {
       logs: logs.map((log) => ({ id: log.id, route: log.route, status: log.status })),

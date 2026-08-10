@@ -33,7 +33,13 @@ export const calculateTrustScore = ({
   return Math.round(weighted * 100);
 };
 
+let _cachedMetrics: { value: TrustScoreMetrics; expiresAt: number } | null = null;
+
 export const getTrustMetrics = async (): Promise<TrustScoreMetrics> => {
+  if (_cachedMetrics && Date.now() < _cachedMetrics.expiresAt) {
+    return _cachedMetrics.value;
+  }
+
   const [total, applied, rollback, violations] = await Promise.all([
     db.optimizationLog.count(),
     db.optimizationLog.count({ where: { status: OptimizationStatus.APPLIED } }),
@@ -49,7 +55,7 @@ export const getTrustMetrics = async (): Promise<TrustScoreMetrics> => {
   const rollbackRate = applied > 0 ? rollback / applied : 0;
   const policyViolationRate = total > 0 ? violations / total : 0;
 
-  return {
+  const value: TrustScoreMetrics = {
     successRate,
     rollbackRate,
     policyViolationRate,
@@ -57,10 +63,18 @@ export const getTrustMetrics = async (): Promise<TrustScoreMetrics> => {
     applied,
     violations,
   };
+
+  _cachedMetrics = { value, expiresAt: Date.now() + 50 };
+  return value;
 };
 
 export const getTrustScore = async (): Promise<TrustScore> => {
   const metrics = await getTrustMetrics();
   const score = calculateTrustScore(metrics);
   return { score, metrics };
+};
+
+/** @internal — for test isolation only */
+export const _resetCacheForTesting = () => {
+  _cachedMetrics = null;
 };

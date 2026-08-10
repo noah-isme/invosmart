@@ -150,7 +150,23 @@ export const runLoop = async (overrides?: {
 
   runtimeState.enabled = true;
 
-  const trust = await getTrustScore();
+  const trustOverridden =
+    overrides?.telemetry?.trustScore !== undefined &&
+    overrides?.telemetry?.successRate !== undefined &&
+    overrides?.telemetry?.errorRate !== undefined;
+  const trust = trustOverridden
+    ? {
+        score: overrides!.telemetry!.trustScore!,
+        metrics: {
+          successRate: overrides!.telemetry!.successRate!,
+          policyViolationRate: overrides!.telemetry!.errorRate!,
+          rollbackRate: 0,
+          totalRecommendations: 0,
+          applied: 0,
+          violations: 0,
+        },
+      }
+    : await getTrustScore();
   const snapshot = await getOrchestratorSnapshot({ limit: 40 });
   const backlog =
     overrides?.telemetry?.backlogSize ??

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { type AgentRole, agentRoleSchema } from "./protocol";
 import { dispatchEvent, isOrchestrationEnabled, registerAgent } from "./orchestrator";
 import { getTrustScore } from "./trustScore";
+import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
 export type RecoverySignal = {
   agent?: AgentRole;
@@ -35,11 +36,22 @@ export const analyzeRecovery = (signal: RecoverySignal): RecoveryAction => {
   const delta = trustScoreBefore === 0 ? 0 : (trustScoreBefore - trustScoreAfter) / Math.max(trustScoreBefore, 1);
   const threshold = signal.regressionThreshold ?? RECOVERY_REGRESSION_THRESHOLD;
 
-  if (delta >= threshold || errorRate >= 0.15) {
+  if (delta >= threshold) {
     return {
       agent: clampAgent(signal.agent),
       action: "rollback",
       reason: `Regresi ${(delta * 100).toFixed(1)}% terdeteksi, memicu rollback & re-evaluasi`,
+      trustScoreBefore,
+      trustScoreAfter,
+      traceId: signal.traceId,
+    } satisfies RecoveryAction;
+  }
+
+  if (errorRate >= 0.15) {
+    return {
+      agent: clampAgent(signal.agent),
+      action: "rollback",
+      reason: `Error rate ${(errorRate * 100).toFixed(1)}% > 15%, memicu rollback otomatis`,
       trustScoreBefore,
       trustScoreAfter,
       traceId: signal.traceId,
@@ -89,7 +101,7 @@ export const runRecoverySweep = async (signal?: Partial<RecoverySignal>): Promis
   const action = analyzeRecovery({
     agent: signal?.agent,
     trustScoreBefore: trust.score,
-    trustScoreAfter: trust.score * (1 - (signal?.errorRate ?? 0)),
+    trustScoreAfter: trust.score, // no artificial delta — errorRate drives recovery independently
     errorRate: signal?.errorRate ?? trust.metrics.policyViolationRate,
     regressionThreshold: signal?.regressionThreshold,
     traceId: signal?.traceId,
@@ -97,6 +109,22 @@ export const runRecoverySweep = async (signal?: Partial<RecoverySignal>): Promis
 
   const record = await persistRecoveryAction(action);
   const result = { ...action, createdAt: record.createdAt } satisfies RecoveryResult;
+
+  if (action.action === "rollback") {
+    void logAuditEvent({
+      action: AuditAction.AI_RECOVERY_ROLLBACK,
+      entity: AuditEntity.RECOVERY,
+      entityId: record.id,
+      details: {
+        agent: action.agent,
+        action: action.action,
+        reason: action.reason,
+        trustScoreBefore: action.trustScoreBefore,
+        trustScoreAfter: action.trustScoreAfter,
+        traceId: action.traceId ?? null,
+      },
+    });
+  }
 
   // Dispatch recovery action event to orchestrator
   if (isOrchestrationEnabled()) {

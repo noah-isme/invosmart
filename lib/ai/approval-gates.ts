@@ -2,6 +2,8 @@ import { AutoActionStatus, AutoActionType, ExperimentAxis, type AiAutoAction } f
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { dispatchWebhookAlert } from "@/lib/ai/webhooks";
+import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
 const DEFAULT_MIN_SAMPLE = 50;
 
@@ -145,7 +147,7 @@ export const logAutoAction = async ({
   reason: string;
   confidence?: number;
 }) => {
-  return db.aiAutoAction.create({
+  const created = await db.aiAutoAction.create({
     data: {
       organizationId,
       actionType,
@@ -156,13 +158,56 @@ export const logAutoAction = async ({
       confidence,
     },
   });
+
+  dispatchWebhookAlert(created).catch((err) => {
+    console.error("Failed to dispatch webhook alert in logAutoAction:", err);
+  });
+
+  void logAuditEvent({
+    tenantId: created.organizationId ?? null,
+    action: AuditAction.AI_AUTO_ACTION,
+    entity: AuditEntity.AI_AUTO_ACTION,
+    entityId: String(created.id),
+    details: {
+      actionType: created.actionType,
+      contentId: created.contentId,
+      experimentId: created.experimentId,
+      variantId: created.variantId,
+      confidence: created.confidence,
+      reason: created.reason,
+      status: created.status,
+    },
+  });
+
+  return created;
 };
 
 export const markAutoActionReverted = async ({ actionId, reason }: { actionId: number; reason?: string }) => {
-  return db.aiAutoAction.update({
+  const updated = await db.aiAutoAction.update({
     where: { id: actionId },
     data: { status: AutoActionStatus.reverted, reason: reason ?? "Manual revert" },
   });
+
+  dispatchWebhookAlert(updated).catch((err) => {
+    console.error("Failed to dispatch webhook alert in markAutoActionReverted:", err);
+  });
+
+  void logAuditEvent({
+    tenantId: updated.organizationId ?? null,
+    action: AuditAction.AI_AUTO_REVERT,
+    entity: AuditEntity.AI_AUTO_ACTION,
+    entityId: String(updated.id),
+    details: {
+      actionType: updated.actionType,
+      contentId: updated.contentId,
+      experimentId: updated.experimentId,
+      variantId: updated.variantId,
+      revertReason: reason ?? "Manual revert",
+      newStatus: updated.status,
+    },
+  });
+
+  return updated;
 };
 
 export const serializeAutoAction = (action: AiAutoAction) => ({

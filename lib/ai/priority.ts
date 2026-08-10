@@ -19,11 +19,12 @@ export type AgentPrioritySnapshot = {
 const AGENT_ROLES = agentRoleSchema.options;
 
 const BASE_WEIGHTS: Record<AgentRole, number> = {
-  governance: 0.28,
-  optimizer: 0.26,
-  learning: 0.22,
-  insight: 0.16,
-  federation: 0.08,
+  governance: 0.25,
+  recovery:   0.20,
+  optimizer:  0.22,
+  learning:   0.17,
+  insight:    0.10,
+  federation: 0.06,
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -60,11 +61,13 @@ export const calculatePriorityWeights = (signal: PrioritySignal): AgentPriorityS
         ? base * (0.7 * successModifier + 0.3 * trustModifier)
         : agent === "learning"
           ? base * (0.6 * (1 - successModifier) + 0.4 * trustModifier)
-          : agent === "insight"
-            ? base * (0.5 * (1 - loadModifier) + 0.5 * trustModifier)
-            : agent === "federation"
-              ? base * (0.6 * trustModifier + 0.4 * (1 - errorPenalty))
-              : base * (0.5 * trustModifier + 0.5 * (1 - errorPenalty));
+          : agent === "recovery"
+            ? base * (0.7 * (1 - errorPenalty) + 0.3 * (1 - trustModifier))
+            : agent === "insight"
+              ? base * (0.5 * (1 - loadModifier) + 0.5 * trustModifier)
+              : agent === "federation"
+                ? base * (0.6 * trustModifier + 0.4 * (1 - errorPenalty))
+                : base * (0.5 * trustModifier + 0.5 * (1 - errorPenalty));
 
     acc[agent] = dynamicWeight;
     return acc;
@@ -82,9 +85,11 @@ export const calculatePriorityWeights = (signal: PrioritySignal): AgentPriorityS
           ? "LearningAgent diperkuat untuk mengimbangi area yang belum optimal."
           : agent === "governance"
             ? "Governance memastikan kepatuhan saat skor kepercayaan turun."
-            : agent === "insight"
-              ? "InsightAgent membantu mendeteksi pola anomali dan peluang baru."
-              : "FederationAgent menyelaraskan prioritas lintas instance untuk menjaga konsistensi global.";
+            : agent === "recovery"
+              ? "RecoveryAgent diaktifkan untuk mendeteksi dan memulihkan regresi performa."
+              : agent === "insight"
+                ? "InsightAgent membantu mendeteksi pola anomali dan peluang baru."
+                : "FederationAgent menyelaraskan prioritas lintas instance untuk menjaga konsistensi global.";
 
     return {
       agent,
@@ -121,14 +126,17 @@ export const persistPriorities = async (snapshots: AgentPrioritySnapshot[]): Pro
     ),
   );
 
-  return records.map((record) => ({
-    id: record.id,
-    agent: record.agent as AgentRole,
-    weight: record.weight,
-    confidence: record.confidence,
-    rationale: record.rationale ?? "",
-    updatedAt: record.updatedAt,
-  }));
+  return records.map((record, i) => {
+    const snap = snapshots[i];
+    return {
+      id: record?.id ?? `${snap.agent}-${now.getTime()}`,
+      agent: (record?.agent ?? snap.agent) as AgentRole,
+      weight: record?.weight ?? snap.weight,
+      confidence: record?.confidence ?? snap.confidence,
+      rationale: record?.rationale ?? snap.rationale ?? "",
+      updatedAt: record?.updatedAt ?? now,
+    };
+  });
 };
 
 export type PriorityUpdateResult = {
