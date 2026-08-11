@@ -1,0 +1,179 @@
+
+> invosmart@1.0.0 lint
+> eslint .
+
+(node:17560) ESLintIgnoreWarning: The ".eslintignore" file is no longer supported. Switch to using the "ignores" property in "eslint.config.js": https://eslint.org/docs/latest/use/configure/migration-guide#ignoring-files
+(Use `node --trace-warnings ...` to show where the warning was created)
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+
+/home/noah/project/invosmart/.agents/challenger_m1_2/stress_test.ts
+  11:3  warning  'synthesiseVariantPayload' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/.agents/challenger_m5_2/scratch/csp_and_middleware_test.ts
+  23:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  37:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/api/clients/[id]/route.ts
+   85:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/api/clients/route.ts
+  106:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/api/invoices/[id]/send-email/route.ts
+  61:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/app/api/receipts/ai-scan/route.ts
+  106:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/app/clients/ClientsClient.tsx
+  7:77  error    Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  9:19  warning  'setClients' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/app/app/clients/[id]/ClientDetailClient.tsx
+    8:73  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    8:85  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   30:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  139:48  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/app/clients/new/ClientFormClient.tsx
+   8:74  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/app/app/receipts/ReceiptScanner.tsx
+   5:10  warning  'z' is defined but never used             @typescript-eslint/no-unused-vars
+  47:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/app/layout.tsx
+  10:10  warning  'THEME_COLORS' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/app/viewport.ts
+  2:10  warning  'THEME_COLORS' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/components/invoices/SendEmailModal.tsx
+  52:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/components/payments/PaymentGatewayModal.tsx
+  8:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/emails/InvoiceEmail.tsx
+  8:3  warning  'Row' is defined but never used     @typescript-eslint/no-unused-vars
+  9:3  warning  'Column' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/lib/__tests__/content-local-optimizer-stress.test.ts
+   1:48  warning  'afterEach' is defined but never used             @typescript-eslint/no-unused-vars
+   2:26  warning  'ExperimentStatus' is defined but never used      @typescript-eslint/no-unused-vars
+  52:3   warning  'ALPHA' is defined but never used                 @typescript-eslint/no-unused-vars
+  54:3   warning  'createZeroVector' is defined but never used      @typescript-eslint/no-unused-vars
+  55:3   warning  'dotProduct' is defined but never used            @typescript-eslint/no-unused-vars
+  56:3   warning  'matrixVectorMultiply' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/lib/__tests__/webhooks.test.ts
+  101:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  277:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/lib/ai.ts
+  14:7  warning  'buildGeminiPrompt' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/lib/ai/content-local-optimizer.ts
+  685:72  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+  686:68  error  Unexpected any. Specify a different type          @typescript-eslint/no-explicit-any
+  688:9   error  'state' is never reassigned. Use 'const' instead  prefer-const
+
+/home/noah/project/invosmart/lib/ai/webhooks.ts
+   43:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:82  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  165:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  194:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/lib/federation/bus.ts
+  12:8  warning  'PreparedFederationEvent' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/lib/receipts/state.ts
+  1:20  warning  'useEffect' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/lib/receipts/utils.ts
+  3:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/lib/security/csrf.ts
+  60:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/test/e2e/tier1-feature-coverage.test.ts
+    2:78  warning  'OptimizationStatus' is defined but never used       @typescript-eslint/no-unused-vars
+  129:3   warning  'federationEventSchema' is defined but never used    @typescript-eslint/no-unused-vars
+  131:3   warning  'validateFederationEvent' is defined but never used  @typescript-eslint/no-unused-vars
+  377:11  error    'state' is never reassigned. Use 'const' instead     prefer-const
+
+/home/noah/project/invosmart/test/e2e/tier2-boundary-corner.test.ts
+   61:25  warning  'markAutoActionReverted' is defined but never used  @typescript-eslint/no-unused-vars
+  200:43  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  207:65  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  396:67  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  459:28  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  460:28  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  461:28  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  462:28  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  518:29  error    Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/test/e2e/tier3-cross-feature.test.ts
+   52:3   warning  'dispatchWebhookAlert' is defined but never used    @typescript-eslint/no-unused-vars
+   53:3   warning  'formatDiscordEmbed' is defined but never used      @typescript-eslint/no-unused-vars
+   54:3   warning  'formatSlackBlocks' is defined but never used       @typescript-eslint/no-unused-vars
+   55:3   warning  'getEmbedColor' is defined but never used           @typescript-eslint/no-unused-vars
+   68:3   warning  'getTrustScore' is defined but never used           @typescript-eslint/no-unused-vars
+   71:3   warning  'dispatchEvent' is defined but never used           @typescript-eslint/no-unused-vars
+   72:3   warning  'isOrchestrationEnabled' is defined but never used  @typescript-eslint/no-unused-vars
+   83:3   warning  'BANDIT_DIM' is defined but never used              @typescript-eslint/no-unused-vars
+   84:3   warning  'computeLinUCBScore' is defined but never used      @typescript-eslint/no-unused-vars
+   86:3   warning  'extractFeatureVector' is defined but never used    @typescript-eslint/no-unused-vars
+   90:10  warning  'computeEngagementScore' is defined but never used  @typescript-eslint/no-unused-vars
+  100:64  warning  'update' is defined but never used                  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/test/e2e/tier4-realworld-scenarios.test.ts
+   58:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:25  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   62:22  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:25  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:25  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:25  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   66:30  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:33  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   68:29  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   69:32  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  290:38  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  338:38  warning  'action' is defined but never used        @typescript-eslint/no-unused-vars
+  338:46  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  434:57  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  506:13  warning  'exp' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  655:52  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/test/m3-edge-cases.test.ts
+  75:20  warning  'evt1' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  83:20  warning  'evt2' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/test/m3-empirical-stress.test.ts
+   1:32  warning  'vi' is defined but never used               @typescript-eslint/no-unused-vars
+   4:10  warning  'FederationAgent' is defined but never used  @typescript-eslint/no-unused-vars
+  93:26  error    Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+
+/home/noah/project/invosmart/test/mocks/next-auth-middleware.ts
+  13:3  warning  '_options' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/test/receipts/pdf.test.ts
+   1:32  warning  'beforeEach' is defined but never used  @typescript-eslint/no-unused-vars
+  28:14  warning  'e' is defined but never used           @typescript-eslint/no-unused-vars
+  32:16  warning  'err' is defined but never used         @typescript-eslint/no-unused-vars
+
+/home/noah/project/invosmart/test/receipts/picker-flow.test.tsx
+  2:26  warning  'fireEvent' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 102 problems (56 errors, 46 warnings)
+  2 errors and 0 warnings potentially fixable with the `--fix` option.
+

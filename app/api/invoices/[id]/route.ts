@@ -192,6 +192,8 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
     issuedAt,
     dueAt,
     notes: parsed.data.notes ?? null,
+    currency: parsed.data.currency || "IDR",
+    clientId: parsed.data.clientId ?? null,
     ...("paidAt" in sideEffects ? { paidAt: sideEffects.paidAt ?? null } : {}),
   };
 

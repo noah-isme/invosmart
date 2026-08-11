@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { InvoiceFormSchema, InvoiceStatusEnum } from "@/lib/schemas";
 import { calculateTotals, type InvoiceItemInput } from "@/lib/invoice-utils";
 import { trackEvent } from "@/lib/telemetry";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   style: "currency",
@@ -25,6 +26,7 @@ export type InvoiceFormInitialValues = {
     qty?: number | string | null;
     price?: number | string | null;
   }>;
+  currency?: string | null;
 };
 
 type InvoiceItemForm = {
@@ -149,6 +151,7 @@ export type InvoiceFormClientProps = {
   heading: string;
   description: string;
   initialValues?: InvoiceFormInitialValues;
+  defaultCurrency?: string;
   submitLabels?: {
     draft: string;
     draftLoading: string;
@@ -177,6 +180,7 @@ export const InvoiceFormClient = ({
   description,
   initialValues,
   submitLabels = defaultSubmitLabels,
+  defaultCurrency = "IDR",
 }: InvoiceFormClientProps) => {
   const router = useRouter();
 
@@ -189,6 +193,7 @@ export const InvoiceFormClient = ({
     client: initialValues?.client?.toString() ?? "",
     dueAt: formatDueAtInput(initialValues?.dueAt),
     notes: initialValues?.notes?.toString() ?? "",
+    currency: initialValues?.currency?.toString() ?? defaultCurrency,
     items: sanitizedInitialItems,
   });
 
@@ -201,6 +206,7 @@ export const InvoiceFormClient = ({
       client: initialValues?.client?.toString() ?? "",
       dueAt: formatDueAtInput(initialValues?.dueAt),
       notes: initialValues?.notes?.toString() ?? "",
+      currency: initialValues?.currency?.toString() ?? defaultCurrency,
       items: nextItems,
     });
     setErrors(emptyErrors(nextItems.length));
@@ -390,6 +396,19 @@ export const InvoiceFormClient = ({
                 {errors.client}
               </span>
             ) : null}
+          </label>
+
+          <label className="flex flex-col gap-3">
+            <span className={labelClass}>Mata Uang</span>
+            <select
+              value={form.currency}
+              onChange={(event) => setForm(prev => ({ ...prev, currency: event.target.value }))}
+              className={inputClass}
+            >
+              {SUPPORTED_CURRENCIES.map(c => (
+                <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
+              ))}
+            </select>
           </label>
 
           <label className="flex flex-col gap-3">

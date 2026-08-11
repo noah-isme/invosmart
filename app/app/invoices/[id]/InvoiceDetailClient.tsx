@@ -10,6 +10,10 @@ import { trackEvent } from "@/lib/telemetry";
 import { InvoiceItemsTable } from "./InvoiceItemsTable";
 import { InvoiceSummary } from "./InvoiceSummary";
 import type { InvoiceDetail } from "./types";
+import Script from "next/script";
+import PaymentGatewayModal from "@/components/payments/PaymentGatewayModal";
+import SendEmailModal from "@/components/invoices/SendEmailModal";
+import { formatDistanceToNow } from "date-fns";
 
 type DialogType = "send" | "paid" | "delete" | null;
 
@@ -57,11 +61,14 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   const [downloadPending, setDownloadPending] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   const dialogConfig = useMemo(() => (dialog ? dialogConfigs[dialog] : null), [dialog]);
 
   const canSend = invoice.status === InvoiceStatusEnum.enum.DRAFT;
   const canMarkPaid = invoice.status !== InvoiceStatusEnum.enum.PAID;
+  const canPay = ['SENT', 'UNPAID', 'OVERDUE'].includes(invoice.status);
 
   const closeDialog = () => {
     setDialog(null);
@@ -193,9 +200,22 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
 
   return (
     <div className="space-y-6 p-6">
+      <Script 
+        src={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith('SB-Mid') ? 'https://app.sandbox.midtrans.com/snap/snap.js' : 'https://app.midtrans.com/snap/snap.js'}
+        data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-foreground">Detail Invoice</h1>
         <div className="flex flex-wrap gap-2">
+          {canPay && (
+            <button
+              type="button"
+              onClick={() => setPaymentModalOpen(true)}
+              className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              Pay Now
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDownload}
@@ -205,6 +225,22 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
           >
             {downloadPending ? "Menyiapkan PDF..." : "Download PDF"}
           </button>
+          
+          <div className="flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setIsEmailModalOpen(true)}
+              className="inline-flex items-center rounded-md border border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Send Email
+            </button>
+            {invoice.emailedAt && (
+              <span className="text-[10px] text-zinc-500 mt-1">
+                Last sent: {formatDistanceToNow(new Date(invoice.emailedAt), { addSuffix: true })}
+              </span>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => openDialog("send")}
@@ -252,6 +288,7 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
 
       <InvoiceSummary invoice={invoice} />
       <InvoiceItemsTable
+        currencyCode={invoice.currency}
         items={invoice.items}
         subtotal={invoice.subtotal}
         tax={invoice.tax}
@@ -270,6 +307,22 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
           onClose={closeDialog}
         />
       ) : null}
+
+      <PaymentGatewayModal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        invoiceId={invoice.id}
+      />
+
+      <SendEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        invoiceId={invoice.id}
+        onSuccess={() => {
+          router.refresh();
+          setInvoice(prev => ({ ...prev, emailedAt: new Date().toISOString() }));
+        }}
+      />
     </div>
   );
 };

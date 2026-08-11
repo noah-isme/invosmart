@@ -51,6 +51,8 @@ export const InvoiceFormSchema = z.object({
     .max(200, "Notes must be 200 characters or less")
     .nullable()
     .optional(),
+  clientId: z.string().nullable().optional(),
+  currency: z.string().default("IDR"),
 });
 
 export type InvoiceForm = z.infer<typeof InvoiceFormSchema>;
@@ -247,3 +249,18 @@ export const AiInvoiceInsightSchema = z.object({
 });
 
 export type AiInvoiceInsight = z.infer<typeof AiInvoiceInsightSchema>;
+
+export const ClientCreateSchema = z.object({
+  name: z.string().trim().min(1, "Name required").max(100),
+  email: z.string().email().optional().nullable().or(z.literal('')),
+  phone: z.string().optional().nullable().or(z.literal('')),
+  address: z.string().optional().nullable().or(z.literal('')),
+  company: z.string().optional().nullable().or(z.literal('')),
+  taxId: z.string().optional().nullable().or(z.literal('')),
+  currency: z.string().default("IDR"),
+  notes: z.string().optional().nullable().or(z.literal(''))
+});
+
+export const ClientUpdateSchema = ClientCreateSchema.extend({
+  id: z.string()
+});

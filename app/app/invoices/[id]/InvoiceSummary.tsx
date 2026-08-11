@@ -1,5 +1,6 @@
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
 import type { InvoiceDetail } from "./types";
+import { formatCurrency } from "@/lib/currency";
 
 const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "medium",
@@ -79,11 +80,7 @@ export const InvoiceSummary = ({ invoice }: InvoiceSummaryProps) => {
         <div className="space-y-1">
           <dt className="text-xs font-semibold uppercase text-muted-foreground">Total Tagihan</dt>
           <dd className="text-lg font-semibold">
-            {new Intl.NumberFormat("id-ID", {
-              style: "currency",
-              currency: "IDR",
-              maximumFractionDigits: 0,
-            }).format(invoice.total)}
+            {formatCurrency(invoice.total, invoice.currency || "IDR")}
           </dd>
         </div>
       </dl>

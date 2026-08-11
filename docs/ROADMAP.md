@@ -1,6 +1,6 @@
 # InvoSmart Roadmap & TODOs
 
-**Current Version:** v1.1.0 (August 2026)
+**Current Version:** v1.2.0-dev (August 2026)
 
 This document outlines the strategic roadmap and upcoming features for InvoSmart. It is divided into three main phases: Near-term, Mid-term, and Long-term.
 
@@ -92,7 +92,7 @@ gantt
 | Implement asymmetric encryption for Federation bus payloads (`lib/federation/bus.ts`) | Security | P1 | M | ✅ Done |
 | Discord/Slack webhook integration for `ai_auto_actions` real-time alerts | Integrations | P1 | S | ✅ Done |
 | Implement comprehensive audit logging for all user actions | Security | P1 | S | ✅ Done |
-| Mobile responsive app enhancements / PWA setup | UX/UI | P1 | L | 📅 Planned |
+| Mobile responsive app enhancements / PWA setup | UX/UI | P1 | L | 🚧 In Progress |
 | Increase E2E test coverage for all critical user flows | Testing | P2 | L | 📅 Planned |
 
 ---
@@ -103,10 +103,10 @@ gantt
 
 | Task | Category | Priority | Effort | Status |
 | :--- | :------- | :------- | :----- | :----- |
-| Payment gateway integration (Stripe/Midtrans) | Features | P1 | L | 📅 Planned |
-| Multi-currency support | Features | P1 | M | 📅 Planned |
-| Add client/customer management module | Features | P1 | M | 📅 Planned |
-| Implement invoice email delivery | Features | P1 | M | 📅 Planned |
+| Payment gateway integration (Stripe/Midtrans) | Features | P1 | L | 🚧 In Progress |
+| Multi-currency support | Features | P1 | M | 🚧 In Progress |
+| Add client/customer management module | Features | P1 | M | 🚧 In Progress |
+| Implement invoice email delivery | Features | P1 | M | 🚧 In Progress |
 | Slack/WhatsApp integrations for notifications | Integrations | P2 | M | 📅 Planned |
 | Implement recurring invoice templates | Features | P2 | S | 📅 Planned |
 | Add proper i18n framework (replace hardcoded locales) | UX/UI | P2 | M | 📅 Planned |

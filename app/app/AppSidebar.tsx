@@ -2,7 +2,7 @@
 
 import { type ComponentType, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2 } from "lucide-react";
+import { GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2, Users } from "lucide-react";
 import { BarChart3, FilePenLine, LayoutDashboard, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -23,6 +23,12 @@ const navItems: NavItem[] = [
     label: "Dashboard",
     description: "Ikhtisar performa & aktivitas",
     icon: LayoutDashboard,
+  },
+  {
+    href: "/app/clients",
+    label: "Clients",
+    description: "Kelola pelanggan Anda",
+    icon: Users,
   },
   {
     href: "/app/dashboard/insight",
@@ -85,7 +91,7 @@ const variants = {
   visible: { opacity: 1, y: 0 },
 };
 
-export const AppSidebar = () => {
+export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
   const pathname = usePathname();
   const sessionResult = useSession();
   const session = sessionResult?.data;
@@ -167,6 +173,7 @@ export const AppSidebar = () => {
                 >
                   <Link
                     href={item.href}
+                    onClick={onNavClick}
                     aria-current={active ? "page" : undefined}
                     className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/5 px-4 py-3 text-sm font-medium transition-all duration-300 hover:border-white/20 hover:bg-white/[0.08] ${
                       active

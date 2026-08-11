@@ -173,6 +173,8 @@ const createInvoice = async (request: NextRequest) => {
       dueAt,
       paidAt: null,
       notes: parsed.data.notes ?? null,
+      currency: parsed.data.currency || "IDR",
+      clientId: parsed.data.clientId ?? null,
       userId,
     },
   });

@@ -13,7 +13,9 @@ export type InvoiceDetail = {
   issuedAt: string;
   dueAt: string | null;
   paidAt: string | null;
+  emailedAt?: string | Date | null;
   notes: string | null;
+  currency?: string;
   createdAt?: string;
   updatedAt?: string;
 };

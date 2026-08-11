@@ -226,3 +226,27 @@ a[data-tooltip]:focus-visible::after {
     --tw-ring-color: rgba(var(--color-accent) / 0.7);
   }
 }
+
+/* Touch-friendly Improvements */
+a, button, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px) {
+  a, button, [role="button"], input, select {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Reset display for block links so they don't break layout */
+  a.block {
+    display: block;
+  }
+  a.flex {
+    display: flex;
+  }
+}

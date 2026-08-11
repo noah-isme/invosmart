@@ -20,11 +20,13 @@ model User {
   themePrimary  String?  @default("#6366F1")
   themeAccent   String?  @default("#22D3EE")
   themeMode     String?  @default("dark")
+  defaultCurrency String @default("IDR")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   invoices  Invoice[]
   auditLogs AuditLog[]
+  clients   Client[]
 }
 
 model Invoice {
@@ -39,10 +41,15 @@ model Invoice {
   issuedAt  DateTime
   dueAt     DateTime?
   paidAt    DateTime?
+  emailedAt DateTime?
+  emailLog  Json?
   notes     String?
+  currency  String         @default("IDR")
 
   userId    String
   user      User           @relation(fields: [userId], references: [id])
+  clientId  String?
+  client_rel Client?       @relation(fields: [clientId], references: [id])
 
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -304,17 +311,21 @@ model GlobalContentSignal {
 }
 
 model Payment {
-  id           String    @id @default(cuid())
-  invoiceId    String
-  paidAmount   Int
-  paidCurrency String    @default("IDR")
-  paidAt       DateTime
-  method       String?
-  note         String?
-  createdAt    DateTime  @default(now())
+  id               String    @id @default(cuid())
+  invoiceId        String
+  paidAmount       Int
+  paidCurrency     String    @default("IDR")
+  paidAt           DateTime
+  method           String?
+  note             String?
+  gatewayProvider  String?
+  gatewayPaymentId String?
+  gatewayStatus    String?
+  gatewayMetadata  Json?
+  createdAt        DateTime  @default(now())
   
-  invoice      Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  receipts     Receipt[]
+  invoice          Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receipts         Receipt[]
   
   @@index([invoiceId])
 }
@@ -375,3 +386,23 @@ model AuditLog {
   @@index([createdAt])
 }
 
+model Client {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  company   String?
+  taxId     String?
+  currency  String    @default("IDR")
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+
+  @@index([userId])
+  @@unique([userId, email], map: "client_user_email")
+}

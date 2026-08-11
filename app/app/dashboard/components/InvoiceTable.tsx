@@ -55,8 +55,8 @@ export const InvoiceTable = ({
 
   return (
     <div className="glass-surface overflow-hidden rounded-[28px] border border-white/8 bg-white/[0.03] shadow-[0_24px_70px_rgba(8,10,16,0.55)]">
-      <table className="min-w-full divide-y divide-white/5">
-        <thead className="bg-white/[0.04] text-left text-[0.68rem] uppercase tracking-[0.32em] text-text/45">
+      <table className="min-w-full divide-y divide-white/5 block sm:table">
+        <thead className="bg-white/[0.04] text-left text-[0.68rem] uppercase tracking-[0.32em] text-text/45 hidden sm:table-header-group">
           <tr>
             <th scope="col" className="px-6 py-3 font-medium">Invoice</th>
             <th scope="col" className="px-6 py-3 font-medium">Nilai</th>
@@ -65,7 +65,7 @@ export const InvoiceTable = ({
             <th scope="col" className="px-6 py-3 font-medium">Aksi</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5 bg-transparent text-sm text-text/85">
+        <tbody className="divide-y divide-white/5 bg-transparent text-sm text-text/85 block sm:table-row-group">
           {loading
             ? Array.from({ length: 4 }).map((_, index) => (
                 <tr key={`skeleton-${index}`}>

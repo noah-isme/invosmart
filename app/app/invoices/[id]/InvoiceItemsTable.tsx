@@ -1,16 +1,13 @@
 import type { InvoiceItemInput } from "@/lib/invoice-utils";
 
-const currency = new Intl.NumberFormat("id-ID", {
-  style: "currency",
-  currency: "IDR",
-  maximumFractionDigits: 0,
-});
+import { formatCurrency } from "@/lib/currency";
 
 type InvoiceItemsTableProps = {
   items: InvoiceItemInput[];
   subtotal: number;
   tax: number;
   total: number;
+  currencyCode?: string;
 };
 
 export const InvoiceItemsTable = ({
@@ -18,6 +15,7 @@ export const InvoiceItemsTable = ({
   subtotal,
   tax,
   total,
+  currencyCode = "IDR",
 }: InvoiceItemsTableProps) => {
   return (
     <section className="overflow-hidden rounded-lg border border-border">
@@ -46,10 +44,10 @@ export const InvoiceItemsTable = ({
               </td>
               <td className="px-4 py-3 text-muted-foreground">{item.qty}</td>
               <td className="px-4 py-3 text-muted-foreground">
-                {currency.format(item.price)}
+                {formatCurrency(item.price, currencyCode)}
               </td>
               <td className="px-4 py-3 font-medium text-foreground">
-                {currency.format(item.qty * item.price)}
+                {formatCurrency(item.qty * item.price, currencyCode)}
               </td>
             </tr>
           ))}
@@ -59,19 +57,19 @@ export const InvoiceItemsTable = ({
             <td className="px-4 py-3 font-medium" colSpan={3}>
               Subtotal
             </td>
-            <td className="px-4 py-3 font-semibold">{currency.format(subtotal)}</td>
+            <td className="px-4 py-3 font-semibold">{formatCurrency(subtotal, currencyCode)}</td>
           </tr>
           <tr>
             <td className="px-4 py-3 font-medium" colSpan={3}>
               Pajak (10%)
             </td>
-            <td className="px-4 py-3 font-semibold">{currency.format(tax)}</td>
+            <td className="px-4 py-3 font-semibold">{formatCurrency(tax, currencyCode)}</td>
           </tr>
           <tr>
             <td className="px-4 py-3 font-medium" colSpan={3}>
               Total
             </td>
-            <td className="px-4 py-3 text-lg font-semibold">{currency.format(total)}</td>
+            <td className="px-4 py-3 text-lg font-semibold">{formatCurrency(total, currencyCode)}</td>
           </tr>
         </tfoot>
       </table>

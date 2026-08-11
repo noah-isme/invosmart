@@ -7,7 +7,7 @@ import { Banner } from "@/components/layout/Banner";
 import ClientRoot from "@/components/ClientRoot";
 import { APP_VERSION } from "@/lib/release";
 
-import { THEME_COLORS } from "./theme-colors";
+import { PWARegister } from "@/components/PWARegister";
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
@@ -42,7 +42,11 @@ export const metadata: Metadata = {
     description:
       "Kelola invoice, tema, dan insight finansial secara otomatis dengan kecerdasan buatan.",
   },
-  themeColor: process.env.NODE_ENV === "test" ? [...THEME_COLORS] : undefined,
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+  },
   icons: {
     icon: "/favicon.svg",
     apple: "/favicon.svg",
@@ -57,6 +61,7 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body className={`${plusJakarta.variable} ${geistMono.variable} antialiased`}>
+        <PWARegister />
         <ClientRoot>
           <div className="relative flex min-h-screen flex-col bg-bg text-text transition-colors duration-200">
             <Banner text={`🎉 InvoSmart ${APP_VERSION} is live! Thanks for supporting our launch.`} />
