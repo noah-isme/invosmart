@@ -56,7 +56,8 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments Payment[]
+  payments        Payment[]
+  paymentAttempts PaymentAttempt[]
 }
 
 enum InvoiceStatus {
@@ -315,7 +316,9 @@ model GlobalContentSignal {
 model Payment {
   id               String   @id @default(cuid())
   invoiceId        String
+  attemptId        String?
   paidAmount       Int
+  refundedAmount   Int      @default(0)
   paidCurrency     String   @default("IDR")
   paidAt           DateTime
   method           String?
@@ -327,11 +330,79 @@ model Payment {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  invoice  Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice  Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  attempt  PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: SetNull)
   receipts Receipt[]
 
-  @@index([invoiceId])
   @@unique([gatewayProvider, gatewayPaymentId], map: "payment_gateway_provider_external_id")
+  @@index([invoiceId])
+  @@index([attemptId])
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  AUTHORIZED
+  SETTLED
+  EXPIRED
+  CANCELLED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentEventType {
+  PENDING
+  AUTHORIZED
+  SETTLED
+  EXPIRED
+  CANCELLED
+  FAILED
+  REFUNDED
+}
+
+model PaymentAttempt {
+  id                String               @id @default(cuid())
+  invoiceId         String
+  provider          String
+  idempotencyKey    String
+  providerOrderId   String?
+  providerSessionId String?
+  providerPaymentId String?
+  providerToken     String?
+  checkoutUrl       String?
+  amount            Int
+  currency          String
+  status            PaymentAttemptStatus @default(PENDING)
+  expiresAt         DateTime?
+  metadata          Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  invoice  Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  events   PaymentEvent[]
+  payments Payment[]
+
+  @@unique([provider, idempotencyKey], map: "payment_attempt_provider_idempotency_key")
+  @@unique([provider, providerOrderId], map: "payment_attempt_provider_order_id")
+  @@index([invoiceId, provider, status])
+  @@index([provider, providerSessionId])
+}
+
+model PaymentEvent {
+  id              String               @id @default(cuid())
+  attemptId       String
+  provider        String
+  providerEventId String
+  eventType       PaymentEventType
+  status          PaymentAttemptStatus
+  amount          Int?
+  currency        String?
+  payload         Json?
+  createdAt       DateTime             @default(now())
+
+  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerEventId], map: "payment_event_provider_event_id")
+  @@index([attemptId, createdAt])
 }
 
 enum ReceiptPosition {
