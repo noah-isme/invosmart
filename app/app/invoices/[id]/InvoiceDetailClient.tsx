@@ -63,6 +63,39 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [saveTemplatePending, setSaveTemplatePending] = useState(false);
+
+  const handleSaveAsTemplate = async () => {
+    const name = prompt("Masukkan nama template:", `${invoice.client} Template`);
+    if (!name) return;
+
+    setSaveTemplatePending(true);
+    setError(null);
+    setDownloadMessage(null);
+
+    try {
+      const res = await fetch("/api/invoices/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          name: name.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? "Gagal menyimpan sebagai template.");
+      }
+
+      setDownloadMessage("Invoice berhasil disimpan sebagai template!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan.";
+      setError(msg);
+    } finally {
+      setSaveTemplatePending(false);
+    }
+  };
 
   const dialogConfig = useMemo(() => (dialog ? dialogConfigs[dialog] : null), [dialog]);
 
@@ -240,6 +273,16 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
               </span>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={handleSaveAsTemplate}
+            className="inline-flex items-center rounded-md border border-purple-600 px-4 py-2 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-50 dark:hover:bg-purple-900/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saveTemplatePending || pending}
+          >
+            {saveTemplatePending ? "Menyimpan Template..." : "Simpan sbg Template"}
+          </button>
+
 
           <button
             type="button"

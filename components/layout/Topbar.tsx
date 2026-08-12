@@ -5,12 +5,28 @@ import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { useTranslation } from "@/lib/i18n/context";
+
 interface TopbarProps {
   title?: string;
   actions?: ReactNode;
   onToggleNavigation?: () => void;
   isNavigationOpen?: boolean;
 }
+
+const routeKeys: Record<string, string> = {
+  "/app": "common.appName",
+  "/app/dashboard": "nav.dashboard",
+  "/app/dashboard/insight": "nav.insightAnalytics",
+  "/app/insight": "nav.aiInsights",
+  "/app/about": "nav.about",
+  "/app/help": "nav.help",
+  "/app/profile": "nav.profile",
+  "/app/ai-invoice": "nav.aiGenerator",
+  "/app/invoices": "invoices.title",
+  "/app/settings/theme": "nav.theme",
+  "/app/settings/branding": "nav.branding",
+};
 
 const routeTitles: Record<string, string> = {
   "/app": "Workspace",
@@ -26,7 +42,14 @@ const routeTitles: Record<string, string> = {
   "/app/settings/branding": "Branding",
 };
 
-const resolveTitle = (pathname: string) => {
+const resolveTitle = (pathname: string, t: (key: string) => string) => {
+  if (routeKeys[pathname]) {
+    const translated = t(routeKeys[pathname]);
+    if (translated && translated !== routeKeys[pathname]) {
+      return translated;
+    }
+  }
+
   if (routeTitles[pathname]) {
     return routeTitles[pathname];
   }
@@ -50,11 +73,12 @@ export default function Topbar({
   isNavigationOpen,
 }: TopbarProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
-  const computedTitle = useMemo(() => title ?? resolveTitle(pathname), [pathname, title]);
+  const computedTitle = useMemo(() => title ?? resolveTitle(pathname, t), [pathname, title, t]);
 
   const NavigationIcon = isNavigationOpen ? X : Menu;
-  const navigationLabel = isNavigationOpen ? "Tutup menu navigasi" : "Buka menu navigasi";
+  const navigationLabel = isNavigationOpen ? t("nav.closeMenu") : t("nav.openMenu");
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-white/10 bg-white/[0.08] backdrop-blur-md transition-colors duration-200">

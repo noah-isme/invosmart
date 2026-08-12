@@ -72,6 +72,48 @@ export enum ReceiptPosition {
   center = "center",
 }
 
+class ClientDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  update = vi.fn();
+  delete = vi.fn();
+}
+
+class InvoiceTemplateDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  update = vi.fn();
+  delete = vi.fn();
+  deleteMany = vi.fn();
+}
+
+class FeatureFlagDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  update = vi.fn();
+  upsert = vi.fn();
+  delete = vi.fn();
+}
+
+class UptimeCheckDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  delete = vi.fn();
+  deleteMany = vi.fn();
+}
+
 class AuditLogDelegate {
   count = vi.fn();
   create = vi.fn();
@@ -86,4 +128,8 @@ export class PrismaClient {
   user = new UserDelegate();
   invoice = new InvoiceDelegate();
   auditLog = new AuditLogDelegate();
+  client = new ClientDelegate();
+  invoiceTemplate = new InvoiceTemplateDelegate();
+  featureFlag = new FeatureFlagDelegate();
+  uptimeCheck = new UptimeCheckDelegate();
 }

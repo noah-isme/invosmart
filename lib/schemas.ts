@@ -264,3 +264,39 @@ export const ClientCreateSchema = z.object({
 export const ClientUpdateSchema = ClientCreateSchema.extend({
   id: z.string()
 });
+
+export const SupportedLocales = ["en", "id"] as const;
+export type SupportedLocale = (typeof SupportedLocales)[number];
+
+export const LocaleUpdateSchema = z.object({
+  locale: z.enum(["en", "id"]),
+});
+
+export type LocaleUpdateInput = z.infer<typeof LocaleUpdateSchema>;
+
+
+export const InvoiceTemplateCreateSchema = z.object({
+  name: z.string().trim().min(1, "Template name required").max(200),
+  invoiceId: z.string().optional(),
+  client: z.string().trim().min(1, "Client name required").max(200).optional(),
+  items: z.array(InvoiceItemSchema).min(1, "At least one item required").optional(),
+  taxRate: z.number().default(0.1),
+  currency: z.string().default("IDR"),
+  notes: z.string().trim().max(200).nullable().optional(),
+  clientId: z.string().nullable().optional(),
+});
+
+export type InvoiceTemplateCreateInput = z.infer<typeof InvoiceTemplateCreateSchema>;
+
+export const InvoiceTemplateUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  client: z.string().trim().min(1).max(200).optional(),
+  items: z.array(InvoiceItemSchema).min(1).optional(),
+  taxRate: z.number().optional(),
+  currency: z.string().optional(),
+  notes: z.string().trim().max(200).nullable().optional(),
+  clientId: z.string().nullable().optional(),
+});
+
+export type InvoiceTemplateUpdateInput = z.infer<typeof InvoiceTemplateUpdateSchema>;
+

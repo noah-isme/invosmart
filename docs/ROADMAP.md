@@ -43,6 +43,15 @@ This document outlines the strategic roadmap and upcoming features for InvoSmart
 - ✅ Comprehensive audit logging (invoices, auth, AI actions) with admin UI
 - ✅ 312 Vitest tests (↑30 from v1.0.1)
 
+### Phase 2 Additions (v1.2.0)
+- ✅ Recurring invoice templates — save, manage, and instantiate invoice templates per-user
+- ✅ CSV / Excel export — download invoice lists as `.csv` or `.xlsx` files
+- ✅ i18n framework — English (`en`) + Indonesian (`id`) with per-user locale persistence
+- ✅ Bayesian A/B statistics — posterior probability, expected loss, credible intervals for experiments
+- ✅ Feature flags system — runtime per-tenant/user toggles with admin UI and typed helper
+- ✅ Uptime monitoring — endpoint health checks with admin dashboard and webhook alerts
+- ✅ 408+ Vitest tests (↑96 from v1.1.0)
+
 ---
 
 ## Project Timeline Overview
@@ -108,13 +117,13 @@ gantt
 | Add client/customer management module | Features | P1 | M | 🚧 In Progress |
 | Implement invoice email delivery | Features | P1 | M | 🚧 In Progress |
 | Slack/WhatsApp integrations for notifications | Integrations | P2 | M | 📅 Planned |
-| Implement recurring invoice templates | Features | P2 | S | 📅 Planned |
-| Add proper i18n framework (replace hardcoded locales) | UX/UI | P2 | M | 📅 Planned |
-| Add export/import functionality (CSV, Excel) | Features | P2 | S | 📅 Planned |
+| Implement recurring invoice templates | Features | P2 | S | ✅ Done |
+| Add proper i18n framework (replace hardcoded locales) | UX/UI | P2 | M | ✅ Done |
+| Add export/import functionality (CSV, Excel) | Features | P2 | S | ✅ Done |
 | Implement ISR/SSG for static pages | Performance | P2 | M | 📅 Planned |
-| Add A/B test statistical significance calculator (Bayesian methods) | AI | P2 | M | 📅 Planned |
-| Implement feature flags system | Infra | P2 | M | 📅 Planned |
-| Add uptime monitoring and alerting | Ops | P2 | S | 📅 Planned |
+| Add A/B test statistical significance calculator (Bayesian methods) | AI | P2 | M | ✅ Done |
+| Implement feature flags system | Infra | P2 | M | ✅ Done |
+| Add uptime monitoring and alerting | Ops | P2 | S | ✅ Done |
 
 ---
 

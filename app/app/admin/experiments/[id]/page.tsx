@@ -6,6 +6,7 @@ import { serializeExperimentSummary, summariseExperiment } from "@/lib/ai/conten
 
 import { VariantActionPanel } from "./components/VariantActionPanel";
 import { VariantInsightTable } from "./components/VariantInsightTable";
+import { BayesianStatsPanel } from "./components/BayesianStatsPanel";
 
 type ExperimentDetailPageProps = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -60,6 +61,8 @@ export default async function ExperimentDetailPage({ params }: ExperimentDetailP
       </section>
 
       <VariantInsightTable experiment={serialized} />
+
+      <BayesianStatsPanel experiment={serialized} />
 
       <VariantActionPanel
         experimentId={summary.experiment.id}

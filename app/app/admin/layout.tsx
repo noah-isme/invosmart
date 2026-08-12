@@ -6,6 +6,8 @@ const navItems = [
   { href: "/app/admin/experiments", label: "Eksperimen" },
   { href: "/app/admin/auto-actions", label: "AUTO Log" },
   { href: "/app/admin/audit-logs", label: "Audit Logs" },
+  { href: "/app/admin/uptime", label: "Uptime Monitoring" },
+  { href: "/app/admin/feature-flags", label: "Feature Flags" },
 ];
 
 type AdminLayoutProps = {

@@ -2,7 +2,7 @@
 
 > **Smart AI Invoice & Insight Platform**
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
@@ -137,9 +137,11 @@ invosmart/
 ├── context/            # React contexts (theme, toast, AI)
 ├── hooks/              # Custom React hooks
 ├── lib/                # Core business logic
-│   ├── ai/            # AI agent modules (20 files)
+│   ├── ai/            # AI agent modules (20+ files)
 │   ├── cache/         # Redis/memory cache
 │   ├── federation/    # Cross-tenant FDP protocol
+│   ├── i18n/          # Internationalization (en, id)
+│   ├── monitoring/    # Uptime health checks
 │   ├── receipts/      # Receipt service
 │   └── stats/         # Statistical utilities
 ├── middleware/         # Request middleware
@@ -165,6 +167,12 @@ invosmart/
 - 🔒 **Authentication**: Secure NextAuth integration with Google OAuth.
 - 📈 **Observability**: Built-in Sentry error tracking and PostHog analytics.
 - 🚀 **CI/CD**: Streamlined Vercel deployment pipeline.
+- 🔄 **Invoice Templates**: Save and reuse invoice templates per-user.
+- 📥 **CSV / Excel Export**: Download invoice lists in multiple formats.
+- 🌐 **i18n**: Multi-language support (English + Indonesian) with per-user locale.
+- 📉 **Bayesian A/B Stats**: Statistical significance analysis for A/B experiments.
+- 🚩 **Feature Flags**: Runtime feature toggles per-tenant with admin UI.
+- 🏥 **Uptime Monitoring**: Endpoint health checks with alerts.
 
 ---
 
@@ -175,8 +183,16 @@ invosmart/
 | **Auth** | `/api/auth/[...nextauth]` | GET/POST | NextAuth endpoints |
 | **Invoices** | `/api/invoices` | GET/POST | List or create invoices |
 | | `/api/invoices/[id]` | GET/PUT/DELETE | Invoice CRUD |
+| | `/api/invoices/export` | GET | Export invoices as CSV/XLSX |
+| | `/api/invoices/templates` | GET/POST | Invoice template management |
+| | `/api/invoices/templates/[id]` | PUT/DELETE | Template CRUD & instantiate |
 | **AI** | `/api/ai/composer` | POST | Natural language to invoice |
 | | `/api/ai/scanner` | POST | Receipt image parsing |
+| **Admin** | `/api/admin/feature-flags` | GET/POST | Feature flag management |
+| | `/api/admin/uptime` | GET | Uptime monitoring status |
+| **User** | `/api/user/locale` | GET/PATCH | User locale preference |
+| **Cron** | `/api/cron/uptime` | GET | Uptime check cron trigger |
+| **Health** | `/api/health` | GET | Application health check |
 | **Telemetry** | `/api/telemetry` | POST | Capture custom analytics |
 
 ---

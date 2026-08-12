@@ -8,53 +8,55 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  name      String?
-  email     String    @unique
-  password  String?
-  logoUrl       String?
-  primaryColor  String?
-  fontFamily    String?
-  brandingSyncWithTheme Boolean @default(false)
-  useThemeForPdf Boolean @default(false)
-  themePrimary  String?  @default("#6366F1")
-  themeAccent   String?  @default("#22D3EE")
-  themeMode     String?  @default("dark")
-  defaultCurrency String @default("IDR")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                    String   @id @default(cuid())
+  name                  String?
+  email                 String   @unique
+  password              String?
+  logoUrl               String?
+  primaryColor          String?
+  fontFamily            String?
+  brandingSyncWithTheme Boolean  @default(false)
+  useThemeForPdf        Boolean  @default(false)
+  themePrimary          String?  @default("#6366F1")
+  themeAccent           String?  @default("#22D3EE")
+  themeMode             String?  @default("dark")
+  defaultCurrency       String   @default("IDR")
+  locale                String   @default("en")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  invoices  Invoice[]
-  auditLogs AuditLog[]
-  clients   Client[]
+  invoices         Invoice[]
+  auditLogs        AuditLog[]
+  clients          Client[]
+  invoiceTemplates InvoiceTemplate[]
 }
 
 model Invoice {
-  id        String         @id @default(cuid())
-  number    String         @unique
+  id        String        @id @default(cuid())
+  number    String        @unique
   client    String
   items     Json
   subtotal  Int
   tax       Int
   total     Int
-  status    InvoiceStatus  @default(DRAFT)
+  status    InvoiceStatus @default(DRAFT)
   issuedAt  DateTime
   dueAt     DateTime?
   paidAt    DateTime?
   emailedAt DateTime?
   emailLog  Json?
   notes     String?
-  currency  String         @default("IDR")
+  currency  String        @default("IDR")
 
-  userId    String
-  user      User           @relation(fields: [userId], references: [id])
-  clientId  String?
-  client_rel Client?       @relation(fields: [clientId], references: [id])
+  userId     String
+  user       User    @relation(fields: [userId], references: [id])
+  clientId   String?
+  client_rel Client? @relation(fields: [clientId], references: [id])
 
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  
-  payments  Payment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
 }
 
 enum InvoiceStatus {
@@ -66,21 +68,21 @@ enum InvoiceStatus {
 }
 
 model OptimizationLog {
-  id         String              @id @default(cuid())
-  route      String
-  change     String
-  impact     String
-  confidence Float               @default(0.7)
-  status     OptimizationStatus  @default(PENDING)
-  actor      String              @default("system")
-  notes      String?
-  rollback   Boolean             @default(false)
-  deltaImpact Float              @default(0)
-  evalConfidence Float           @default(0.7)
-  policyStatus   PolicyStatus    @default(ALLOWED)
+  id             String             @id @default(cuid())
+  route          String
+  change         String
+  impact         String
+  confidence     Float              @default(0.7)
+  status         OptimizationStatus @default(PENDING)
+  actor          String             @default("system")
+  notes          String?
+  rollback       Boolean            @default(false)
+  deltaImpact    Float              @default(0)
+  evalConfidence Float              @default(0.7)
+  policyStatus   PolicyStatus       @default(ALLOWED)
   policyReason   String?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   explanations ExplanationLog[]
 }
@@ -92,18 +94,18 @@ enum OptimizationStatus {
 }
 
 model ExplanationLog {
-  id                String        @id @default(cuid())
-  recommendationId  String
-  route             String
-  why               String
-  context           String?
-  dataBasis         Json
-  confidence        Float
-  policyStatus      PolicyStatus  @default(ALLOWED)
-  trustScore        Float         @default(0)
-  actor             String        @default("system")
-  createdAt         DateTime      @default(now())
-  metadata          Json?
+  id               String       @id @default(cuid())
+  recommendationId String
+  route            String
+  why              String
+  context          String?
+  dataBasis        Json
+  confidence       Float
+  policyStatus     PolicyStatus @default(ALLOWED)
+  trustScore       Float        @default(0)
+  actor            String       @default("system")
+  createdAt        DateTime     @default(now())
+  metadata         Json?
 
   recommendation OptimizationLog @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
 }
@@ -115,61 +117,61 @@ enum PolicyStatus {
 }
 
 model LearningProfile {
-  route            String   @id
-  successRate      Float    @default(0)
-  avgImpact        Float    @default(0)
-  confidenceWeight Float    @default(0.7)
-  totalEvaluations Int      @default(0)
-  lastLcpP95       Float    @default(0)
-  lastInpP95       Float    @default(0)
-  lastApiLatencyP95 Float   @default(0)
-  lastErrorRate    Float    @default(0)
-  lastEval         DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  route             String    @id
+  successRate       Float     @default(0)
+  avgImpact         Float     @default(0)
+  confidenceWeight  Float     @default(0.7)
+  totalEvaluations  Int       @default(0)
+  lastLcpP95        Float     @default(0)
+  lastInpP95        Float     @default(0)
+  lastApiLatencyP95 Float     @default(0)
+  lastErrorRate     Float     @default(0)
+  lastEval          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model AgentEventLog {
-  id                String   @id @default(cuid())
-  traceId           String
-  eventType         String
-  sourceAgent       String
-  targetAgent       String?
-  priority          Int
-  summary           String
-  payload           Json
-  recommendationId  String?
-  createdAt         DateTime @default(now())
+  id               String   @id @default(cuid())
+  traceId          String
+  eventType        String
+  sourceAgent      String
+  targetAgent      String?
+  priority         Int
+  summary          String
+  payload          Json
+  recommendationId String?
+  createdAt        DateTime @default(now())
 
   @@index([traceId])
   @@index([recommendationId])
 }
 
 model AgentPriority {
-  id          String   @id @default(cuid())
-  agent       String
-  weight      Float
-  confidence  Float   @default(0.5)
-  rationale   String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  agent      String
+  weight     Float
+  confidence Float    @default(0.5)
+  rationale  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@index([agent])
   @@unique([agent])
+  @@index([agent])
 }
 
 model RecoveryLog {
-  id                String   @id @default(cuid())
-  agent             String
-  action            String
-  reason            String?
-  traceId           String?
-  trustScoreBefore  Float?
-  trustScoreAfter   Float?
-  metadata          Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  agent            String
+  action           String
+  reason           String?
+  traceId          String?
+  trustScoreBefore Float?
+  trustScoreAfter  Float?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([agent])
   @@index([createdAt])
@@ -190,7 +192,7 @@ model FederationMetrics {
   averageLatencyMs     Float?
   aggregatedPriorities Json
   summary              String?
-  networkHealth        String  @default("healthy")
+  networkHealth        String   @default("healthy")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -225,61 +227,61 @@ enum AutoActionStatus {
 }
 
 model ContentExperiment {
-  id              Int               @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   organizationId  String?
   contentId       Int
   axis            ExperimentAxis
-  status          ExperimentStatus  @default(running)
-  startAt         DateTime          @default(now())
+  status          ExperimentStatus @default(running)
+  startAt         DateTime         @default(now())
   endAt           DateTime?
   winnerVariantId Int?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  variants        ContentVariant[]
-  winnerVariant   ContentVariant?   @relation("ExperimentWinner", fields: [winnerVariantId], references: [id])
-  autoActions     AiAutoAction[]    @relation("ExperimentAutoActions")
+  variants      ContentVariant[]
+  winnerVariant ContentVariant?  @relation("ExperimentWinner", fields: [winnerVariantId], references: [id])
+  autoActions   AiAutoAction[]   @relation("ExperimentAutoActions")
 
   @@index([organizationId, contentId, axis])
 }
 
 model ContentVariant {
-  id             Int                @id @default(autoincrement())
-  experimentId   Int
-  variantKey     String
-  payload        Json
-  aiExplanation  String?
-  confidence     Float?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id            Int      @id @default(autoincrement())
+  experimentId  Int
+  variantKey    String
+  payload       Json
+  aiExplanation String?
+  confidence    Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  experiment      ContentExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
-  metrics         VariantMetric[]
-  autoActions     AiAutoAction[]    @relation("VariantAutoActions")
-  wonExperiments  ContentExperiment[] @relation("ExperimentWinner")
+  experiment     ContentExperiment   @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  metrics        VariantMetric[]
+  autoActions    AiAutoAction[]      @relation("VariantAutoActions")
+  wonExperiments ContentExperiment[] @relation("ExperimentWinner")
 
-  @@index([experimentId])
   @@unique([experimentId, variantKey])
+  @@index([experimentId])
 }
 
 model VariantMetric {
-  id          Int             @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   variantId   Int
-  impressions Int             @default(0)
-  clicks      Int             @default(0)
-  conversions Int             @default(0)
-  dwellMs     Int             @default(0)
-  ctr         Float           @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  conversions Int      @default(0)
+  dwellMs     Int      @default(0)
+  ctr         Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  variant     ContentVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variant ContentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@index([variantId])
 }
 
 model AiAutoAction {
-  id             Int                  @id @default(autoincrement())
+  id             Int              @id @default(autoincrement())
   organizationId String?
   actionType     AutoActionType
   contentId      Int?
@@ -287,34 +289,34 @@ model AiAutoAction {
   variantId      Int?
   reason         String?
   confidence     Float?
-  status         AutoActionStatus     @default(applied)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  status         AutoActionStatus @default(applied)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  experiment     ContentExperiment?   @relation("ExperimentAutoActions", fields: [experimentId], references: [id])
-  variant        ContentVariant?      @relation("VariantAutoActions", fields: [variantId], references: [id])
+  experiment ContentExperiment? @relation("ExperimentAutoActions", fields: [experimentId], references: [id])
+  variant    ContentVariant?    @relation("VariantAutoActions", fields: [variantId], references: [id])
 
   @@index([organizationId, actionType, createdAt])
 }
 
 model GlobalContentSignal {
-  id             Int              @id @default(autoincrement())
+  id             Int            @id @default(autoincrement())
   organizationId String?
   axis           ExperimentAxis
   window         String
   signal         Json
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  @@index([organizationId, axis, window])
   @@unique([organizationId, axis, window], map: "organizationId_axis_window")
+  @@index([organizationId, axis, window])
 }
 
 model Payment {
-  id               String    @id @default(cuid())
+  id               String   @id @default(cuid())
   invoiceId        String
   paidAmount       Int
-  paidCurrency     String    @default("IDR")
+  paidCurrency     String   @default("IDR")
   paidAt           DateTime
   method           String?
   note             String?
@@ -322,11 +324,11 @@ model Payment {
   gatewayPaymentId String?
   gatewayStatus    String?
   gatewayMetadata  Json?
-  createdAt        DateTime  @default(now())
-  
-  invoice          Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  receipts         Receipt[]
-  
+  createdAt        DateTime @default(now())
+
+  invoice  Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receipts Receipt[]
+
   @@index([invoiceId])
 }
 
@@ -346,10 +348,10 @@ model Receipt {
   stampPaidEnabled        Boolean         @default(true)
   signatureEnabled        Boolean         @default(false)
   createdAt               DateTime        @default(now())
-  
-  payment                 Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  audits                  ReceiptAuditLog[]
-  
+
+  payment Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  audits  ReceiptAuditLog[]
+
   @@index([paymentId])
 }
 
@@ -360,9 +362,9 @@ model ReceiptAuditLog {
   actor     String
   meta      Json?
   createdAt DateTime @default(now())
-  
-  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  
+
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
   @@index([receiptId])
 }
 
@@ -377,7 +379,7 @@ model AuditLog {
   ipAddress String?
   createdAt DateTime @default(now())
 
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([userId])
@@ -387,7 +389,7 @@ model AuditLog {
 }
 
 model Client {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
   name      String
   email     String?
@@ -395,14 +397,67 @@ model Client {
   address   String?
   company   String?
   taxId     String?
-  currency  String    @default("IDR")
+  currency  String   @default("IDR")
   notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoices  Invoice[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices         Invoice[]
+  invoiceTemplates InvoiceTemplate[]
+
+  @@unique([userId, email], map: "client_user_email")
+  @@index([userId])
+}
+
+model InvoiceTemplate {
+  id         String  @id @default(cuid())
+  name       String
+  client     String
+  items      Json
+  subtotal   Int
+  tax        Int
+  total      Int
+  currency   String  @default("IDR")
+  notes      String?
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId   String?
+  client_rel Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
-  @@unique([userId, email], map: "client_user_email")
+  @@index([clientId])
+}
+
+model FeatureFlag {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  description   String?
+  enabled       Boolean  @default(true)
+  targetTenants Json?
+  targetUsers   Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([key])
+  @@index([enabled])
+}
+
+model UptimeCheck {
+  id         String   @id @default(cuid())
+  url        String
+  name       String?
+  statusCode Int
+  latencyMs  Float
+  status     String   @default("UP")
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([url])
+  @@index([status])
+  @@index([createdAt])
 }

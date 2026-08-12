@@ -149,7 +149,13 @@ Berikut adalah beberapa tugas pengembangan agen yang telah selesai (Phase 1) dan
 - [x] Implementasi CSRF protection (Double Submit Cookie) dan Content-Security-Policy di `middleware.ts` dan `next.config.ts`.
 - [x] Implementasi audit logging komprehensif (`lib/audit/auditLogger.ts`) untuk invoice, auth, dan AI auto-actions, dengan admin UI di `/app/admin/audit-logs`.
 
-**📅 Phase 2 — Berikutnya**
+**✅ Phase 2 — Selesai (2026-08-12)**
+- [x] Implementasi **recurring invoice templates** — simpan, kelola, dan instansiasi template faktur per-user (`app/api/invoices/templates/`, `app/app/invoices/templates/`).
+- [x] Implementasi **CSV / Excel export** — unduh daftar faktur sebagai `.csv` atau `.xlsx` (`lib/export-utils.ts`, `app/api/invoices/export/`).
+- [x] Implementasi **i18n framework** dengan locale English (`en`) dan Indonesian (`id`), persistensi per-user di database (`lib/i18n/`, `app/api/user/locale/`).
+- [x] Implementasi **Bayesian A/B statistics** — posterior probability, expected loss, dan credible interval untuk eksperimen (`lib/ai/bayesian-ab.ts`).
+- [x] Implementasi **feature flags system** — toggle fitur runtime per-tenant/user dengan admin UI dan helper `getFlag()` (`lib/feature-flags.ts`, `app/app/admin/feature-flags/`).
+- [x] Implementasi **uptime monitoring** — health check cron-based dengan dashboard admin dan webhook alert (`lib/monitoring/uptime.ts`, `app/app/admin/uptime/`).
 
 ## graphify
 

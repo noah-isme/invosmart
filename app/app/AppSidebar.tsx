@@ -2,17 +2,20 @@
 
 import { type ComponentType, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2, Users } from "lucide-react";
+import { GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2, Users, Copy, Globe } from "lucide-react";
 import { BarChart3, FilePenLine, LayoutDashboard, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useTranslation } from "@/lib/i18n";
 
 type NavItem = {
   href: string;
+  labelKey?: string;
   label: string;
+  descriptionKey?: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
 };
@@ -20,57 +23,89 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     href: "/app/dashboard",
+    labelKey: "nav.dashboard",
     label: "Dashboard",
+    descriptionKey: "nav.dashboardDesc",
     description: "Ikhtisar performa & aktivitas",
     icon: LayoutDashboard,
   },
   {
     href: "/app/clients",
+    labelKey: "nav.clients",
     label: "Clients",
+    descriptionKey: "nav.clientsDesc",
     description: "Kelola pelanggan Anda",
     icon: Users,
   },
   {
     href: "/app/dashboard/insight",
+    labelKey: "nav.insightAnalytics",
     label: "Insight Analytics",
+    descriptionKey: "nav.insightAnalyticsDesc",
     description: "Tren revenue dan status pembayaran",
     icon: BarChart3,
   },
   {
     href: "/app/invoices/new",
+    labelKey: "nav.manualInvoice",
     label: "Invoice Manual",
+    descriptionKey: "nav.manualInvoiceDesc",
     description: "Susun invoice profesional secara manual",
     icon: FilePenLine,
   },
   {
+    href: "/app/invoices/templates",
+    label: "Template Invoice",
+    description: "Kelola dan pakai template invoice berulang",
+    icon: Copy,
+  },
+  {
     href: "/app/ai-invoice",
+    labelKey: "nav.aiGenerator",
     label: "AI Generator",
+    descriptionKey: "nav.aiGeneratorDesc",
     description: "Gunakan AI untuk membuat draft invoice",
     icon: Sparkles,
   },
   {
     href: "/app/profile",
+    labelKey: "nav.profile",
     label: "Profil",
+    descriptionKey: "nav.profileDesc",
     description: "Kelola identitas dan keamanan akun",
     icon: UserCircle2,
   },
   {
     href: "/app/settings/theme",
+    labelKey: "nav.theme",
     label: "Tema",
+    descriptionKey: "nav.themeDesc",
     description: "Personalisasi warna aplikasi",
     icon: SunMoon,
   },
   {
     href: "/app/settings/branding",
+    labelKey: "nav.branding",
     label: "Branding",
+    descriptionKey: "nav.brandingDesc",
     description: "Warna, logo, dan font brand Anda",
     icon: Palette,
   },
   {
     href: "/app/settings/performance",
+    labelKey: "nav.performance",
     label: "Performance",
+    descriptionKey: "nav.performanceDesc",
     description: "Atur prefetch adaptif AI",
     icon: GaugeCircle,
+  },
+  {
+    href: "/app/settings/language",
+    labelKey: "nav.language",
+    label: "Bahasa / Language",
+    descriptionKey: "nav.languageDesc",
+    description: "Pilih bahasa tampilan aplikasi",
+    icon: Globe,
   },
 ];
 
@@ -95,6 +130,7 @@ export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
   const pathname = usePathname();
   const sessionResult = useSession();
   const session = sessionResult?.data;
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
 
   const userName = useMemo(
@@ -153,7 +189,7 @@ export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
 
         {!collapsed ? (
           <p className="mt-4 text-xs uppercase tracking-[0.32em] text-text/50">
-            Navigasi utama
+            {t("nav.mainNavigation")}
           </p>
         ) : null}
 
@@ -162,6 +198,8 @@ export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
             {navItems.map((item) => {
               const active = isActivePath(pathname, item.href);
               const Icon = item.icon;
+              const displayLabel = item.labelKey ? t(item.labelKey) : item.label;
+              const displayDesc = item.descriptionKey ? t(item.descriptionKey) : item.description;
 
               return (
                 <motion.li
@@ -196,8 +234,8 @@ export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
                     </span>
                     {!collapsed ? (
                       <span className="relative flex-1 text-left">
-                        <span className="block text-sm font-medium text-text">{item.label}</span>
-                        <span className="mt-1 block text-xs text-text/60">{item.description}</span>
+                        <span className="block text-sm font-medium text-text">{displayLabel}</span>
+                        <span className="mt-1 block text-xs text-text/60">{displayDesc}</span>
                       </span>
                     ) : null}
                   </Link>
@@ -225,7 +263,7 @@ export const AppSidebar = ({ onNavClick }: { onNavClick?: () => void }) => {
           {!collapsed ? (
             <SignOutButton className="gradient-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-text shadow-lg shadow-primary-glow transition duration-200 hover:scale-[1.01]">
               <LogOut className="h-4 w-4" />
-              Keluar
+              {t("common.logout")}
             </SignOutButton>
           ) : (
             <SignOutButton className="gradient-button inline-flex h-10 w-10 items-center justify-center rounded-2xl p-0 text-text shadow-lg">

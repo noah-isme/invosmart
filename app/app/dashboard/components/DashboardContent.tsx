@@ -110,6 +110,16 @@ export const DashboardContent = () => {
     [fetchInvoices],
   );
 
+  const handleExportCSV = useCallback(() => {
+    const query = filter !== "ALL" ? `?format=csv&status=${encodeURIComponent(filter)}` : "?format=csv";
+    window.open(`/api/invoices/export${query}`, "_blank");
+  }, [filter]);
+
+  const handleExportExcel = useCallback(() => {
+    const query = filter !== "ALL" ? `?format=xlsx&status=${encodeURIComponent(filter)}` : "?format=xlsx";
+    window.open(`/api/invoices/export${query}`, "_blank");
+  }, [filter]);
+
   const handleUpdateStatus = useCallback(
     async (invoiceId: string, status: InvoiceStatusValue) => {
       const target = invoices.find((invoice) => invoice.id === invoiceId);
@@ -250,7 +260,13 @@ export const DashboardContent = () => {
       </motion.div>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.1, duration: 0.35, ease: "easeOut" }}>
-        <InvoiceFilter value={filter} onChange={handleFilterChange} counts={filterCounts} />
+        <InvoiceFilter
+          value={filter}
+          onChange={handleFilterChange}
+          counts={filterCounts}
+          onExportCSV={handleExportCSV}
+          onExportExcel={handleExportExcel}
+        />
       </motion.div>
 
       <motion.div variants={sectionFade} transition={{ delay: 0.15, duration: 0.35, ease: "easeOut" }}>

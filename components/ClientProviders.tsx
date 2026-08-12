@@ -7,17 +7,20 @@ import { TelemetryProvider } from "@/components/telemetry/TelemetryProvider";
 import { AiOptimizerProvider } from "@/context/AiOptimizerContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { I18nProvider } from "@/lib/i18n";
 
 export default function ClientProviders({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
-      <TelemetryProvider>
-        <ThemeProvider>
-          <AiOptimizerProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </AiOptimizerProvider>
-        </ThemeProvider>
-      </TelemetryProvider>
+      <I18nProvider>
+        <TelemetryProvider>
+          <ThemeProvider>
+            <AiOptimizerProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </AiOptimizerProvider>
+          </ThemeProvider>
+        </TelemetryProvider>
+      </I18nProvider>
     </SessionProvider>
   );
 }

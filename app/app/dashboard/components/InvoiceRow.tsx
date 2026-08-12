@@ -9,6 +9,7 @@ import {
   invoiceStatusValues,
   type InvoiceStatusValue,
 } from "@/lib/schemas";
+import { useTranslation } from "@/lib/i18n/context";
 
 type InvoiceRowProps = {
   invoice: DashboardInvoice;
@@ -63,7 +64,14 @@ const formatDate = (value: string | null) => {
 };
 
 export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: InvoiceRowProps) => {
+  const { t } = useTranslation();
   const [selectedStatus, setSelectedStatus] = useState<InvoiceStatusValue>(invoice.status);
+
+  const getStatusLabel = (status: InvoiceStatusValue) => {
+    const key = `invoices.status.${status.toLowerCase()}`;
+    const translated = t(key);
+    return translated && translated !== key ? translated : statusLabels[status];
+  };
 
   const updateDisabled = useMemo(
     () => disabled || selectedStatus === invoice.status,
@@ -91,7 +99,7 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
           <span
             className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyles[invoice.status]}`}
           >
-            {statusLabels[invoice.status]}
+            {getStatusLabel(invoice.status)}
           </span>
         </div>
       </td>
@@ -108,7 +116,7 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
         <span
           className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${statusStyles[invoice.status]}`}
         >
-          {statusLabels[invoice.status]}
+          {getStatusLabel(invoice.status)}
         </span>
       </td>
       <td className="px-6 py-5 align-top hidden sm:table-cell">
@@ -133,7 +141,7 @@ export const InvoiceRow = ({ invoice, disabled, onUpdateStatus, onDelete }: Invo
           >
             {invoiceStatusValues.map((status) => (
               <option key={status} value={status}>
-                {statusLabels[status]}
+                {getStatusLabel(status)}
               </option>
             ))}
           </select>
