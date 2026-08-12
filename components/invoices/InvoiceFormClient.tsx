@@ -7,13 +7,7 @@ import { useRouter } from "next/navigation";
 import { InvoiceFormSchema, InvoiceStatusEnum } from "@/lib/schemas";
 import { calculateTotals, type InvoiceItemInput } from "@/lib/invoice-utils";
 import { trackEvent } from "@/lib/telemetry";
-import { SUPPORTED_CURRENCIES } from "@/lib/currency";
-
-const currencyFormatter = new Intl.NumberFormat("id-ID", {
-  style: "currency",
-  currency: "IDR",
-  maximumFractionDigits: 0,
-});
+import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 const DEFAULT_TAX_RATE = 0.1;
 
@@ -543,15 +537,15 @@ export const InvoiceFormClient = ({
           <dl className="grid gap-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-6 text-sm text-text/70">
             <div className="flex items-center justify-between">
               <dt>Subtotal</dt>
-              <dd className="font-semibold text-text">{currencyFormatter.format(totals.subtotal)}</dd>
+              <dd className="font-semibold text-text">{formatCurrency(totals.subtotal, form.currency)}</dd>
             </div>
             <div className="flex items-center justify-between">
               <dt>Pajak (10%)</dt>
-              <dd className="font-semibold text-text">{currencyFormatter.format(totals.tax)}</dd>
+              <dd className="font-semibold text-text">{formatCurrency(totals.tax, form.currency)}</dd>
             </div>
             <div className="flex items-center justify-between text-base">
               <dt className="font-semibold text-text">Total</dt>
-              <dd className="text-lg font-semibold text-text">{currencyFormatter.format(totals.total)}</dd>
+              <dd className="text-lg font-semibold text-text">{formatCurrency(totals.total, form.currency)}</dd>
             </div>
           </dl>
         </div>

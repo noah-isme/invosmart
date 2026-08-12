@@ -10,6 +10,7 @@ type InvoiceRow = {
   number: string;
   status: string;
   issuedAt: string | Date;
+  createdAt: string | Date;
   total: number;
   currency: string;
 };
@@ -132,11 +133,11 @@ export default function ClientDetailClient({ client, stats }: { client: ClientDa
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
               <p className="text-sm text-[var(--muted-foreground)]">Total Revenue</p>
-              <p className="text-2xl font-bold mt-1 text-[var(--foreground)]">{formatCurrency(stats.revenue, client.currency)}</p>
+              <p className="text-2xl font-bold mt-1 text-[var(--foreground)]">{formatCurrency(stats.totalRevenue, client.currency)}</p>
             </div>
             <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
               <p className="text-sm text-[var(--muted-foreground)]">Outstanding</p>
-              <p className="text-2xl font-bold mt-1 text-[var(--foreground)]">{formatCurrency(stats.outstandingAmount, client.currency)}</p>
+              <p className="text-2xl font-bold mt-1 text-[var(--foreground)]">{formatCurrency(stats.unpaidRevenue, client.currency)}</p>
             </div>
             <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
               <p className="text-sm text-[var(--muted-foreground)]">Invoices</p>

@@ -10,8 +10,8 @@ type ClientRow = {
   company: string | null;
   email: string | null;
   currency: string;
-  _count: { invoices: number };
-  invoices: { total: number }[];
+  invoiceCount: number;
+  revenue: number;
 };
 
 export default function ClientsClient({ initialClients }: { initialClients: ClientRow[] }) {

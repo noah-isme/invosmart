@@ -24,5 +24,5 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
     });
   }
 
-  return <ClientFormClient initialData={client} />;
+  return <ClientFormClient initialData={client ?? undefined} />;
 }

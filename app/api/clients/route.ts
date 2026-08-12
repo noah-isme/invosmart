@@ -82,13 +82,8 @@ export async function POST(request: NextRequest) {
 
   // If email is provided, verify uniqueness for this user
   if (parsed.data.email) {
-    const existing = await db.client.findUnique({
-      where: {
-        client_user_email: {
-          userId,
-          email: parsed.data.email
-        }
-      }
+    const existing = await db.client.findFirst({
+      where: { userId, email: parsed.data.email },
     });
     if (existing) {
       return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });

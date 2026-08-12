@@ -20,7 +20,7 @@ describe("Invoice manual form", () => {
   });
 
   it("menampilkan pesan kesalahan ketika field wajib kosong", async () => {
-    render(<NewInvoicePage />);
+    render(await NewInvoicePage());
 
     const submitButton = screen.getByRole("button", { name: /kirim invoice/i });
     fireEvent.click(submitButton);
@@ -29,8 +29,8 @@ describe("Invoice manual form", () => {
     expect(await screen.findByText(/Item name required/i)).toBeInTheDocument();
   });
 
-  it("menghitung subtotal dan total secara otomatis", () => {
-    render(<NewInvoicePage />);
+  it("menghitung subtotal dan total secara otomatis", async () => {
+    render(await NewInvoicePage());
 
     const qtyInput = screen.getByLabelText(/Jumlah/i);
     fireEvent.change(qtyInput, { target: { value: "2" } });

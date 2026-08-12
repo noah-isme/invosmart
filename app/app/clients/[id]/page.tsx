@@ -44,10 +44,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   });
 
   const stats = {
-    revenue: paidAgg._sum.total || 0,
+    totalRevenue: paidAgg._sum.total || 0,
     paidCount: paidAgg._count || 0,
-    outstandingCount: outstandingAgg._count || 0,
-    outstandingAmount: outstandingAgg._sum.total || 0,
+    unpaidRevenue: outstandingAgg._sum.total || 0,
     invoiceCount: client.invoices.length, // total history count from DB, let's just use what we have or count all
   };
 
