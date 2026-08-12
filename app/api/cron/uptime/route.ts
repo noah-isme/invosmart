@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runUptimeChecks } from "@/lib/monitoring/uptime";
+import { requireCronAuthorization } from "@/lib/cron-auth";
 
 export async function GET(request: NextRequest) {
-  try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = request.headers.get("authorization");
-      const urlSecret = new URL(request.url).searchParams.get("secret");
-      if (authHeader !== `Bearer ${cronSecret}` && urlSecret !== cronSecret) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-    }
+  const authError = requireCronAuthorization(request);
+  if (authError) return authError;
 
+  try {
     const { searchParams } = new URL(request.url);
     const endpointsParam = searchParams.get("endpoints") || searchParams.get("urls");
     const endpoints = endpointsParam
@@ -45,16 +40,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = request.headers.get("authorization");
-      const urlSecret = new URL(request.url).searchParams.get("secret");
-      if (authHeader !== `Bearer ${cronSecret}` && urlSecret !== cronSecret) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-    }
+  const authError = requireCronAuthorization(request);
+  if (authError) return authError;
 
+  try {
     let endpoints: string[] | undefined;
     try {
       const body = await request.json();
