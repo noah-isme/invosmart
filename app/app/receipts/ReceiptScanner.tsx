@@ -2,7 +2,6 @@
 
 import { useState, useRef, ChangeEvent } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertCircle } from "lucide-react";
-import { z } from "zod";
 
 type ReceiptData = {
   client: string;
@@ -44,8 +43,12 @@ export const ReceiptScanner = ({
       if (onScanSuccess) {
         onScanSuccess(body.data);
       }
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan saat memproses gambar.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Terjadi kesalahan saat memproses gambar.",
+      );
     } finally {
       setLoading(false);
     }

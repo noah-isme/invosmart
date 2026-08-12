@@ -9,12 +9,37 @@
    allows switching providers by setting environment variables.
 */
 
-type Message = { role: string; content: string };
+type ChatMessagePart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
 
-const buildGeminiPrompt = (messages: Message[]) => {
-  // Convert chat-style messages into a single prompt. We keep role markers
-  // so the model can understand system/user distinctions.
-  return messages.map((m) => `<${m.role}>\n${m.content}`).join("\n\n");
+type Message = {
+  role: "system" | "user" | "assistant";
+  content: string | ChatMessagePart[];
+};
+
+type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } }
+  | { fileData: { mimeType: string; fileUri: string } };
+
+const toGeminiParts = (content: Message["content"]): GeminiPart[] => {
+  if (typeof content === "string") {
+    return [{ text: content }];
+  }
+
+  return content.flatMap((part): GeminiPart[] => {
+    if (part.type === "text") {
+      return [{ text: part.text }];
+    }
+
+    const dataUrl = part.image_url.url.match(/^data:([^;,]+);base64,(.+)$/);
+    if (dataUrl) {
+      return [{ inlineData: { mimeType: dataUrl[1], data: dataUrl[2] } }];
+    }
+
+    return [{ fileData: { mimeType: "image/*", fileUri: part.image_url.url } }];
+  });
 };
 
 export const createClient = () => {
@@ -28,7 +53,7 @@ export const createClient = () => {
             // Use the v1beta generateContent endpoint (current stable API)
             const contents = messages.map((msg) => ({
               role: msg.role === "system" || msg.role === "user" ? "user" : "model",
-              parts: [{ text: msg.content }],
+              parts: toGeminiParts(msg.content),
             }));
 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;

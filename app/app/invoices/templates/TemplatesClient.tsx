@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/currency";
 import { FileText, Copy, Trash2, Edit3, Plus, Search, Check, X, Loader2 } from "lucide-react";
@@ -346,7 +345,7 @@ export default function TemplatesClient({ initialTemplates }: { initialTemplates
                     </p>
                     {template.notes && (
                       <p className="truncate italic opacity-80 text-[11px]">
-                        "{template.notes}"
+                        &quot;{template.notes}&quot;
                       </p>
                     )}
                   </div>

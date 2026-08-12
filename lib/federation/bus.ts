@@ -9,7 +9,6 @@ import {
   type SignatureAlgorithm,
   federationEventSchema,
   validateFederationEvent,
-  type PreparedFederationEvent,
 } from "@/lib/federation/protocol";
 
 const DEFAULT_RECENT_LIMIT = 25;

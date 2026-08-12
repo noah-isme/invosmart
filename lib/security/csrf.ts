@@ -6,6 +6,12 @@ export const CSRF_HEADER_NAME = "x-csrf-token";
 export const CSRF_COOKIE = CSRF_COOKIE_NAME;
 export const CSRF_HEADER = CSRF_HEADER_NAME;
 
+type RequestWithCookies = Request & {
+  cookies?: {
+    get: (name: string) => { value?: string } | undefined;
+  };
+};
+
 /**
  * Generate a cryptographically secure random CSRF token.
  */
@@ -57,8 +63,9 @@ export function validateCsrfToken(
 export function verifyCsrfToken(req: Request): boolean {
   let cookieToken: string | undefined | null = null;
 
-  if ("cookies" in req && typeof (req as any).cookies?.get === "function") {
-    cookieToken = (req as any).cookies.get(CSRF_COOKIE_NAME)?.value;
+  const requestWithCookies = req as RequestWithCookies;
+  if (typeof requestWithCookies.cookies?.get === "function") {
+    cookieToken = requestWithCookies.cookies.get(CSRF_COOKIE_NAME)?.value;
   }
 
   if (!cookieToken && req.headers) {

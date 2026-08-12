@@ -682,17 +682,27 @@ export const recordVariantPerformance = async ({
   const reward = engagement.score;
 
   if (variantRecord) {
-    const rawPayload = (variantRecord.payload ?? {}) as Record<string, any>;
-    const metadata = (rawPayload.metadata ?? {}) as Record<string, any>;
+    const rawPayload = (variantRecord.payload ?? {}) as unknown as Record<string, unknown>;
+    const metadata =
+      rawPayload.metadata &&
+      typeof rawPayload.metadata === "object" &&
+      !Array.isArray(rawPayload.metadata)
+        ? (rawPayload.metadata as Record<string, unknown>)
+        : {};
 
-    let state: BanditState =
-      metadata.banditState && Array.isArray(metadata.banditState.A)
-        ? (metadata.banditState as BanditState)
+    const candidateState = metadata.banditState;
+    const state: BanditState =
+      candidateState &&
+      typeof candidateState === "object" &&
+      "A" in candidateState &&
+      Array.isArray(candidateState.A)
+        ? (candidateState as BanditState)
         : createInitialBanditState();
 
     const axis = variantRecord.experiment?.axis ?? "HOOK";
-    const tone = metadata.tone ?? "bold";
-    const targetMetric = metadata.targetMetric ?? "ctr";
+    const tone = typeof metadata.tone === "string" ? metadata.tone : "bold";
+    const targetMetric =
+      typeof metadata.targetMetric === "string" ? metadata.targetMetric : "ctr";
 
     const x_a = extractFeatureVector({
       impressions: totalPerf.impressions,

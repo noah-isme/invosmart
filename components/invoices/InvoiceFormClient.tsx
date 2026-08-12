@@ -204,7 +204,7 @@ export const InvoiceFormClient = ({
       items: nextItems,
     });
     setErrors(emptyErrors(nextItems.length));
-  }, [initialValues]);
+  }, [defaultCurrency, initialValues]);
 
   const normalizedItems = useMemo(
     () => normalizeItems(form.items),

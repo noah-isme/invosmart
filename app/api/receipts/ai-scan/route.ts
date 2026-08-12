@@ -96,14 +96,14 @@ const scanReceipt = async (request: NextRequest) => {
         {
           role: "user",
           content: [
-             { type: "text", text: "Parse this receipt." },
-             {
-               type: "image_url",
-               image_url: {
-                 url: parsedPayload.data.image, // expected format "data:image/jpeg;base64,..."
-               },
-             }
-          ] as any // Assuming the client types in lib/ai might not strictly type multimodal
+            { type: "text", text: "Parse this receipt." },
+            {
+              type: "image_url",
+              image_url: {
+                url: parsedPayload.data.image, // expected format "data:image/jpeg;base64,..."
+              },
+            },
+          ],
         },
       ],
       temperature: 0.1, // low temperature for better parsing accuracy
@@ -124,10 +124,11 @@ const scanReceipt = async (request: NextRequest) => {
     });
 
     return NextResponse.json({ data: validated });
-  } catch (e: any) {
-    console.error(e)
+  } catch (e: unknown) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(e);
     return NextResponse.json(
-      { error: "Invalid AI response", fallback: fallbackDraft, detail: e.message },
+      { error: "Invalid AI response", fallback: fallbackDraft, detail },
       { status: 400 },
     );
   }

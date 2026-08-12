@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 // Lightweight module-level state (non-reactive across tabs but sufficient for simple flow)
 let selectedPaymentId: string | null = null;

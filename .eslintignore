@@ -1,8 +1,0 @@
-# Ignore test files and generated test declarations during build linting
-app/**/__tests__/**
-app/**/__mocks__/**
-app/**/tests/**
-lib/**/__tests__/**
-test/**
-types/**
-**/*.d.ts

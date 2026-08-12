@@ -53,8 +53,10 @@ export default function UptimeMonitoringPage() {
       const data = await res.json();
       setHistory(data.history || []);
       setStats(data.stats || []);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Gagal memuat data uptime monitoring.");
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Gagal memuat data uptime monitoring.",
+      );
     } finally {
       setLoading(false);
     }
@@ -86,8 +88,10 @@ export default function UptimeMonitoringPage() {
       setSuccessMessage("Pengujian ping manual berhasil dieksekusi.");
 
       setTimeout(() => setSuccessMessage(null), 4000);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Gagal mengeksekusi manual ping.");
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Gagal mengeksekusi manual ping.",
+      );
     } finally {
       setIsPinging(false);
     }
@@ -170,7 +174,7 @@ export default function UptimeMonitoringPage() {
           </div>
         ) : stats.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-white/50">
-            Belum ada data status endpoint. Klik "Trigger Manual Ping" untuk memulai.
+            Belum ada data status endpoint. Klik &quot;Trigger Manual Ping&quot; untuk memulai.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">

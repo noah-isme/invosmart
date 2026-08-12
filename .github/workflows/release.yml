@@ -26,6 +26,11 @@ jobs:
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      - name: Typecheck
+        run: npm run typecheck
+        env:
+          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
+          ENABLE_TELEMETRY: "false"
       - name: Unit tests
         run: npm run test
         env:
@@ -33,6 +38,13 @@ jobs:
           ENABLE_TELEMETRY: "false"
       - name: Build
         run: npm run build
+        env:
+          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
+          ENABLE_TELEMETRY: "false"
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Critical browser contract
+        run: npm run test:e2e -- test/e2e/invoice-delivery-payment.spec.ts
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"

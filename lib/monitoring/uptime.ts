@@ -55,16 +55,16 @@ export async function checkEndpoint(
       status = "DOWN";
       errorMsg = `HTTP status ${statusCode}`;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     statusCode = 0;
     status = "DOWN";
-    errorMsg = err?.message || String(err);
+    errorMsg = err instanceof Error ? err.message : String(err);
   }
 
   const latencyMs = Math.max(0, Math.round(performance.now() - startTime));
   const checkTime = new Date();
 
-  let savedRecord: any = null;
+  let savedRecord: { id?: string } | null = null;
   try {
     savedRecord = await db.uptimeCheck.create({
       data: {
@@ -87,7 +87,7 @@ export async function checkEndpoint(
         actionType: "UPTIME_ALERT",
         reason: `Endpoint ${url} returned status ${statusCode}${errorMsg ? `: ${errorMsg}` : ""}`,
         confidence: 1.0,
-        status: "triggered" as any,
+        status: "triggered",
         createdAt: checkTime,
       });
     } catch (alertErr) {

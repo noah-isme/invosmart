@@ -1,4 +1,4 @@
-import { AutoActionStatus, AutoActionType, type AiAutoAction } from "@prisma/client";
+import { AutoActionStatus, AutoActionType } from "@prisma/client";
 
 export type WebhookResultItem = {
   ok: boolean;
@@ -9,6 +9,15 @@ export type WebhookDispatchResult = {
   discord?: WebhookResultItem;
   slack?: WebhookResultItem;
 };
+
+type WebhookAction = {
+  actionType?: string;
+  status?: string;
+  confidence?: number | null;
+  organizationId?: string | null;
+  reason?: string | null;
+  createdAt?: Date | string | number | null;
+} & Record<string, unknown>;
 
 /**
  * Returns integer hex color code corresponding to AutoActionType.
@@ -40,7 +49,7 @@ export function getEmbedColor(actionType?: string): number {
 /**
  * Formats Discord Embed payload for AI Auto Action.
  */
-export function formatDiscordEmbed(action: Partial<AiAutoAction> | Record<string, any>) {
+export function formatDiscordEmbed(action: WebhookAction) {
   const actionType = action.actionType ?? "UNKNOWN";
   const status = action.status ?? AutoActionStatus.applied;
   const color = getEmbedColor(String(actionType));
@@ -74,7 +83,7 @@ export function formatDiscordEmbed(action: Partial<AiAutoAction> | Record<string
 /**
  * Formats Slack Block Kit payload for AI Auto Action.
  */
-export function formatSlackBlocks(action: Partial<AiAutoAction> | Record<string, any>) {
+export function formatSlackBlocks(action: WebhookAction) {
   const actionType = action.actionType ?? "UNKNOWN";
   const status = action.status ?? AutoActionStatus.applied;
   const confidenceStr =
@@ -130,7 +139,7 @@ export function formatSlackBlocks(action: Partial<AiAutoAction> | Record<string,
  * Catches all HTTP and network errors, returning status result objects without throwing.
  */
 export async function dispatchWebhookAlert(
-  action: Partial<AiAutoAction> | Record<string, any>
+  action: WebhookAction,
 ): Promise<WebhookDispatchResult> {
   const discordUrl = process.env.DISCORD_WEBHOOK_URL;
   const slackUrl = process.env.SLACK_WEBHOOK_URL;
@@ -162,10 +171,10 @@ export async function dispatchWebhookAlert(
           } else {
             result.discord = { ok: true };
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           result.discord = {
             ok: false,
-            error: err?.message || String(err),
+            error: err instanceof Error ? err.message : String(err),
           };
         }
       })()
@@ -191,10 +200,10 @@ export async function dispatchWebhookAlert(
           } else {
             result.slack = { ok: true };
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           result.slack = {
             ok: false,
-            error: err?.message || String(err),
+            error: err instanceof Error ? err.message : String(err),
           };
         }
       })()
