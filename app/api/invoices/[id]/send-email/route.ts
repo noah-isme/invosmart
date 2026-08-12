@@ -6,14 +6,16 @@ import { authOptions } from "@/server/auth";
 import { db } from "@/lib/db";
 import { resend } from "@/lib/email/resend";
 import { InvoiceEmail } from "@/emails/InvoiceEmail";
-import { logAuditEvent, AuditEntity } from "@/lib/audit/auditLogger";
+import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import {
   appendInvoiceDeliveryLog,
   buildInvoiceShareUrl,
+  classifyEmailFailure,
   createInvoiceShareToken,
-  parseInvoiceDeliveryLog,
+  getInvoiceEmailRetryState,
+  getNextEmailRetryAt,
   type InvoiceDeliveryLogEntry,
 } from "@/lib/invoice-delivery";
 
@@ -77,6 +79,12 @@ const recordDelivery = async (
   }
 };
 
+const retryAfterSeconds = (retryAt: string | null) => {
+  if (!retryAt) return undefined;
+  const seconds = Math.max(1, Math.ceil((new Date(retryAt).getTime() - Date.now()) / 1000));
+  return String(seconds);
+};
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const httpsCheck = enforceHttps(request);
   if (httpsCheck) return httpsCheck;
@@ -110,10 +118,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || request.url;
     const shareToken = createInvoiceShareToken(invoice.id);
     const viewUrl = buildInvoiceShareUrl(baseUrl, invoice.id, shareToken);
+    // Keep the existing signed share URL intact while giving mail clients a
+    // dedicated payment action that can be handled by the public payment flow.
+    const paymentUrl = new URL(viewUrl);
+    paymentUrl.searchParams.set("action", "pay");
     const parsedItems = parseItems(invoice.items);
-    const attempt = parseInvoiceDeliveryLog(invoice.emailLog).filter(
-      (entry) => entry.to.toLowerCase() === recipientEmail,
-    ).length + 1;
+    const retryState = getInvoiceEmailRetryState(invoice.emailLog, recipientEmail);
+    const now = new Date();
+    if (retryState.exhausted) {
+      return NextResponse.json({
+        error: retryState.retryable ? "Email retry limit reached" : "Email delivery failed permanently",
+        attempt: retryState.nextAttempt - 1,
+        retryable: retryState.retryable,
+      }, { status: 409 });
+    }
+    if (retryState.retryAt && new Date(retryState.retryAt).getTime() > now.getTime()) {
+      return NextResponse.json({
+        error: "Email retry is scheduled",
+        attempt: retryState.nextAttempt - 1,
+        retryAt: retryState.retryAt,
+        retryable: true,
+      }, {
+        status: 429,
+        headers: { "Retry-After": retryAfterSeconds(retryState.retryAt) || "60" },
+      });
+    }
+    const attempt = retryState.nextAttempt;
 
     const html = await render(
       InvoiceEmail({
@@ -128,6 +158,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         dueAt: invoice.dueAt,
         notes: invoice.notes,
         viewUrl,
+        paymentUrl: paymentUrl.toString(),
       }),
     );
 
@@ -139,52 +170,99 @@ export async function POST(request: NextRequest, context: RouteContext) {
         to: recipientEmail,
         subject: `Invoice #${invoice.number} from ${invoice.user.name || "Your Company"}`,
         html,
+        tags: [
+          { name: "invoice_id", value: invoice.id },
+          { name: "invoice_attempt", value: String(attempt) },
+        ],
+      }, {
+        idempotencyKey: `invoice-email-${invoice.id}-${attempt}-${recipientEmail}`,
       });
     } catch (error) {
+      const classification = classifyEmailFailure(error);
+      const retryAt = classification.retryable ? getNextEmailRetryAt(attempt) : null;
       const failure: InvoiceDeliveryLogEntry = {
         to: recipientEmail,
         status: "failed",
         attempt,
         failedAt: new Date().toISOString(),
-        error: errorText(error),
+        providerStatus: classification.statusCode ? `http_${classification.statusCode}` : "send_error",
+        error: classification.reason || errorText(error),
+        retryable: classification.retryable,
+        ...(retryAt ? { nextRetryAt: retryAt } : {}),
       };
       await recordDelivery(invoice.id, invoice.emailLog, failure);
       void logAuditEvent({
-        action: "email_failed",
+        action: "INVOICE_EMAIL_FAILED",
         entity: AuditEntity.INVOICE,
         entityId: invoice.id,
         userId: session.user.id,
-        details: { to: recipientEmail, attempt, error: failure.error },
+        details: {
+          to: recipientEmail,
+          attempt,
+          error: failure.error,
+          retryable: classification.retryable,
+          retryAt,
+          statusCode: classification.statusCode,
+        },
       });
-      return NextResponse.json({ error: "Failed to send email", attempt }, { status: 502 });
-    }
-
-    if (result.error) {
-      const failure: InvoiceDeliveryLogEntry = {
-        to: recipientEmail,
-        status: "failed",
+      return NextResponse.json({
+        error: "Failed to send email",
         attempt,
-        failedAt: new Date().toISOString(),
-        error: errorText(result.error),
-      };
-      await recordDelivery(invoice.id, invoice.emailLog, failure);
-      void logAuditEvent({
-        action: "email_failed",
-        entity: AuditEntity.INVOICE,
-        entityId: invoice.id,
-        userId: session.user.id,
-        details: { to: recipientEmail, attempt, error: failure.error },
+        retryable: classification.retryable,
+        ...(retryAt ? { retryAt } : {}),
+      }, {
+        status: classification.retryable ? 503 : 502,
+        ...(retryAt ? { headers: { "Retry-After": retryAfterSeconds(retryAt) || "60" } } : {}),
       });
-      return NextResponse.json({ error: "Failed to send email", attempt }, { status: 502 });
     }
 
     const messageId = result.data?.id;
+    if (result.error || !messageId) {
+      const providerError = result.error || new Error("Resend did not return a provider message id");
+      const classification = classifyEmailFailure(providerError);
+      const retryAt = classification.retryable ? getNextEmailRetryAt(attempt) : null;
+      const failure: InvoiceDeliveryLogEntry = {
+        to: recipientEmail,
+        status: "failed",
+        attempt,
+        failedAt: new Date().toISOString(),
+        providerStatus: result.error ? "provider_rejected" : "provider_unknown",
+        error: classification.reason || errorText(providerError),
+        retryable: classification.retryable,
+        ...(retryAt ? { nextRetryAt: retryAt } : {}),
+      };
+      await recordDelivery(invoice.id, invoice.emailLog, failure);
+      void logAuditEvent({
+        action: "INVOICE_EMAIL_FAILED",
+        entity: AuditEntity.INVOICE,
+        entityId: invoice.id,
+        userId: session.user.id,
+        details: {
+          to: recipientEmail,
+          attempt,
+          error: failure.error,
+          retryable: classification.retryable,
+          retryAt,
+        },
+      });
+      return NextResponse.json({
+        error: "Failed to send email",
+        attempt,
+        retryable: classification.retryable,
+        ...(retryAt ? { retryAt } : {}),
+      }, {
+        status: classification.retryable ? 503 : 502,
+        ...(retryAt ? { headers: { "Retry-After": retryAfterSeconds(retryAt) || "60" } } : {}),
+      });
+    }
+
     const success: InvoiceDeliveryLogEntry = {
       to: recipientEmail,
-      status: "sent",
+      status: "accepted",
       attempt,
-      sentAt: new Date().toISOString(),
-      ...(messageId ? { messageId } : {}),
+      acceptedAt: new Date().toISOString(),
+      providerStatus: "accepted",
+      messageId,
     };
 
     await db.invoice.update({
@@ -197,14 +275,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
 
     void logAuditEvent({
-      action: "email_sent",
+      action: AuditAction.INVOICE_EMAIL_ACCEPTED,
       entity: AuditEntity.INVOICE,
       entityId: invoice.id,
       userId: session.user.id,
       details: { to: recipientEmail, messageId, attempt },
     });
 
-    return NextResponse.json({ success: true, messageId, attempt });
+    return NextResponse.json({ success: true, messageId, attempt, status: "accepted" });
   } catch (error) {
     console.error("Error sending invoice email:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

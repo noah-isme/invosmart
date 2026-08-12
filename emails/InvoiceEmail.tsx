@@ -25,6 +25,8 @@ export interface InvoiceEmailProps {
   dueAt?: Date | null;
   notes?: string | null;
   viewUrl: string;
+  /** Public invoice URL used by the recipient to review and pay the invoice. */
+  paymentUrl?: string;
 }
 
 const formatCurrency = (amount: number, currency: string) => {
@@ -51,6 +53,7 @@ export const InvoiceEmail = ({
   dueAt,
   notes,
   viewUrl,
+  paymentUrl,
 }: InvoiceEmailProps) => {
   const previewText = `Invoice ${invoiceNumber} from ${issuerName}`;
 
@@ -129,6 +132,9 @@ export const InvoiceEmail = ({
             <Section style={buttonContainer}>
               <Button style={button} href={viewUrl}>
                 View Invoice
+              </Button>
+              <Button style={secondaryButton} href={paymentUrl || viewUrl}>
+                Pay Invoice
               </Button>
             </Section>
           </Section>
@@ -260,6 +266,12 @@ const button = {
   width: '100%',
   padding: '12px 20px',
   fontWeight: 'bold',
+};
+
+const secondaryButton = {
+  ...button,
+  backgroundColor: '#111827',
+  marginTop: '12px',
 };
 
 const footer = {
