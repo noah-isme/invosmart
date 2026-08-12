@@ -84,6 +84,13 @@ The baseline PostgreSQL migration is located at:
 
 This migration creates all 18 tables, 8 PostgreSQL Enum types, composite indexes, foreign key relationships, and default timestamp definitions.
 
+### 3.5 Payment Lifecycle Migration
+
+The additive payment lifecycle migration is located at:
+`prisma/migrations/20260812173000_payment_attempts_events/migration.sql`
+
+Apply it with `npx prisma migrate deploy` before enabling provider webhooks in a staging or production environment. It is safe for existing invoices and settled `Payment` rows: `PaymentAttempt` is nullable on legacy records, while new checkout and webhook flows persist attempts and events.
+
 ---
 
 ## 4. Database Schema Models Overview
@@ -93,7 +100,9 @@ The database schema is organized into four main functional domains:
 ### 4.1 Core Financial & User Domain
 - **`User`**: User accounts, authentication credentials, and theme/branding preferences (`logoUrl`, `primaryColor`, `themePrimary`, `themeAccent`, `themeMode`).
 - **`Invoice`**: Invoice records tracking customer details, total amounts, line items (JSON), status (`DRAFT`, `SENT`, `PAID`, `UNPAID`, `OVERDUE`), issue dates, and due dates.
-- **`Payment`**: Payment transactions linked to invoices, tracking transaction IDs, payment methods, amounts, and statuses.
+- **`Payment`**: Settled payment ledger entries linked to invoices, tracking transaction IDs, payment methods, amounts, cumulative refunds, and statuses.
+- **`PaymentAttempt`**: Provider-facing checkout state (`PENDING`, `AUTHORIZED`, `SETTLED`, `EXPIRED`, `CANCELLED`, `FAILED`, `REFUNDED`) with immutable invoice amount/currency, stable provider IDs, expiry, and idempotency key.
+- **`PaymentEvent`**: Append-only provider webhook history keyed by provider event ID; used to deduplicate replayed notifications and audit out-of-order lifecycle events.
 - **`Receipt`**: Dynamic receipt configurations including verification tokens, verification QR codes, layout positions (`bottom_left`, `bottom_right`, `center`), and design themes.
 - **`ReceiptAuditLog`**: Financial verification audit log tracking token creation, verification events, and IP addresses.
 

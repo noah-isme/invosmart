@@ -80,6 +80,7 @@ Ensure the following environment variables are correctly configured in your `.en
 ### App
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET`
+- `CRON_SECRET` (required in production for scheduled uptime checks)
 - `NEXT_PUBLIC_APP_VERSION`
 
 ### Observability
@@ -115,6 +116,11 @@ Ensure the following environment variables are correctly configured in your `.en
 
 ### Deployment
 - `VERCEL_TOKEN`
+- `RESEND_WEBHOOK_SECRET`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+- `STRIPE_WEBHOOK_SECRET`
+- `MIDTRANS_SERVER_KEY`
 
 ---
 
@@ -173,6 +179,8 @@ invosmart/
 - 📉 **Bayesian A/B Stats**: Statistical significance analysis for A/B experiments.
 - 🚩 **Feature Flags**: Runtime feature toggles per-tenant with admin UI.
 - 🏥 **Uptime Monitoring**: Endpoint health checks with alerts.
+- 💳 **Payment Lifecycle**: Idempotent Midtrans/Stripe checkout with signed webhook reconciliation.
+- ✉️ **Invoice Delivery**: Retryable Resend delivery with signed status webhooks and payment links.
 
 ---
 
@@ -183,9 +191,16 @@ invosmart/
 | **Auth** | `/api/auth/[...nextauth]` | GET/POST | NextAuth endpoints |
 | **Invoices** | `/api/invoices` | GET/POST | List or create invoices |
 | | `/api/invoices/[id]` | GET/PUT/DELETE | Invoice CRUD |
+| | `/api/invoices/[id]/send-email` | POST | Send an invoice with a signed payment link |
 | | `/api/invoices/export` | GET | Export invoices as CSV/XLSX |
 | | `/api/invoices/templates` | GET/POST | Invoice template management |
 | | `/api/invoices/templates/[id]` | PUT/DELETE | Template CRUD & instantiate |
+| **Payments** | `/api/payments/midtrans/create` | POST | Create or reuse an idempotent Midtrans checkout |
+| | `/api/payments/stripe/create-session` | POST | Create or reuse an idempotent Stripe checkout |
+| | `/api/payments/[attemptId]` | GET | Read an owned payment attempt status |
+| | `/api/payments/midtrans/notification` | POST | Verify and reconcile Midtrans events |
+| | `/api/payments/stripe/webhook` | POST | Verify and reconcile Stripe events |
+| **Webhooks** | `/api/webhooks/resend` | POST | Verify and persist Resend delivery events |
 | **AI** | `/api/ai/composer` | POST | Natural language to invoice |
 | | `/api/ai/scanner` | POST | Receipt image parsing |
 | **Admin** | `/api/admin/feature-flags` | GET/POST | Feature flag management |

@@ -8,10 +8,13 @@ This document outlines the strategic roadmap and upcoming features for InvoSmart
 
 The latest execution pass is focused on release readiness around the Phase 2 foundation. Statuses distinguish an available implementation from provider/device validation that is still outstanding: `✅ Done` means the feature implementation is present, while `🚧 Hardening` means the implementation exists but its production validation is not complete.
 
-- **Release-gate stabilization — 🚧 In Progress:** async server-page tests now await the page before rendering, viewport theme metadata is asserted through Next's `viewport` export, and stale Prisma/client query assumptions were removed. Typecheck, build, and the full Vitest suite pass; repository-wide lint remains blocked by pre-existing errors outside this execution pass.
-- **Currency hardening — 🚧 In Progress:** `formatCurrency()` now normalizes currency codes, defaults to IDR, preserves nominal invoice units, and applies zero-decimal rules for IDR/JPY with targeted unit coverage. Gateway minor-unit conversion and reconciliation remain payment-hardening work.
+- **Release-gate stabilization — 🚧 In Progress:** flat ESLint ignores now replace the removed `.eslintignore`, production-source lint errors are fixed, `npm run typecheck` is a CI gate, and the Playwright suite is restricted to browser specs. Current verification: lint passes with 0 errors, TypeScript passes, and 432 Vitest tests pass with 1 intentionally skipped test. The sandbox/host currently aborts `next build` with exit 135 (`Bus error`) and the browser server with `SyntaxError: Invalid or unexpected token`; CI Node 20 validation remains required.
+- **Currency hardening — 🚧 In Progress:** `formatCurrency()` now normalizes currency codes, defaults to IDR, preserves nominal invoice units, and applies zero-decimal rules for IDR/JPY with targeted unit coverage. Payment-attempt amount/currency reconciliation is now enforced at both gateway webhook boundaries; live sandbox certification remains.
 - **PWA/mobile hardening — 🚧 In Progress:** service-worker cache versioning and cleanup are in place, API/navigation/cross-origin requests are excluded from caching, and light/dark viewport metadata is explicit. Device and critical-flow E2E validation remain.
 - **Client module cleanup — ✅ Done:** client list/detail contracts use stable `invoiceCount`/`revenue` and `totalRevenue`/`unpaidRevenue` fields, scoped email checks use Prisma-supported queries, and the client form safely handles absent initial data.
+- **Payment lifecycle hardening — 🚧 Sandbox validation:** Midtrans-first and Stripe-secondary checkout attempts now have stable IDs, idempotency keys, signed event validation, replay/out-of-order protection, expiry/failure/refund transitions, and a user-scoped attempt-status endpoint. Production database migration and provider sandbox certification remain.
+- **Invoice email hardening — 🚧 Sandbox validation:** Resend delivery states, bounded retries, provider event deduplication, signed webhook handling, audit events, and a signed payment link are implemented. Real provider webhook verification and bounce/complaint testing remain.
+- **Scheduled operations — ✅ Implemented:** uptime cron authentication fails closed in production, query-string secrets are rejected, and `vercel.json` schedules the health sweep every five minutes.
 
 ---
 
@@ -122,10 +125,10 @@ gantt
 
 | Task | Category | Priority | Effort | Status |
 | :--- | :------- | :------- | :----- | :----- |
-| Payment gateway integration (Stripe/Midtrans) | Features | P1 | L | 🚧 In Progress |
+| Payment gateway integration (Stripe/Midtrans) | Features | P1 | L | 🚧 Sandbox validation |
 | Multi-currency support | Features | P1 | M | 🚧 Hardening |
 | Add client/customer management module | Features | P1 | M | ✅ Done |
-| Implement invoice email delivery | Features | P1 | M | 🚧 In Progress |
+| Implement invoice email delivery | Features | P1 | M | 🚧 Sandbox validation |
 | Slack/WhatsApp integrations for notifications | Integrations | P2 | M | 📅 Planned |
 | Implement recurring invoice templates | Features | P2 | S | ✅ Done |
 | Add proper i18n framework (replace hardcoded locales) | UX/UI | P2 | M | ✅ Done |
@@ -139,9 +142,10 @@ gantt
 
 ## Next Execution
 
-- **Payment hardening:** consolidate Stripe/Midtrans checkout and webhook handling around idempotent payment attempts; verify signatures, invoice ownership, amount/currency, duplicate or out-of-order events, expiry, and refund transitions in sandbox tests.
-- **Email hardening:** make Resend delivery retryable and observable, persist provider message/status data, handle delivery failures and bounces, and include the payment link in invoice mail without marking an invoice sent before provider acceptance.
-- **Release gate:** run lint, typecheck, unit tests, build, and the critical invoice → email → payment Playwright flow before moving payment and email to `✅ Done`.
+- **Provider certification:** apply the additive payment-attempt/event migration to a staging PostgreSQL database; run signed Midtrans sandbox pending → settlement → partial/full refund, expiry, cancellation, replay, and amount/currency mismatch scenarios; repeat the shared contract for Stripe.
+- **Email certification:** register the Resend webhook, verify signed `sent`/`delivered`/`delayed`/`failed`/`bounced`/`complained` events in staging, and replace legacy JSON-log fallback scanning with structured delivery persistence in the next schema increment.
+- **Release gate:** run `npm run build`, the critical invoice → email → payment Playwright spec on Node 20/Chromium, and mobile/PWA smoke checks; move payment and email to `✅ Done` only after provider and device evidence is attached.
+- **v1.3 planning:** design recurring billing/reminder occurrence keys and adapter contracts for Slack/WhatsApp behind feature flags after v1.2 certification.
 
 ---
 
