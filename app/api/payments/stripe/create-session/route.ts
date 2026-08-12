@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/authOptions';
+import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { stripe } from '@/lib/payments/stripe';
+import { toGatewayMinorUnit } from '@/lib/payments/money';
 
 export async function POST(request: Request) {
   try {
@@ -31,13 +32,14 @@ export async function POST(request: Request) {
 
     type InvoiceItem = { description?: string; rate?: number; quantity?: number };
     const items = (invoice.items as InvoiceItem[]) || [];
+    const currency = invoice.currency.toUpperCase();
     const line_items = items.map((item) => ({
       price_data: {
-        currency: invoice.currency.toLowerCase() || 'idr',
+        currency: currency.toLowerCase(),
         product_data: {
           name: item.description || 'Item',
         },
-        unit_amount: Math.round((item.rate || 0) * 100), // Stripe expects amounts in cents for USD, or smallest unit.
+        unit_amount: toGatewayMinorUnit(item.rate || 0, currency),
       },
       quantity: item.quantity || 1,
     }));

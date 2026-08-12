@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/payments/stripe';
 import { db } from '@/lib/db';
-import auditLogger from '@/lib/audit/auditLogger';
+import { logAuditEvent, AuditAction, AuditEntity } from '@/lib/audit/auditLogger';
+import { fromGatewayMinorUnit } from '@/lib/payments/money';
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -37,18 +38,38 @@ export async function POST(request: Request) {
         });
 
         if (invoice) {
+          const gatewayPaymentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : session.id;
+          const paidCurrency = session.currency?.toUpperCase() || invoice.currency.toUpperCase();
+          const paidAmount = session.amount_total === null || session.amount_total === undefined
+            ? invoice.total
+            : fromGatewayMinorUnit(session.amount_total, paidCurrency);
+
+          if (paidCurrency !== invoice.currency.toUpperCase() || Math.round(paidAmount) !== invoice.total) {
+            return NextResponse.json({ error: 'Payment amount or currency does not match invoice' }, { status: 400 });
+          }
+
+          const existingPayment = await db.payment.findFirst({
+            where: { gatewayProvider: 'stripe', gatewayPaymentId },
+            select: { id: true },
+          });
+          if (existingPayment) {
+            return NextResponse.json({ received: true, duplicate: true }, { status: 200 });
+          }
+
           await db.$transaction(async (tx) => {
             const payment = await tx.payment.create({
               data: {
                 invoiceId,
-                paidAmount: session.amount_total ? session.amount_total / 100 : invoice.total,
-                paidCurrency: session.currency?.toUpperCase() || invoice.currency,
+                paidAmount,
+                paidCurrency,
                 paidAt: new Date(),
                 method: 'stripe',
                 gatewayProvider: 'stripe',
-                gatewayPaymentId: session.payment_intent as string,
+                gatewayPaymentId,
                 gatewayStatus: session.payment_status,
-                gatewayMetadata: session,
+                gatewayMetadata: JSON.parse(JSON.stringify(session)),
               },
             });
 
@@ -61,13 +82,13 @@ export async function POST(request: Request) {
             });
 
             if (userId) {
-              await auditLogger.log(
+              await logAuditEvent({
                 userId,
-                'PAYMENT_RECEIVED',
-                'Invoice',
-                invoiceId,
-                { paymentId: payment.id, gateway: 'stripe' }
-              );
+                action: AuditAction.INVOICE_UPDATE,
+                entity: AuditEntity.INVOICE,
+                entityId: invoiceId,
+                details: { paymentId: payment.id, gateway: 'stripe', event: 'PAYMENT_RECEIVED' },
+              });
             }
           });
         }

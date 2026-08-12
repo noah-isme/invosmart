@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/authOptions';
+import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { midtransSnap } from '@/lib/payments/midtrans';
 

@@ -11,6 +11,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components';
+import { formatCurrency as formatInvoiceCurrency } from '@/lib/currency';
 
 export interface InvoiceEmailProps {
   invoiceNumber: string;
@@ -27,10 +28,7 @@ export interface InvoiceEmailProps {
 }
 
 const formatCurrency = (amount: number, currency: string) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount / 100);
+  return formatInvoiceCurrency(amount, currency);
 };
 
 const formatDate = (date: Date) => {

@@ -325,11 +325,13 @@ model Payment {
   gatewayStatus    String?
   gatewayMetadata  Json?
   createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   invoice  Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   receipts Receipt[]
 
   @@index([invoiceId])
+  @@unique([gatewayProvider, gatewayPaymentId], map: "payment_gateway_provider_external_id")
 }
 
 enum ReceiptPosition {

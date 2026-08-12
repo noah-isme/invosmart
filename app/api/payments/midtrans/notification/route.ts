@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/db';
-import auditLogger from '@/lib/audit/auditLogger';
+import { logAuditEvent, AuditAction, AuditEntity } from '@/lib/audit/auditLogger';
 
 export async function POST(request: Request) {
   try {
@@ -12,9 +12,16 @@ export async function POST(request: Request) {
     const grossAmount = notification.gross_amount;
     const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
 
+    if (typeof orderId !== 'string' || statusCode === undefined || grossAmount === undefined) {
+      return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
+    }
+
+    const statusCodeValue = String(statusCode);
+    const grossAmountValue = String(grossAmount);
+
     const expectedSignature = crypto
       .createHash('sha512')
-      .update(`${orderId}${statusCode}${grossAmount}${serverKey}`)
+      .update(`${orderId}${statusCodeValue}${grossAmountValue}${serverKey}`)
       .digest('hex');
 
     if (expectedSignature !== notification.signature_key) {
@@ -25,7 +32,12 @@ export async function POST(request: Request) {
     const fraudStatus = notification.fraud_status;
 
     // The orderId format we used was `${invoiceId}-${timestamp}`
-    const invoiceId = orderId.split('-')[0];
+    if (!orderId || typeof notification.signature_key !== 'string') {
+      return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
+    }
+
+    const separator = orderId.lastIndexOf('-');
+    const invoiceId = separator > 0 ? orderId.slice(0, separator) : orderId;
 
     if (
       transactionStatus === 'capture' ||
@@ -40,13 +52,25 @@ export async function POST(request: Request) {
         where: { id: invoiceId },
       });
 
-      if (invoice && invoice.status !== 'PAID') {
+      const paidAmount = Number(grossAmount);
+      const paidCurrency = String(notification.currency || invoice?.currency || 'IDR').toUpperCase();
+
+      if (!Number.isFinite(paidAmount) || !invoice || paidCurrency !== invoice.currency.toUpperCase() || Math.round(paidAmount) !== invoice.total) {
+        return NextResponse.json({ error: 'Payment amount or currency does not match invoice' }, { status: 400 });
+      }
+
+      const existingPayment = await db.payment.findFirst({
+        where: { gatewayProvider: 'midtrans', gatewayPaymentId: notification.transaction_id },
+        select: { id: true },
+      });
+
+      if (!existingPayment && invoice.status !== 'PAID') {
         await db.$transaction(async (tx) => {
           const payment = await tx.payment.create({
             data: {
               invoiceId,
-              paidAmount: parseFloat(grossAmount),
-              paidCurrency: notification.currency || invoice.currency,
+              paidAmount,
+              paidCurrency,
               paidAt: new Date(notification.settlement_time || notification.transaction_time || new Date()),
               method: notification.payment_type || 'midtrans',
               gatewayProvider: 'midtrans',
@@ -65,13 +89,13 @@ export async function POST(request: Request) {
           });
 
           if (invoice.userId) {
-            await auditLogger.log(
-              invoice.userId,
-              'PAYMENT_RECEIVED',
-              'Invoice',
-              invoiceId,
-              { paymentId: payment.id, gateway: 'midtrans' }
-            );
+            await logAuditEvent({
+              userId: invoice.userId,
+              action: AuditAction.INVOICE_UPDATE,
+              entity: AuditEntity.INVOICE,
+              entityId: invoiceId,
+              details: { paymentId: payment.id, gateway: 'midtrans', event: 'PAYMENT_RECEIVED' },
+            });
           }
         });
       }
