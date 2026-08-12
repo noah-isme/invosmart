@@ -4,6 +4,15 @@
 
 This document outlines the strategic roadmap and upcoming features for InvoSmart. It is divided into three main phases: Near-term, Mid-term, and Long-term.
 
+## Current Execution Update (2026-08-12)
+
+The latest execution pass is focused on release readiness around the Phase 2 foundation. Statuses distinguish an available implementation from provider/device validation that is still outstanding: `✅ Done` means the feature implementation is present, while `🚧 Hardening` means the implementation exists but its production validation is not complete.
+
+- **Release-gate stabilization — 🚧 In Progress:** async server-page tests now await the page before rendering, viewport theme metadata is asserted through Next's `viewport` export, and stale Prisma/client query assumptions were removed. Typecheck, build, and the full Vitest suite pass; repository-wide lint remains blocked by pre-existing errors outside this execution pass.
+- **Currency hardening — 🚧 In Progress:** `formatCurrency()` now normalizes currency codes, defaults to IDR, preserves nominal invoice units, and applies zero-decimal rules for IDR/JPY with targeted unit coverage. Gateway minor-unit conversion and reconciliation remain payment-hardening work.
+- **PWA/mobile hardening — 🚧 In Progress:** service-worker cache versioning and cleanup are in place, API/navigation/cross-origin requests are excluded from caching, and light/dark viewport metadata is explicit. Device and critical-flow E2E validation remain.
+- **Client module cleanup — ✅ Done:** client list/detail contracts use stable `invoiceCount`/`revenue` and `totalRevenue`/`unpaidRevenue` fields, scoped email checks use Prisma-supported queries, and the client form safely handles absent initial data.
+
 ---
 
 ## Completed Features (v1.0.1)
@@ -101,8 +110,9 @@ gantt
 | Implement asymmetric encryption for Federation bus payloads (`lib/federation/bus.ts`) | Security | P1 | M | ✅ Done |
 | Discord/Slack webhook integration for `ai_auto_actions` real-time alerts | Integrations | P1 | S | ✅ Done |
 | Implement comprehensive audit logging for all user actions | Security | P1 | S | ✅ Done |
-| Mobile responsive app enhancements / PWA setup | UX/UI | P1 | L | 🚧 In Progress |
-| Increase E2E test coverage for all critical user flows | Testing | P2 | L | 📅 Planned |
+| Mobile responsive app enhancements / PWA setup | UX/UI | P1 | L | 🚧 Hardening |
+| Release-gate compatibility and verification pass | Testing | P0 | S | 🚧 In Progress |
+| Increase E2E test coverage for all critical user flows | Testing | P2 | L | 🚧 In Progress |
 
 ---
 
@@ -113,8 +123,8 @@ gantt
 | Task | Category | Priority | Effort | Status |
 | :--- | :------- | :------- | :----- | :----- |
 | Payment gateway integration (Stripe/Midtrans) | Features | P1 | L | 🚧 In Progress |
-| Multi-currency support | Features | P1 | M | 🚧 In Progress |
-| Add client/customer management module | Features | P1 | M | 🚧 In Progress |
+| Multi-currency support | Features | P1 | M | 🚧 Hardening |
+| Add client/customer management module | Features | P1 | M | ✅ Done |
 | Implement invoice email delivery | Features | P1 | M | 🚧 In Progress |
 | Slack/WhatsApp integrations for notifications | Integrations | P2 | M | 📅 Planned |
 | Implement recurring invoice templates | Features | P2 | S | ✅ Done |
@@ -124,6 +134,14 @@ gantt
 | Add A/B test statistical significance calculator (Bayesian methods) | AI | P2 | M | ✅ Done |
 | Implement feature flags system | Infra | P2 | M | ✅ Done |
 | Add uptime monitoring and alerting | Ops | P2 | S | ✅ Done |
+
+---
+
+## Next Execution
+
+- **Payment hardening:** consolidate Stripe/Midtrans checkout and webhook handling around idempotent payment attempts; verify signatures, invoice ownership, amount/currency, duplicate or out-of-order events, expiry, and refund transitions in sandbox tests.
+- **Email hardening:** make Resend delivery retryable and observable, persist provider message/status data, handle delivery failures and bounces, and include the payment link in invoice mail without marking an invoice sent before provider acceptance.
+- **Release gate:** run lint, typecheck, unit tests, build, and the critical invoice → email → payment Playwright flow before moving payment and email to `✅ Done`.
 
 ---
 
