@@ -6,21 +6,36 @@ on:
       - main
     tags:
       - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_staging_certification:
+        description: "Run the secret-backed PostgreSQL/provider certification against the staging environment"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
-        with:
-          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('20.')) { throw new Error('Release certification requires Node.js 20'); }"
       - name: Install dependencies
         run: npm ci
+      - name: Release certification preflight
+        run: npm run release:check
+        env:
+          RELEASE_CERTIFICATION_REPORT: QA-report/release-certification.json
+      - name: Validate Prisma schema
+        run: npx --no-install prisma validate --schema=prisma/schema.prisma
       - name: Lint
         run: npm run lint
         env:
@@ -48,6 +63,15 @@ jobs:
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      - name: Upload release certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-certification-${{ github.run_id }}
+          path: |
+            QA-report
+            test-results
+          if-no-files-found: warn
       - name: Semantic Release
         if: github.ref == 'refs/heads/main'
         env:
@@ -66,6 +90,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('20.')) { throw new Error('Release certification requires Node.js 20'); }"
       - name: Install dependencies
         run: npm ci
       - name: Build
@@ -88,6 +114,8 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('20.')) { throw new Error('Release certification requires Node.js 20'); }"
       - name: Install dependencies
         run: npm ci
       - name: Playwright install
@@ -98,9 +126,52 @@ jobs:
           ENABLE_TELEMETRY: "false"
         run: npm run test:e2e
       - name: Upload QA screenshots
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-report
           path: QA-report
+          if-no-files-found: warn
+
+  staging-certification:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_staging_certification == true
+    environment: staging
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      NEXTAUTH_URL: ${{ secrets.STAGING_NEXTAUTH_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.STAGING_NEXTAUTH_SECRET }}
+      CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
+      STRIPE_SECRET_KEY: ${{ secrets.STAGING_STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STAGING_STRIPE_PUBLISHABLE_KEY }}
+      MIDTRANS_SERVER_KEY: ${{ secrets.STAGING_MIDTRANS_SERVER_KEY }}
+      MIDTRANS_CLIENT_KEY: ${{ secrets.STAGING_MIDTRANS_CLIENT_KEY }}
+      NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: ${{ secrets.STAGING_MIDTRANS_CLIENT_KEY }}
+      RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
+      RESEND_FROM_EMAIL: ${{ secrets.STAGING_RESEND_FROM_EMAIL }}
+      RESEND_WEBHOOK_SECRET: ${{ secrets.STAGING_RESEND_WEBHOOK_SECRET }}
+      RELEASE_CERTIFICATION_REPORT: QA-report/release-certification.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('20.')) { throw new Error('Release certification requires Node.js 20'); }"
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run staging certification
+        run: npm run release:certify
+      - name: Upload staging certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-certification-${{ github.run_id }}
+          path: |
+            QA-report
+            test-results
           if-no-files-found: warn

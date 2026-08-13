@@ -2,6 +2,9 @@
   "name": "invosmart",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "next dev -p 1234",
     "build": "next build",
@@ -10,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test --reporter=list --output=QA-report",
+    "release:check": "node scripts/release-certification.mjs --mode=ci",
+    "release:certify": "node scripts/release-certification.mjs --mode=staging --check-migrations --run-gates",
     "release": "semantic-release",
     "qa:lighthouse": "npx @lhci/cli autorun",
     "db:push": "prisma db push",
