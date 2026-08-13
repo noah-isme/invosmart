@@ -1,14 +1,14 @@
 # InvoSmart Roadmap & TODOs
 
-**Current Version:** v1.2.0-dev (August 2026)
+**Current Version:** v1.2.1-dev (August 2026)
 
 This document outlines the strategic roadmap and upcoming features for InvoSmart. It is divided into three main phases: Near-term, Mid-term, and Long-term.
 
-## Current Execution Update (2026-08-12)
+## Current Execution Update (2026-08-13)
 
 The latest execution pass is focused on release readiness around the Phase 2 foundation. Statuses distinguish an available implementation from provider/device validation that is still outstanding: `✅ Done` means the feature implementation is present, while `🚧 Hardening` means the implementation exists but its production validation is not complete.
 
-- **Release-gate stabilization — 🚧 In Progress:** flat ESLint ignores now replace the removed `.eslintignore`, production-source lint errors are fixed, `npm run typecheck` is a CI gate, and the Playwright suite is restricted to browser specs. Current verification: lint passes with 0 errors, TypeScript passes, and 432 Vitest tests pass with 1 intentionally skipped test. The sandbox/host currently aborts `next build` with exit 135 (`Bus error`) and the browser server with `SyntaxError: Invalid or unexpected token`; CI Node 20 validation remains required.
+- **Release-gate stabilization — 🚧 In Progress:** flat ESLint ignores now replace the removed `.eslintignore`, production-source lint errors are fixed, `npm run typecheck` is a CI gate, and the Playwright suite is restricted to browser specs. The local Node 20-compatible verification pass now has lint, TypeScript, Vitest, and `next build` passing; CI Node 20, provider sandboxes, and browser/device evidence remain required.
 - **Currency hardening — 🚧 In Progress:** `formatCurrency()` now normalizes currency codes, defaults to IDR, preserves nominal invoice units, and applies zero-decimal rules for IDR/JPY with targeted unit coverage. Payment-attempt amount/currency reconciliation is now enforced at both gateway webhook boundaries; live sandbox certification remains.
 - **PWA/mobile hardening — 🚧 In Progress:** service-worker cache versioning and cleanup are in place, API/navigation/cross-origin requests are excluded from caching, and light/dark viewport metadata is explicit. Device and critical-flow E2E validation remain.
 - **Client module cleanup — ✅ Done:** client list/detail contracts use stable `invoiceCount`/`revenue` and `totalRevenue`/`unpaidRevenue` fields, scoped email checks use Prisma-supported queries, and the client form safely handles absent initial data.
@@ -129,7 +129,7 @@ gantt
 | Multi-currency support | Features | P1 | M | 🚧 Hardening |
 | Add client/customer management module | Features | P1 | M | ✅ Done |
 | Implement invoice email delivery | Features | P1 | M | 🚧 Sandbox validation |
-| Slack/WhatsApp integrations for notifications | Integrations | P2 | M | 📅 Planned |
+| Slack workspace notifications / WhatsApp | Integrations | P2 | M | 🚧 Slack foundation; WhatsApp deferred |
 | Implement recurring invoice templates | Features | P2 | S | ✅ Done |
 | Add proper i18n framework (replace hardcoded locales) | UX/UI | P2 | M | ✅ Done |
 | Add export/import functionality (CSV, Excel) | Features | P2 | S | ✅ Done |
@@ -142,10 +142,16 @@ gantt
 
 ## Next Execution
 
-- **Provider certification:** apply the additive payment-attempt/event migration to a staging PostgreSQL database; run signed Midtrans sandbox pending → settlement → partial/full refund, expiry, cancellation, replay, and amount/currency mismatch scenarios; repeat the shared contract for Stripe.
-- **Email certification:** register the Resend webhook, verify signed `sent`/`delivered`/`delayed`/`failed`/`bounced`/`complained` events in staging, and replace legacy JSON-log fallback scanning with structured delivery persistence in the next schema increment.
-- **Release gate:** run `npm run build`, the critical invoice → email → payment Playwright spec on Node 20/Chromium, and mobile/PWA smoke checks; move payment and email to `✅ Done` only after provider and device evidence is attached.
-- **v1.3 planning:** design recurring billing/reminder occurrence keys and adapter contracts for Slack/WhatsApp behind feature flags after v1.2 certification.
+- **v1.2.1 release certification:** apply the additive payment-attempt/event migration to staging PostgreSQL; run signed Midtrans and Stripe sandbox lifecycle scenarios; verify Resend delivery webhooks; and attach Node 20/Chromium plus mobile/PWA evidence before marking the remaining hardening items done.
+- **v1.3 enterprise foundation:** rehearse the implemented personal workspaces, organization-scoped ownership, database-backed memberships, and `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization on staging before organization scope becomes mandatory.
+- **v1.4 team operations — 🚧 Foundation implemented:** workspace switching, invitation issuance/acceptance, member role/removal APIs, encrypted Slack endpoint configuration, reminder rules, and idempotent occurrence materialization are implemented; Resend delivery, Slack dispatch worker, and full device/provider certification remain.
+- **Deferred platform work:** WhatsApp, custom roles, API keys/OpenAPI, GraphQL, and realtime collaboration follow the tenancy and notification reliability gates.
+
+### Enterprise roadmap exit criteria
+
+- Every business query resolves an active workspace and revalidates membership server-side; a client-supplied organization identifier is never trusted for authorization.
+- A migration rehearsal proves personal-workspace backfill, invoice-number uniqueness, orphan detection, and rollback on staging data.
+- Provider/device certification evidence is stored with the release, while authorization denial, invitation replay, reminder duplication, and notification failures are observable through audit and uptime telemetry.
 
 ---
 
@@ -155,9 +161,11 @@ gantt
 
 | Task | Category | Priority | Effort | Status |
 | :--- | :------- | :------- | :----- | :----- |
-| Team workspaces with role-based access control (RBAC) | Enterprise | P2 | XL | 📅 Planned |
-| Add multi-tenant organization support | Enterprise | P2 | XL | 📅 Planned |
-| Implement real-time notifications/WebSocket for invoice status changes | UX/UI | P2 | L | 📅 Planned |
+| Team workspaces with role-based access control (RBAC) | Enterprise | P1 | XL | 🚧 v1.3 Foundation |
+| Add multi-tenant organization support | Enterprise | P1 | XL | 🚧 v1.3 Foundation |
+| Workspace invitations, member administration, and audit activity | Enterprise | P1 | L | 🚧 v1.4 Foundation |
+| Idempotent recurring reminders with Email/Slack adapters | Integrations | P1 | L | 🚧 v1.4 Foundation |
+| Implement real-time notifications/WebSocket for invoice status changes | UX/UI | P2 | L | ⏸ Deferred |
 | Comprehensive API documentation (OpenAPI/Swagger) | API | P2 | M | 📅 Planned |
 | AI: Implement full contextual bandit incorporating diverse user features | AI | P2 | L | 📅 Planned |
 | Add API versioning | API | P3 | S | 📅 Planned |

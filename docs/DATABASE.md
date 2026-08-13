@@ -125,6 +125,12 @@ The database schema is organized into four main functional domains:
 ### 4.4 Audit & Governance Domain
 - **`AuditLog`**: Comprehensive audit log tracking system actions (invoice operations, authentication events, AI auto-actions, security events), storing `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), and `ipAddress`.
 
+### 4.5 Workspace & Team Operations Domain
+- **`Organization`** and **`Membership`**: workspace ownership and database-backed `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization. Existing users are backfilled into personal workspaces by the workspace foundation migration.
+- **`WorkspaceInvitation`**: one-time, seven-day invitation records. Only a SHA-256 token digest is persisted; acceptance uses an atomic compare-and-set update.
+- **`WorkspaceNotificationEndpoint`**: workspace-scoped provider settings. Slack webhook credentials are encrypted with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` before storage.
+- **`InvoiceReminderRule`** and **`InvoiceReminderOccurrence`**: reminder policy and unique occurrence keys for retry-safe scheduled jobs.
+
 ---
 
 ## 5. Useful Prisma CLI Commands
@@ -138,6 +144,11 @@ The database schema is organized into four main functional domains:
 | `npx prisma migrate status` | Checks pending migrations against the connected database. |
 | `npx prisma studio` | Launches an interactive web UI (`http://localhost:5555`) to view and edit database records. |
 | `npm run db:seed` | Seeds the database with default initial data using `prisma/seed.ts`. |
+
+Workspace/team migrations are additive and should be rehearsed on staging before enforcing non-null organization ownership:
+
+- `20260813120000_workspace_rbac_foundation` provisions personal workspaces, memberships, and backfills business rows.
+- `20260813130000_team_operations` adds invitations, encrypted notification endpoint metadata, reminder rules, and idempotent occurrences.
 
 ---
 
