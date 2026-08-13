@@ -29,11 +29,20 @@ Mutating operations use the central permission matrix. The last owner cannot be 
 - `/api/workspaces/[id]/notifications` stores encrypted Slack endpoint configuration without returning webhook credentials.
 - `/api/workspaces/[id]/reminder-rules` manages reminder policies, while `/api/cron/reminders` materializes unique due occurrences every five minutes.
 
-The reminder cron currently materializes retry-safe occurrences. Email and Slack
-delivery workers remain the next implementation step; until then, reminder
-records must be monitored as pending work rather than treated as delivered.
+The reminder cron materializes retry-safe occurrences, while the authenticated
+delivery dispatcher claims per-channel rows and sends through Resend or the
+encrypted Slack endpoint. Delivery rows expose `PENDING`, `PROCESSING`,
+`RETRY`, `SENT`, `FAILED`, and `SKIPPED` states with bounded retries and audit
+telemetry. Provider sandbox certification remains a release gate; a materialized
+occurrence must never be treated as delivered until its channel row is `SENT`.
 
 ## Migration sequence
+
+Set `WORKSPACE_AUTH_MODE=compat` during the additive rollout. After the
+staging backfill and orphan checks pass, set `WORKSPACE_AUTH_MODE=enforce`;
+missing membership/delegates then fail closed instead of falling back to
+user-owned rows. Keep the compatibility mode available for rollback until all
+business routes have been certified.
 
 1. Expand the schema with nullable organization references, `Organization`, `Membership`, and `User.activeOrganizationId`.
 2. Create one personal organization and `OWNER` membership per existing user.

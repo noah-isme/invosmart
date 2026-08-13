@@ -15,6 +15,7 @@ The latest execution pass is focused on release readiness around the Phase 2 fou
 - **Payment lifecycle hardening — 🚧 Sandbox validation:** Midtrans-first and Stripe-secondary checkout attempts now have stable IDs, idempotency keys, signed event validation, replay/out-of-order protection, expiry/failure/refund transitions, and a user-scoped attempt-status endpoint. Production database migration and provider sandbox certification remain.
 - **Invoice email hardening — 🚧 Sandbox validation:** Resend delivery states, bounded retries, provider event deduplication, signed webhook handling, audit events, and a signed payment link are implemented. Real provider webhook verification and bounce/complaint testing remain.
 - **Scheduled operations — ✅ Implemented:** uptime cron authentication fails closed in production, query-string secrets are rejected, and `vercel.json` schedules the health sweep every five minutes.
+- **Reminder delivery dispatcher — 🚧 Implemented; provider certification pending:** reminder occurrences now materialize per-channel delivery rows with atomic claims, paid-invoice suppression, bounded retries, Resend idempotency, encrypted Slack delivery, audit/telemetry events, and a five-minute dispatcher cron. Staging provider delivery evidence remains required.
 
 ---
 
@@ -144,7 +145,7 @@ gantt
 
 - **v1.2.1 release certification:** apply the additive payment-attempt/event migration to staging PostgreSQL; run signed Midtrans and Stripe sandbox lifecycle scenarios; verify Resend delivery webhooks; and attach Node 20/Chromium plus mobile/PWA evidence before marking the remaining hardening items done.
 - **v1.3 enterprise foundation:** rehearse the implemented personal workspaces, organization-scoped ownership, database-backed memberships, and `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization on staging before organization scope becomes mandatory.
-- **v1.4 team operations — 🚧 Foundation implemented:** workspace switching, invitation issuance/acceptance, member role/removal APIs, encrypted Slack endpoint configuration, reminder rules, and idempotent occurrence materialization are implemented; Resend delivery, Slack dispatch worker, and full device/provider certification remain.
+- **v1.4 team operations — 🚧 Delivery implementation complete; certification pending:** workspace switching, invitation issuance/acceptance, member role/removal APIs, encrypted Slack endpoint configuration, reminder rules, idempotent occurrence materialization, Resend delivery, Slack dispatch worker, bounded retries, suppression, and delivery audit state are implemented; full device/provider certification remains.
 - **Deferred platform work:** WhatsApp, custom roles, API keys/OpenAPI, GraphQL, and realtime collaboration follow the tenancy and notification reliability gates.
 
 ### Enterprise roadmap exit criteria
@@ -164,7 +165,7 @@ gantt
 | Team workspaces with role-based access control (RBAC) | Enterprise | P1 | XL | 🚧 v1.3 Foundation |
 | Add multi-tenant organization support | Enterprise | P1 | XL | 🚧 v1.3 Foundation |
 | Workspace invitations, member administration, and audit activity | Enterprise | P1 | L | 🚧 v1.4 Foundation |
-| Idempotent recurring reminders with Email/Slack adapters | Integrations | P1 | L | 🚧 v1.4 Foundation |
+| Idempotent recurring reminders with Email/Slack adapters | Integrations | P1 | L | 🚧 Implemented; provider certification |
 | Implement real-time notifications/WebSocket for invoice status changes | UX/UI | P2 | L | ⏸ Deferred |
 | Comprehensive API documentation (OpenAPI/Swagger) | API | P2 | M | 📅 Planned |
 | AI: Implement full contextual bandit incorporating diverse user features | AI | P2 | L | 📅 Planned |
