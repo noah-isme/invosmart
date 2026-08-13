@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getRevenueInsight } from "@/lib/analytics";
 import { authOptions } from "@/server/auth";
 import { RevenueInsightBoundary } from "./RevenueInsightBoundary";
+import { resolveWorkspaceContext } from "@/lib/workspaces";
 
 export const metadata = {
   title: "Revenue Insight | InvoSmart",
@@ -16,7 +17,8 @@ export default async function InsightDashboardPage() {
     redirect("/auth/login");
   }
 
-  const insight = await getRevenueInsight(session.user.id);
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  const insight = await getRevenueInsight(session.user.id, workspace?.organizationId);
 
   return (
     <main className="relative mx-auto w-full max-w-6xl px-4 pb-24 pt-10">

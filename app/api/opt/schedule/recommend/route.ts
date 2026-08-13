@@ -1,15 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { recommendSchedule } from "@/lib/ai/scheduler";
 import { ensureFeatureEnabled, requireAuthenticatedSession, respondFeatureDisabled } from "@/app/api/opt/_shared";
+import {
+  canReadWorkspace,
+  resolveWorkspaceContextForRequest,
+} from "@/lib/workspaces";
 
 const requestSchema = z.object({
-  organizationId: z.string().uuid().optional(),
   contentId: z.number().int(),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const featureEnabled = ensureFeatureEnabled(process.env.ENABLE_AI_OPTIMIZER_GLOBAL ?? process.env.ENABLE_AI_OPTIMIZER);
   if (!featureEnabled) {
     return respondFeatureDisabled();
@@ -20,6 +23,11 @@ export async function POST(request: Request) {
     return auth.response;
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, auth.session);
+  if (!workspace || !canReadWorkspace(workspace) || !workspace.organizationId) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+
   const json = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(json);
 
@@ -28,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const recommendation = await recommendSchedule({
-    organizationId: parsed.data.organizationId,
+    organizationId: workspace.organizationId,
     contentId: parsed.data.contentId,
   });
 

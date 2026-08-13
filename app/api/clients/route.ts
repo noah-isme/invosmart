@@ -6,8 +6,16 @@ import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const forbidden = () => NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 export async function GET(request: NextRequest) {
   const httpsCheck = enforceHttps(request);
@@ -19,14 +27,17 @@ export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return unauthorized();
 
-  const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) return forbidden();
+  const scope = workspaceScope(workspace);
+
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") || "";
   const cursor = searchParams.get("cursor");
   const limit = parseInt(searchParams.get("limit") || "10", 10);
 
   const where = {
-    userId,
+    ...scope,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
   };
 
@@ -49,7 +60,7 @@ export async function GET(request: NextRequest) {
   // Calculate revenue for each client
   const clientsWithRevenue = await Promise.all(clients.map(async (client) => {
     const agg = await db.invoice.aggregate({
-      where: { clientId: client.id, status: 'PAID' },
+      where: { clientId: client.id, ...scope, status: 'PAID' },
       _sum: { total: true }
     });
     return {
@@ -72,6 +83,10 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return unauthorized();
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) return forbidden();
+  const scope = workspaceScope(workspace);
+
   const userId = session.user.id;
   const json = await request.json();
   const parsed = ClientCreateSchema.safeParse(json);
@@ -83,7 +98,7 @@ export async function POST(request: NextRequest) {
   // If email is provided, verify uniqueness for this user
   if (parsed.data.email) {
     const existing = await db.client.findFirst({
-      where: { userId, email: parsed.data.email },
+      where: { ...scope, email: parsed.data.email },
     });
     if (existing) {
       return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });
@@ -93,12 +108,13 @@ export async function POST(request: NextRequest) {
   const client = await db.client.create({
     data: {
       userId,
+      ...workspaceData(workspace),
       ...parsed.data
     }
   });
 
   void logAuditEvent({
-    tenantId: null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.CLIENT_CREATE || "CLIENT_CREATE",
     entity: AuditEntity.CLIENT || "CLIENT",

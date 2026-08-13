@@ -182,7 +182,24 @@ export const logAutoAction = async ({
   return created;
 };
 
-export const markAutoActionReverted = async ({ actionId, reason }: { actionId: number; reason?: string }) => {
+export const markAutoActionReverted = async ({
+  actionId,
+  organizationId,
+  reason,
+}: {
+  actionId: number;
+  organizationId?: string;
+  reason?: string;
+}) => {
+  if (organizationId) {
+    const existing = await db.aiAutoAction.findFirst({
+      where: { id: actionId, organizationId },
+    });
+    if (!existing) {
+      throw new Error("Auto action not found");
+    }
+  }
+
   const updated = await db.aiAutoAction.update({
     where: { id: actionId },
     data: { status: AutoActionStatus.reverted, reason: reason ?? "Manual revert" },

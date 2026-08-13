@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { authOptions } from '@/server/auth';
 import { ensureReceiptsEnabled } from '@/lib/receipts/guards';
 import { getReceipt } from '@/lib/receipts/service';
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,15 +28,23 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: 'Workspace access denied' }, { status: 403 });
+  }
+
   const { id } = await context.params;
 
-  const receipt = await getReceipt(db, id);
+  const receipt = await getReceipt(db, id, workspace.organizationId);
   if (!receipt) {
     return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
   }
 
-  if (receipt.payment.invoice.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const ownsReceipt = workspace.organizationId
+    ? receipt.payment.invoice.organizationId === workspace.organizationId
+    : receipt.payment.invoice.userId === session.user.id;
+  if (!ownsReceipt) {
+    return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
   }
 
   const auditLogs = await db.receiptAuditLog.findMany({

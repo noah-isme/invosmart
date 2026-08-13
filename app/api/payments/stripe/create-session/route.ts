@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
-import { stripe } from '@/lib/payments/stripe';
+import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
+import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
 import { toGatewayMinorUnit } from '@/lib/payments/money';
 import {
   ACTIVE_PAYMENT_ATTEMPT_STATUSES,
@@ -35,12 +36,18 @@ function serializeAttempt(attempt: {
   };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!isStripeConfigured) {
+      return NextResponse.json({ error: 'Stripe is not configured' }, { status: 503 });
+    }
+
+    const workspace = await resolveWorkspaceContextForRequest(request, session);
+    if (!workspace || !canWriteWorkspace(workspace)) return NextResponse.json({ error: 'Workspace access denied' }, { status: 403 });
 
     const { invoiceId } = await request.json();
     if (!invoiceId) {
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
     const invoice = await db.invoice.findFirst({
       where: {
         id: invoiceId,
-        userId: session.user.id,
+        ...(workspace.organizationId ? { organizationId: workspace.organizationId } : { userId: session.user.id }),
       },
     });
 

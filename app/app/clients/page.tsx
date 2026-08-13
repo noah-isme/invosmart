@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/server/auth";
 import { db } from "@/lib/db";
 import ClientsClient from "./ClientsClient";
+import { resolveWorkspaceContext, workspaceScope } from "@/lib/workspaces";
 
 export const metadata = {
   title: "Clients | InvoSmart",
@@ -15,8 +16,14 @@ export default async function ClientsPage() {
     redirect("/auth/login");
   }
 
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace) {
+    redirect("/app/workspaces");
+  }
+  const scope = workspaceScope(workspace);
+
   const initialClients = await db.client.findMany({
-    where: { userId: session.user.id },
+    where: scope,
     take: 10,
     orderBy: { createdAt: 'desc' },
     include: {
@@ -26,7 +33,7 @@ export default async function ClientsPage() {
 
   const clientsWithRevenue = await Promise.all(initialClients.map(async (client) => {
     const agg = await db.invoice.aggregate({
-      where: { clientId: client.id, status: 'PAID' },
+      where: { clientId: client.id, ...scope, status: 'PAID' },
       _sum: { total: true }
     });
     return {

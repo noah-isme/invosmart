@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { recordVariantPerformance } from "@/lib/ai/content-local-optimizer";
 import { ensureFeatureEnabled, requireAuthenticatedSession, respondFeatureDisabled } from "@/app/api/opt/_shared";
+import { db } from "@/lib/db";
+import { canWriteWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const requestSchema = z.object({
   variantId: z.number().int(),
@@ -12,7 +14,7 @@ const requestSchema = z.object({
   dwellMs: z.number().int().nonnegative(),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const featureEnabled = ensureFeatureEnabled(process.env.ENABLE_AI_OPTIMIZER_LOCAL ?? process.env.ENABLE_AI_OPTIMIZER);
   if (!featureEnabled) {
     return respondFeatureDisabled();
@@ -23,6 +25,11 @@ export async function POST(request: Request) {
     return auth.response;
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, auth.session);
+  if (!workspace || !canWriteWorkspace(workspace) || !workspace.organizationId) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+
   const json = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(json);
 
@@ -30,8 +37,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload", issues: parsed.error.issues }, { status: 400 });
   }
 
+  const variant = await db.contentVariant.findUnique({
+    where: { id: parsed.data.variantId },
+    include: { experiment: { select: { organizationId: true } } },
+  });
+  if (!variant || variant.experiment.organizationId !== workspace.organizationId) {
+    return NextResponse.json({ error: "Variant not found" }, { status: 404 });
+  }
+
   const metrics = await recordVariantPerformance({
     variantId: parsed.data.variantId,
+    organizationId: workspace.organizationId,
     impressions: parsed.data.impressions,
     clicks: parsed.data.clicks,
     conversions: parsed.data.conversions,

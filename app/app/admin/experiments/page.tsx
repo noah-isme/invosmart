@@ -1,9 +1,13 @@
 import { ExperimentAxis, ExperimentStatus } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 
 import { listExperiments, serializeExperimentSummary } from "@/lib/ai/content-local-optimizer";
 
 import { ExperimentTable } from "./components/ExperimentTable";
 import { StartExperimentForm } from "./components/StartExperimentForm";
+import { authOptions } from "@/server/auth";
+import { resolveWorkspaceContext } from "@/lib/workspaces";
 
 type ExperimentsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -26,15 +30,18 @@ const parseStatus = (value?: string | string[]) => {
 };
 
 export default async function ExperimentsPage({ searchParams }: ExperimentsPageProps) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/auth/login");
+
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace?.organizationId) redirect("/app/workspaces");
+
   const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const axis = parseAxis(resolvedSearchParams.axis);
   const status = parseStatus(resolvedSearchParams.status);
-  const organizationId =
-    typeof resolvedSearchParams.organizationId === "string" ? resolvedSearchParams.organizationId : undefined;
-
   const experiments = await listExperiments({
-    organizationId,
+    organizationId: workspace.organizationId,
     axis,
     status,
     limit: 30,

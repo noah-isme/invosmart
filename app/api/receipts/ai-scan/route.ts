@@ -9,6 +9,7 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { withSpan } from "@/lib/tracing";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const systemPrompt = `
 You are a receipt parsing assistant.
@@ -58,6 +59,11 @@ const scanReceipt = async (request: NextRequest) => {
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 
   let payload: unknown;

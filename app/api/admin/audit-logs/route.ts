@@ -3,12 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { authOptions } from "@/server/auth";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -24,12 +30,25 @@ export async function GET(request: NextRequest) {
   const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50;
   const skip = skipParam ? Math.max(parseInt(skipParam, 10) || 0, 0) : 0;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = workspace.organizationId
+    ? { tenantId: workspace.organizationId }
+    : { userId: session.user.id };
 
   if (action) where.action = action;
   if (entity) where.entity = entity;
   if (userId) where.userId = userId;
-  if (tenantId) where.tenantId = tenantId;
+  if (tenantId) {
+    if (workspace.organizationId && tenantId !== workspace.organizationId) {
+      return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+    }
+
+    // Legacy rows are retained for pre-workspace deployments. Once the
+    // resolver returns a real membership, the tenant filter above is always
+    // derived from that membership rather than from this query parameter.
+    if (!workspace.organizationId) {
+      where.tenantId = tenantId;
+    }
+  }
 
   if (fromDateParam || toDateParam) {
     const createdAtFilter: Record<string, Date> = {};

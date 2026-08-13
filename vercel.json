@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/uptime",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reminder-delivery",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

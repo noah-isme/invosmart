@@ -9,6 +9,11 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { withSpan } from "@/lib/tracing";
+import {
+  canReadWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -44,6 +49,12 @@ const getInvoicePdf = async (request: NextRequest, context: RouteContext) => {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveParams(context.params);
 
   if (!id) {
@@ -51,7 +62,7 @@ const getInvoicePdf = async (request: NextRequest, context: RouteContext) => {
   }
 
   const invoice = await db.invoice.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!invoice) {

@@ -1,5 +1,5 @@
 import { ExperimentAxis, ExperimentStatus } from "@prisma/client";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
@@ -8,16 +8,19 @@ import {
   variantPayloadSchema,
 } from "@/lib/ai/content-local-optimizer";
 import { ensureFeatureEnabled, requireAuthenticatedSession, respondFeatureDisabled } from "@/app/api/opt/_shared";
+import {
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+} from "@/lib/workspaces";
 
 const requestSchema = z.object({
-  organizationId: z.string().uuid().optional(),
   contentId: z.number().int(),
   axis: z.nativeEnum(ExperimentAxis),
   baseline: variantPayloadSchema,
   status: z.nativeEnum(ExperimentStatus).optional(),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const featureEnabled = ensureFeatureEnabled(process.env.ENABLE_AI_OPTIMIZER_LOCAL ?? process.env.ENABLE_AI_OPTIMIZER);
   if (!featureEnabled) {
     return respondFeatureDisabled();
@@ -28,6 +31,11 @@ export async function POST(request: Request) {
     return auth.response;
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, auth.session);
+  if (!workspace || !canWriteWorkspace(workspace) || !workspace.organizationId) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+
   const json = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(json);
 
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
   }
 
   const summary = await startExperiment({
-    organizationId: parsed.data.organizationId,
+    organizationId: workspace.organizationId,
     contentId: parsed.data.contentId,
     axis: parsed.data.axis,
     baseline: parsed.data.baseline,

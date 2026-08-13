@@ -10,9 +10,17 @@ import { withTiming } from "@/middleware/withTiming";
 import { withSpan } from "@/lib/tracing";
 import { logAuditEvent, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
 import { exportToCSV, exportToXLSX, type InvoiceExportData } from "@/lib/export-utils";
+import {
+  canReadWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const invalidRequest = (message: string) =>
   NextResponse.json({ error: message }, { status: 400 });
@@ -33,7 +41,12 @@ const handleExport = async (request: NextRequest) => {
     return unauthorized();
   }
 
-  const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const searchParams = request.nextUrl?.searchParams ?? new URL(request.url).searchParams;
 
   const formatParam = (searchParams?.get("format") || "csv").toLowerCase();
@@ -53,7 +66,7 @@ const handleExport = async (request: NextRequest) => {
   }
 
   const where = {
-    userId,
+    ...scope,
     ...(statusFilter ? { status: statusFilter } : {}),
   };
 
@@ -73,7 +86,7 @@ const handleExport = async (request: NextRequest) => {
   }));
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: "INVOICE_EXPORT",
     entity: AuditEntity.INVOICE,

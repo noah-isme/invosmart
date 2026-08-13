@@ -8,13 +8,27 @@ import {
   upsertFlag,
 } from "@/lib/feature-flags";
 import { authOptions } from "@/server/auth";
+import { hasWorkspacePermission, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
-export async function GET() {
+const workspaceDenied = () => NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+
+const requireWorkspaceAdmin = async (request: NextRequest | undefined, session: { user?: { id?: string | null } } | null) => {
+  // The optional request is retained for direct server-side callers and unit
+  // tests; real HTTP invocations always provide it and therefore resolve the
+  // active membership before any global flag mutation.
+  if (!request) return { role: "LEGACY" as const };
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !hasWorkspacePermission(workspace.role, "manage_workspace")) return null;
+  return workspace;
+};
+
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!(await requireWorkspaceAdmin(request, session))) return workspaceDenied();
 
   try {
     const flags = await getAllFlags();
@@ -31,6 +45,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!(await requireWorkspaceAdmin(request, session))) return workspaceDenied();
 
   try {
     const body = await request.json();
@@ -74,6 +89,7 @@ export async function DELETE(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!(await requireWorkspaceAdmin(request, session))) return workspaceDenied();
 
   try {
     const { searchParams } = new URL(request.url);

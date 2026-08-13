@@ -1,13 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/server/auth";
 import { db } from "@/lib/db";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 type RouteContext = { params: Promise<{ attemptId: string }> };
 
 /** Return a provider-neutral view of a payment attempt owned by the caller. */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,10 +19,14 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Payment attempt ID required" }, { status: 400 });
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   const attempt = await db.paymentAttempt.findFirst({
     where: {
       id: attemptId,
-      invoice: { userId: session.user.id },
+      invoice: workspace.organizationId
+        ? { organizationId: workspace.organizationId }
+        : { userId: session.user.id },
     },
     select: {
       id: true,

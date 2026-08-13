@@ -48,7 +48,7 @@ const daysBetween = (start: Date, end: Date) => {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / millisPerDay));
 };
 
-export const getRevenueInsight = async (userId: string): Promise<RevenueInsight> => {
+export const getRevenueInsight = async (userId: string, organizationId?: string | null): Promise<RevenueInsight> => {
   const { startDate, months, monthIndex } = calculateMonthsRange();
   const revenue = Array<number>(months.length).fill(0);
   const paid = Array<number>(months.length).fill(0);
@@ -56,7 +56,7 @@ export const getRevenueInsight = async (userId: string): Promise<RevenueInsight>
 
   const invoices = await db.invoice.findMany({
     where: {
-      userId,
+      ...(organizationId ? { organizationId } : { userId }),
       issuedAt: { gte: startDate },
     },
     select: {

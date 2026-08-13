@@ -13,6 +13,7 @@ import { ThemeSuggestionSchema } from "@/lib/schemas";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const requestSchema = z.object({
   brandName: z
@@ -83,6 +84,11 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 
   let json: unknown;

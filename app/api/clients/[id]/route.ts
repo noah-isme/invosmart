@@ -6,9 +6,17 @@ import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 const notFound = () => NextResponse.json({ error: "Client not found" }, { status: 404 });
+const forbidden = () => NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const httpsCheck = enforceHttps(request);
@@ -20,13 +28,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return unauthorized();
 
-  const { id } = await params;
-  const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) return forbidden();
+  const scope = workspaceScope(workspace);
 
-  const client = await db.client.findUnique({
-    where: { id, userId },
+  const { id } = await params;
+
+  const client = await db.client.findFirst({
+    where: { id, ...scope },
     include: {
       invoices: {
+        where: scope,
         orderBy: { createdAt: 'desc' },
         take: 5
       }
@@ -48,8 +60,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return unauthorized();
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) return forbidden();
+  const scope = workspaceScope(workspace);
+
   const { id } = await params;
-  const userId = session.user.id;
 
   const json = await request.json();
   const parsed = ClientUpdateSchema.safeParse({ ...json, id });
@@ -58,13 +73,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existing = await db.client.findUnique({ where: { id, userId } });
+  const existing = await db.client.findFirst({ where: { id, ...scope } });
   if (!existing) return notFound();
 
   // If email is provided, verify uniqueness for this user
   if (parsed.data.email && parsed.data.email !== existing.email) {
     const existingEmail = await db.client.findFirst({
-      where: { userId, email: parsed.data.email },
+      where: { ...scope, email: parsed.data.email },
     });
     if (existingEmail) {
       return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });
@@ -73,11 +88,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   const client = await db.client.update({
     where: { id },
-    data: parsed.data
+    data: { ...parsed.data, ...workspaceData(workspace) }
   });
 
   void logAuditEvent({
-    tenantId: null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.CLIENT_UPDATE,
     entity: AuditEntity.CLIENT,
@@ -96,11 +111,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return unauthorized();
 
-  const { id } = await params;
-  const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) return forbidden();
+  const scope = workspaceScope(workspace);
 
-  const client = await db.client.findUnique({
-    where: { id, userId },
+  const { id } = await params;
+
+  const client = await db.client.findFirst({
+    where: { id, ...scope },
     include: {
       _count: { select: { invoices: true } }
     }
@@ -115,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   await db.client.delete({ where: { id } });
 
   void logAuditEvent({
-    tenantId: null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.CLIENT_DELETE,
     entity: AuditEntity.CLIENT,

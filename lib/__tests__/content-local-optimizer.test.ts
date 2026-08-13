@@ -6,6 +6,7 @@ import { ExperimentAxis, ExperimentStatus } from "@prisma/client";
 const {
   experimentCreateMock,
   experimentFindUniqueMock,
+  experimentFindFirstMock,
   experimentFindManyMock,
   experimentUpdateMock,
   variantCreateMock,
@@ -17,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   experimentCreateMock: vi.fn(),
   experimentFindUniqueMock: vi.fn(),
+  experimentFindFirstMock: vi.fn(),
   experimentFindManyMock: vi.fn(),
   experimentUpdateMock: vi.fn(),
   variantCreateMock: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/lib/db", () => ({
     contentExperiment: {
       create: experimentCreateMock,
       findUnique: experimentFindUniqueMock,
+      findFirst: experimentFindFirstMock,
       findMany: experimentFindManyMock,
       update: experimentUpdateMock,
     },
@@ -309,6 +312,7 @@ describe("Database Operations & Experiment Flow", () => {
   beforeEach(() => {
     experimentCreateMock.mockReset();
     experimentFindUniqueMock.mockReset();
+    experimentFindFirstMock.mockReset();
     experimentFindManyMock.mockReset();
     experimentUpdateMock.mockReset();
 
@@ -340,6 +344,22 @@ describe("Database Operations & Experiment Flow", () => {
 
     experimentCreateMock.mockResolvedValue(mockExperiment);
     experimentFindUniqueMock.mockResolvedValue({
+      ...mockExperiment,
+      variants: [
+        {
+          id: 1001,
+          experimentId: 101,
+          variantKey: "baseline",
+          payload: { hook: "Awal", metadata: { banditState: createInitialBanditState() } },
+          aiExplanation: "Baseline konten",
+          confidence: 0.66,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          metrics: [],
+        },
+      ],
+    });
+    experimentFindFirstMock.mockResolvedValue({
       ...mockExperiment,
       variants: [
         {
@@ -472,6 +492,27 @@ describe("Database Operations & Experiment Flow", () => {
     expect(result.impressions).toBe(100);
     expect(result.clicks).toBe(20);
     expect(result.conversions).toBe(5);
+  });
+
+  it("rejects metric writes when the variant belongs to another workspace", async () => {
+    variantFindUniqueMock.mockResolvedValue({
+      id: 3901,
+      experimentId: 109,
+      experiment: { organizationId: "org-b", axis: ExperimentAxis.HOOK },
+      payload: {},
+      metrics: [],
+    });
+
+    await expect(recordVariantPerformance({
+      variantId: 3901,
+      organizationId: "org-a",
+      impressions: 1,
+      clicks: 0,
+      conversions: 0,
+      dwellMs: 0,
+    })).rejects.toThrow("Variant 3901 not found");
+
+    expect(metricFindFirstMock).not.toHaveBeenCalled();
   });
 
   it("handles high impressions with 0 conversions safely without division by zero", async () => {

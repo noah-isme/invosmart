@@ -6,6 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { enforceHttps } from "@/lib/security";
 import { authOptions } from "@/server/auth";
 import { withSpan } from "@/lib/tracing";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,7 +28,9 @@ const revenueHandler = async (request: NextRequest) => {
     return unauthorized();
   }
 
-  const data = await getRevenueInsight(session.user.id);
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  const data = await getRevenueInsight(session.user.id, workspace.organizationId);
 
   return NextResponse.json(data);
 };

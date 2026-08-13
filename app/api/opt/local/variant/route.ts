@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { generateVariant, serializeExperimentSummary } from "@/lib/ai/content-local-optimizer";
 import { ensureFeatureEnabled, requireAuthenticatedSession, respondFeatureDisabled } from "@/app/api/opt/_shared";
+import { db } from "@/lib/db";
+import { canWriteWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const requestSchema = z.object({
   experimentId: z.number().int(),
@@ -11,7 +13,7 @@ const requestSchema = z.object({
   globalSignal: z.string().optional(),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const featureEnabled = ensureFeatureEnabled(process.env.ENABLE_AI_OPTIMIZER_LOCAL ?? process.env.ENABLE_AI_OPTIMIZER);
   if (!featureEnabled) {
     return respondFeatureDisabled();
@@ -22,6 +24,11 @@ export async function POST(request: Request) {
     return auth.response;
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, auth.session);
+  if (!workspace || !canWriteWorkspace(workspace) || !workspace.organizationId) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+
   const json = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(json);
 
@@ -29,8 +36,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload", issues: parsed.error.issues }, { status: 400 });
   }
 
+  const experiment = await db.contentExperiment.findFirst({
+    where: { id: parsed.data.experimentId, organizationId: workspace.organizationId },
+    select: { id: true },
+  });
+  if (!experiment) {
+    return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
+  }
+
   const summary = await generateVariant({
     experimentId: parsed.data.experimentId,
+    organizationId: workspace.organizationId,
     tone: parsed.data.tone,
     targetMetric: parsed.data.targetMetric,
     globalSignal: parsed.data.globalSignal,

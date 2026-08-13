@@ -457,14 +457,27 @@ const mapVariant = (
   };
 };
 
-const loadExperiment = async (experimentId: number): Promise<ExperimentRecord | null> =>
-  db.contentExperiment.findUnique({
-    where: { id: experimentId },
+const loadExperiment = async (
+  experimentId: number,
+  organizationId?: string,
+): Promise<ExperimentRecord | null> => {
+  const query = {
     include: { variants: { include: { metrics: true } }, autoActions: true },
-  });
+  } as const;
 
-export const summariseExperiment = async (experimentId: number): Promise<ExperimentSummary | null> => {
-  const experiment = await loadExperiment(experimentId);
+  // Keep the primary lookup on the unique id delegate so lightweight Prisma
+  // doubles used by existing optimizer tests remain compatible. Ownership is
+  // still enforced immediately after the lookup when a workspace is supplied.
+  const experiment = await db.contentExperiment.findUnique({ where: { id: experimentId }, ...query });
+  if (organizationId && experiment?.organizationId !== organizationId) return null;
+  return experiment;
+};
+
+export const summariseExperiment = async (
+  experimentId: number,
+  organizationId?: string,
+): Promise<ExperimentSummary | null> => {
+  const experiment = await loadExperiment(experimentId, organizationId);
   if (!experiment) return null;
 
   const baselineVariant =
@@ -508,7 +521,7 @@ export const listExperiments = async ({
     include: { variants: { include: { metrics: true } } },
   });
 
-  return Promise.all(experiments.map((experiment) => summariseExperiment(experiment.id))).then((items) =>
+  return Promise.all(experiments.map((experiment) => summariseExperiment(experiment.id, organizationId))).then((items) =>
     items.filter((item): item is ExperimentSummary => Boolean(item)),
   );
 };
@@ -562,7 +575,7 @@ export const startExperiment = async ({
     },
   });
 
-  const summary = await summariseExperiment(experiment.id);
+  const summary = await summariseExperiment(experiment.id, organizationId);
   if (!summary) {
     throw new Error("Failed to load experiment after creation");
   }
@@ -572,16 +585,18 @@ export const startExperiment = async ({
 
 export const generateVariant = async ({
   experimentId,
+  organizationId,
   tone,
   targetMetric,
   globalSignal,
 }: {
   experimentId: number;
+  organizationId?: string;
   tone?: "bold" | "curious" | "urgent";
   targetMetric?: "ctr" | "conversions" | "dwell";
   globalSignal?: string;
 }): Promise<ExperimentSummary> => {
-  const experiment = await loadExperiment(experimentId);
+  const experiment = await loadExperiment(experimentId, organizationId);
   if (!experiment) {
     throw new Error(`Experiment ${experimentId} not found`);
   }
@@ -621,24 +636,32 @@ export const generateVariant = async ({
     },
   });
 
-  const summary = await summariseExperiment(experiment.id);
+  const summary = await summariseExperiment(experiment.id, organizationId);
   if (!summary) throw new Error("Failed to summarise experiment after generating variant");
   return summary;
 };
 
 export const recordVariantPerformance = async ({
   variantId,
+  organizationId,
   impressions,
   clicks,
   conversions,
   dwellMs,
-}: VariantPerformance & { variantId: number }) => {
+}: VariantPerformance & { variantId: number; organizationId?: string }) => {
   const parsed = variantPerformanceSchema.parse({ impressions, clicks, conversions, dwellMs });
   
   const variantRecord = await db.contentVariant.findUnique({
     where: { id: variantId },
     include: { experiment: true, metrics: true },
   });
+
+  if (
+    organizationId &&
+    (!variantRecord || variantRecord.experiment?.organizationId !== organizationId)
+  ) {
+    throw new Error(`Variant ${variantId} not found`);
+  }
 
   const existing = await db.variantMetric.findFirst({ where: { variantId } });
 
@@ -749,13 +772,27 @@ export const recordVariantPerformance = async ({
   return summariseVariantPerformance(totalPerf);
 };
 
-export const chooseWinner = async ({ experimentId, variantId }: { experimentId: number; variantId: number }) => {
+export const chooseWinner = async ({
+  experimentId,
+  variantId,
+  organizationId,
+}: {
+  experimentId: number;
+  variantId: number;
+  organizationId?: string;
+}) => {
+  const experiment = await loadExperiment(experimentId, organizationId);
+  if (!experiment) throw new Error(`Experiment ${experimentId} not found`);
+
+  const variant = experiment.variants.find((candidate) => candidate.id === variantId);
+  if (!variant) throw new Error(`Variant ${variantId} not found`);
+
   await db.contentExperiment.update({
     where: { id: experimentId },
     data: { winnerVariantId: variantId, status: ExperimentStatus.completed, endAt: new Date() },
   });
 
-  const summary = await summariseExperiment(experimentId);
+  const summary = await summariseExperiment(experimentId, organizationId);
   if (!summary) throw new Error("Failed to summarise experiment after choosing winner");
   return summary;
 };

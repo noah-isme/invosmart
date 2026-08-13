@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/server/auth";
 import { db } from "@/lib/db";
 import ClientDetailClient from "./ClientDetailClient";
+import { resolveWorkspaceContext, workspaceScope } from "@/lib/workspaces";
 
 export const metadata = {
   title: "Client Detail | InvoSmart",
@@ -15,12 +16,19 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     redirect("/auth/login");
   }
 
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace) {
+    redirect("/app/workspaces");
+  }
+  const scope = workspaceScope(workspace);
+
   const { id } = await params;
   
   const client = await db.client.findUnique({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
     include: {
       invoices: {
+        where: scope,
         orderBy: { createdAt: 'desc' },
         take: 10
       }
@@ -32,13 +40,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   }
 
   const paidAgg = await db.invoice.aggregate({
-    where: { clientId: id, status: 'PAID' },
+    where: { clientId: id, ...scope, status: 'PAID' },
     _sum: { total: true },
     _count: true
   });
 
   const outstandingAgg = await db.invoice.aggregate({
-    where: { clientId: id, status: { in: ['UNPAID', 'OVERDUE', 'SENT'] } },
+    where: { clientId: id, ...scope, status: { in: ['UNPAID', 'OVERDUE', 'SENT'] } },
     _sum: { total: true },
     _count: true
   });
@@ -50,7 +58,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     invoiceCount: client.invoices.length, // total history count from DB, let's just use what we have or count all
   };
 
-  const totalInvoices = await db.invoice.count({ where: { clientId: id }});
+  const totalInvoices = await db.invoice.count({ where: { clientId: id, ...scope }});
   stats.invoiceCount = totalInvoices;
 
   return <ClientDetailClient client={client} stats={stats} />;

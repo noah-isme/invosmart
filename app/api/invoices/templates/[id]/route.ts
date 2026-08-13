@@ -9,6 +9,13 @@ import { calculateTotals } from "@/lib/invoice-utils";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -16,6 +23,9 @@ type RouteContext = {
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const notFound = () =>
   NextResponse.json({ error: "Template not found" }, { status: 404 });
@@ -47,6 +57,12 @@ const getTemplateHandler = async (request: NextRequest, context: RouteContext) =
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -54,7 +70,7 @@ const getTemplateHandler = async (request: NextRequest, context: RouteContext) =
   }
 
   const template = await db.invoiceTemplate.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!template) {
@@ -81,6 +97,12 @@ const updateTemplateHandler = async (request: NextRequest, context: RouteContext
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -88,7 +110,7 @@ const updateTemplateHandler = async (request: NextRequest, context: RouteContext
   }
 
   const existing = await db.invoiceTemplate.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!existing) {
@@ -109,6 +131,16 @@ const updateTemplateHandler = async (request: NextRequest, context: RouteContext
   }
 
   const { name, client, items, taxRate, currency, notes, clientId } = parsed.data;
+
+  if (clientId) {
+    const clientRecord = await db.client.findFirst({
+      where: { id: clientId, ...scope },
+      select: { id: true },
+    });
+    if (!clientRecord) {
+      return notFound();
+    }
+  }
 
   const updatedData: Record<string, unknown> = {};
 
@@ -133,11 +165,11 @@ const updateTemplateHandler = async (request: NextRequest, context: RouteContext
 
   const updated = await db.invoiceTemplate.update({
     where: { id },
-    data: updatedData,
+    data: { ...updatedData, ...workspaceData(workspace) },
   });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_UPDATE,
     entity: AuditEntity.INVOICE,
@@ -169,6 +201,12 @@ const deleteTemplateHandler = async (request: NextRequest, context: RouteContext
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -176,7 +214,7 @@ const deleteTemplateHandler = async (request: NextRequest, context: RouteContext
   }
 
   const existing = await db.invoiceTemplate.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!existing) {
@@ -186,7 +224,7 @@ const deleteTemplateHandler = async (request: NextRequest, context: RouteContext
   await db.invoiceTemplate.delete({ where: { id } });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_DELETE,
     entity: AuditEntity.INVOICE,

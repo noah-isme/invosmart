@@ -9,6 +9,7 @@ import {
 import { canViewPerfTools } from "@/lib/devtools/access";
 import { withSpan } from "@/lib/tracing";
 import { authOptions } from "@/server/auth";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const orchestratorStatus = async (request: NextRequest) => {
   if (!isOrchestrationEnabled()) {
@@ -23,6 +24,11 @@ const orchestratorStatus = async (request: NextRequest) => {
   const session = await getServerSession(authOptions);
   if (!canViewPerfTools(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 
   const limitParam =

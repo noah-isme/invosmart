@@ -9,6 +9,7 @@ import { InvoiceEmail } from "@/emails/InvoiceEmail";
 import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
+import { canWriteWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 import {
   appendInvoiceDeliveryLog,
   buildInvoiceShareUrl,
@@ -99,13 +100,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (limited) return limited;
 
     const { id } = await context.params;
+    const workspace = await resolveWorkspaceContextForRequest(request, session);
+    if (!workspace || !canWriteWorkspace(workspace)) {
+      return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+    }
     const body = await request.json().catch(() => ({})) as { to?: unknown };
     const invoice = await db.invoice.findUnique({
       where: { id },
       include: { user: true, client_rel: true },
     });
 
-    if (!invoice || invoice.userId !== session.user.id) {
+    const ownsInvoice = workspace.organizationId
+      ? invoice?.organizationId === workspace.organizationId
+      : invoice?.userId === session.user.id;
+    if (!invoice || !ownsInvoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
@@ -192,6 +200,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       };
       await recordDelivery(invoice.id, invoice.emailLog, failure);
       void logAuditEvent({
+        tenantId: workspace.organizationId,
         action: "INVOICE_EMAIL_FAILED",
         entity: AuditEntity.INVOICE,
         entityId: invoice.id,
@@ -233,6 +242,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       };
       await recordDelivery(invoice.id, invoice.emailLog, failure);
       void logAuditEvent({
+        tenantId: workspace.organizationId,
         action: "INVOICE_EMAIL_FAILED",
         entity: AuditEntity.INVOICE,
         entityId: invoice.id,
@@ -275,6 +285,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
 
     void logAuditEvent({
+      tenantId: workspace.organizationId,
       action: AuditAction.INVOICE_EMAIL_ACCEPTED,
       entity: AuditEntity.INVOICE,
       entityId: invoice.id,

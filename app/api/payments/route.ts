@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { authOptions } from '@/server/auth';
 import { buildPaymentsWhere } from '@/lib/receipts/utils';
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
 
 
 const QuerySchema = z.object({
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) return NextResponse.json({ error: 'Workspace access denied' }, { status: 403 });
+
   const url = new URL(request.url);
   const parsed = QuerySchema.safeParse(Object.fromEntries(url.searchParams.entries()));
   if (!parsed.success) {
@@ -29,7 +33,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { q, limit, cursor } = parsed.data;
-  const where = buildPaymentsWhere(q);
+  const where = buildPaymentsWhere(q, workspace.organizationId ? { organizationId: workspace.organizationId } : { userId: session.user.id });
 
   const findArgs: {
     where: ReturnType<typeof buildPaymentsWhere>;

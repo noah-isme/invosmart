@@ -16,6 +16,13 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -23,6 +30,9 @@ type RouteContext = {
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const notFound = () =>
   NextResponse.json({ error: "Invoice not found" }, { status: 404 });
@@ -54,6 +64,12 @@ const getInvoiceHandler = async (request: NextRequest, context: RouteContext) =>
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -61,7 +77,7 @@ const getInvoiceHandler = async (request: NextRequest, context: RouteContext) =>
   }
 
   const invoice = await db.invoice.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!invoice) {
@@ -77,7 +93,7 @@ const getInvoiceHandler = async (request: NextRequest, context: RouteContext) =>
       invoiceId: id,
     });
     void logAuditEvent({
-      tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+      tenantId: workspace.organizationId,
       userId: session.user.id,
       action: AuditAction.INVOICE_AUTO_OVERDUE,
       entity: AuditEntity.INVOICE,
@@ -137,6 +153,12 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -169,8 +191,17 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
     return invalidRequest("Invalid dueAt value");
   }
 
+  if (parsed.data.clientId) {
+    const client = await db.client.findFirst({
+      where: { id: parsed.data.clientId, ...scope },
+    });
+    if (!client) {
+      return notFound();
+    }
+  }
+
   const existing = await db.invoice.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!existing) {
@@ -194,6 +225,7 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
     notes: parsed.data.notes ?? null,
     currency: parsed.data.currency || "IDR",
     clientId: parsed.data.clientId ?? null,
+    ...workspaceData(workspace),
     ...("paidAt" in sideEffects ? { paidAt: sideEffects.paidAt ?? null } : {}),
   };
 
@@ -229,7 +261,7 @@ const updateInvoiceHandler = async (request: NextRequest, context: RouteContext)
   }
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_UPDATE,
     entity: AuditEntity.INVOICE,
@@ -268,6 +300,12 @@ const deleteInvoiceHandler = async (request: NextRequest, context: RouteContext)
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -275,7 +313,7 @@ const deleteInvoiceHandler = async (request: NextRequest, context: RouteContext)
   }
 
   const existing = await db.invoice.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!existing) {
@@ -289,7 +327,7 @@ const deleteInvoiceHandler = async (request: NextRequest, context: RouteContext)
   });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_DELETE,
     entity: AuditEntity.INVOICE,

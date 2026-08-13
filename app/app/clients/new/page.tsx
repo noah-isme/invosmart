@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/server/auth";
 import { db } from "@/lib/db";
 import ClientFormClient from "./ClientFormClient";
+import { resolveWorkspaceContext, workspaceScope } from "@/lib/workspaces";
 
 export const metadata = {
   title: "New Client | InvoSmart",
@@ -15,12 +16,18 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
     redirect("/auth/login");
   }
 
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace) {
+    redirect("/app/workspaces");
+  }
+  const scope = workspaceScope(workspace);
+
   const { edit } = await searchParams;
   let client = null;
 
   if (edit) {
     client = await db.client.findUnique({
-      where: { id: edit, userId: session.user.id }
+      where: { id: edit, ...scope }
     });
   }
 

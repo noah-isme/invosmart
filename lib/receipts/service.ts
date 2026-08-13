@@ -7,6 +7,7 @@ import { randomBytes, createHash } from 'crypto';
 
 export type CreateReceiptInput = {
   paymentId: string;
+  organizationId?: string;
   positionPreset: ReceiptPosition;
   stampCompanySealEnabled?: boolean;
   stampPaidEnabled?: boolean;
@@ -18,10 +19,18 @@ export async function createReceipt(
   db: PrismaClient,
   input: CreateReceiptInput
 ) {
-  const payment = await db.payment.findUnique({
-    where: { id: input.paymentId },
-    include: { invoice: true },
-  });
+  const payment = input.organizationId
+    ? await db.payment.findFirst({
+      where: {
+        id: input.paymentId,
+        invoice: { organizationId: input.organizationId },
+      },
+      include: { invoice: true },
+    })
+    : await db.payment.findUnique({
+      where: { id: input.paymentId },
+      include: { invoice: true },
+    });
 
   if (!payment) {
     throw new Error('Payment not found');
@@ -58,15 +67,26 @@ export async function createReceipt(
   return { receipt, receiptNo, verifyToken };
 }
 
-export async function getReceipt(db: PrismaClient, id: string) {
-  return db.receipt.findUnique({
-    where: { id },
+export async function getReceipt(db: PrismaClient, id: string, organizationId?: string | null) {
+  const query = {
     include: {
       payment: {
         include: { invoice: { include: { user: true } } },
       },
     },
-  });
+  } as const;
+
+  if (organizationId) {
+    return db.receipt.findFirst({
+      where: {
+        id,
+        payment: { invoice: { organizationId } },
+      },
+      ...query,
+    });
+  }
+
+  return db.receipt.findUnique({ where: { id }, ...query });
 }
 
 export async function generateReceiptNumber(db: PrismaClient): Promise<string> {

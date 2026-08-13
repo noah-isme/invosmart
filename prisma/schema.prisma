@@ -22,6 +22,8 @@ model User {
   themeMode             String?  @default("dark")
   defaultCurrency       String   @default("IDR")
   locale                String   @default("en")
+  /// Server-side hint only; access is always revalidated through Membership.
+  activeOrganizationId  String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -29,11 +31,164 @@ model User {
   auditLogs        AuditLog[]
   clients          Client[]
   invoiceTemplates InvoiceTemplate[]
+  memberships      Membership[]
+  sentInvitations  WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  logoUrl         String?
+  primaryColor    String?
+  fontFamily      String?
+  defaultCurrency String   @default("IDR")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  memberships           Membership[]
+  invoices              Invoice[]
+  clients               Client[]
+  invoiceTemplates      InvoiceTemplate[]
+  invitations           WorkspaceInvitation[]
+  notificationEndpoints WorkspaceNotificationEndpoint[]
+  reminderRules         InvoiceReminderRule[]
+  reminderOccurrences   InvoiceReminderOccurrence[]
+
+  @@index([createdAt])
+}
+
+model Membership {
+  id             String        @id @default(cuid())
+  organizationId String
+  userId         String
+  role           WorkspaceRole @default(MEMBER)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, role])
+}
+
+model WorkspaceInvitation {
+  id             String        @id @default(cuid())
+  organizationId String
+  email          String
+  role           WorkspaceRole @default(MEMBER)
+  tokenHash      String        @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  invitedById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("WorkspaceInvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+  @@index([organizationId, expiresAt])
+}
+
+model WorkspaceNotificationEndpoint {
+  id               String   @id @default(cuid())
+  organizationId   String
+  type             String
+  secretCiphertext String
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type])
+  @@index([organizationId, enabled])
+}
+
+model InvoiceReminderRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  offsetDays     Int
+  channels       Json
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  occurrences  InvoiceReminderOccurrence[]
+
+  @@index([organizationId, enabled])
+}
+
+model InvoiceReminderOccurrence {
+  id             String    @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  ruleId         String
+  occurrenceKey  String    @unique
+  scheduledAt    DateTime
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  sentAt         DateTime?
+  providerRef    String?
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  rule         InvoiceReminderRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  deliveries   InvoiceReminderDelivery[]
+
+  @@index([organizationId, scheduledAt, status])
+  @@index([invoiceId, ruleId])
+}
+
+enum InvoiceReminderDeliveryStatus {
+  PENDING
+  PROCESSING
+  RETRY
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model InvoiceReminderDelivery {
+  id            String                         @id @default(cuid())
+  occurrenceId  String
+  channel       String
+  status        InvoiceReminderDeliveryStatus  @default(PENDING)
+  attempts      Int                            @default(0)
+  nextAttemptAt DateTime?
+  claimedAt     DateTime?
+  sentAt        DateTime?
+  providerRef   String?
+  errorCode     String?
+  errorMessage  String?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  occurrence InvoiceReminderOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@unique([occurrenceId, channel], map: "invoice_reminder_delivery_occurrence_channel")
+  @@index([status, nextAttemptAt])
+  @@index([occurrenceId, status])
 }
 
 model Invoice {
   id        String        @id @default(cuid())
-  number    String        @unique
+  number    String
   client    String
   items     Json
   subtotal  Int
@@ -48,16 +203,22 @@ model Invoice {
   notes     String?
   currency  String        @default("IDR")
 
-  userId     String
-  user       User    @relation(fields: [userId], references: [id])
-  clientId   String?
-  client_rel Client? @relation(fields: [clientId], references: [id])
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  clientId       String?
+  client_rel     Client?       @relation(fields: [clientId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments        Payment[]
-  paymentAttempts PaymentAttempt[]
+  payments            Payment[]
+  paymentAttempts     PaymentAttempt[]
+  reminderOccurrences InvoiceReminderOccurrence[]
+
+  @@unique([organizationId, number], map: "invoice_organization_number")
+  @@index([organizationId, createdAt])
 }
 
 enum InvoiceStatus {
@@ -462,46 +623,53 @@ model AuditLog {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  company   String?
-  taxId     String?
-  currency  String   @default("IDR")
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String?
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  company        String?
+  taxId          String?
+  currency       String   @default("IDR")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   invoices         Invoice[]
   invoiceTemplates InvoiceTemplate[]
 
   @@unique([userId, email], map: "client_user_email")
+  @@unique([organizationId, email], map: "client_organization_email")
   @@index([userId])
+  @@index([organizationId])
 }
 
 model InvoiceTemplate {
-  id         String  @id @default(cuid())
-  name       String
-  client     String
-  items      Json
-  subtotal   Int
-  tax        Int
-  total      Int
-  currency   String  @default("IDR")
-  notes      String?
-  userId     String
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clientId   String?
-  client_rel Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  id             String        @id @default(cuid())
+  name           String
+  client         String
+  items          Json
+  subtotal       Int
+  tax            Int
+  total          Int
+  currency       String        @default("IDR")
+  notes          String?
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  clientId       String?
+  client_rel     Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([organizationId])
   @@index([clientId])
 }
 

@@ -9,6 +9,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
+import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const RequestSchema = z.object({
   recommendation_id: z.string().min(1),
@@ -32,6 +33,11 @@ const explainRecommendation = async (request: NextRequest) => {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 
   let payload: unknown;

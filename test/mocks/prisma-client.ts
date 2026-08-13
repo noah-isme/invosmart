@@ -7,6 +7,26 @@ class UserDelegate {
   update = vi.fn();
 }
 
+class OrganizationDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  update = vi.fn();
+  delete = vi.fn();
+}
+
+class MembershipDelegate {
+  count = vi.fn();
+  create = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  update = vi.fn();
+  delete = vi.fn();
+}
+
 class InvoiceDelegate {
   count = vi.fn();
   create = vi.fn();
@@ -72,6 +92,13 @@ export enum ReceiptPosition {
   center = "center",
 }
 
+export enum WorkspaceRole {
+  OWNER = "OWNER",
+  ADMIN = "ADMIN",
+  MEMBER = "MEMBER",
+  VIEWER = "VIEWER",
+}
+
 class ClientDelegate {
   count = vi.fn();
   create = vi.fn();
@@ -126,6 +153,8 @@ class AuditLogDelegate {
 
 export class PrismaClient {
   user = new UserDelegate();
+  organization = new OrganizationDelegate();
+  membership = new MembershipDelegate();
   invoice = new InvoiceDelegate();
   auditLog = new AuditLogDelegate();
   client = new ClientDelegate();

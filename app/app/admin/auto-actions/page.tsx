@@ -1,7 +1,11 @@
 import { AutoActionType } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 
 import { serializeAutoAction } from "@/lib/ai/approval-gates";
 import { db } from "@/lib/db";
+import { authOptions } from "@/server/auth";
+import { resolveWorkspaceContext } from "@/lib/workspaces";
 
 type AutoActionPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -21,10 +25,13 @@ const actionLabel: Record<AutoActionType, string> = {
 const formatDateTime = (value: string) => new Date(value).toLocaleString("id-ID", { hour12: false });
 
 export default async function AutoActionsPage({ searchParams }: AutoActionPageProps) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/auth/login");
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace?.organizationId) redirect("/app/workspaces");
+
   const resolvedSearchParams = await resolveSearchParams(searchParams);
 
-  const organizationId =
-    typeof resolvedSearchParams.organizationId === "string" ? resolvedSearchParams.organizationId : undefined;
   const actionTypeParam =
     typeof resolvedSearchParams.actionType === "string" ? resolvedSearchParams.actionType : undefined;
 
@@ -32,7 +39,7 @@ export default async function AutoActionsPage({ searchParams }: AutoActionPagePr
 
   const actions = await db.aiAutoAction.findMany({
     where: {
-      ...(organizationId ? { organizationId } : {}),
+      organizationId: workspace.organizationId,
       ...(actionType ? { actionType } : {}),
     },
     orderBy: { createdAt: "desc" },

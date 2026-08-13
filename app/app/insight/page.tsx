@@ -10,6 +10,7 @@ import {
   type InvoiceInsightSummary,
 } from "@/lib/schemas";
 import { authOptions } from "@/server/auth";
+import { resolveWorkspaceContext } from "@/lib/workspaces";
 
 type SummaryTotals = {
   revenue: number;
@@ -26,11 +27,11 @@ type InvoiceSummaryRecord = {
   issuedAt: Date;
 };
 
-const buildSummary = async (userId: string) => {
+const buildSummary = async (userId: string, organizationId?: string | null) => {
   const [revenueInsight, invoices] = await Promise.all([
     getRevenueInsight(userId),
     db.invoice.findMany({
-      where: { userId },
+      where: organizationId ? { organizationId } : { userId },
       select: {
         total: true,
         status: true,
@@ -151,7 +152,12 @@ export default async function InvoiceInsightPage() {
     redirect("/auth/login");
   }
 
-  const data = await buildSummary(session.user.id);
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace) {
+    redirect("/app/workspaces");
+  }
+
+  const data = await buildSummary(session.user.id, workspace.organizationId);
 
   return (
     <main className="relative mx-auto w-full max-w-6xl px-4 pb-24 pt-10">

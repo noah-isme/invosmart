@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/payments/stripe';
+import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
 import { db } from '@/lib/db';
 import { logAuditEvent, AuditAction, AuditEntity } from '@/lib/audit/auditLogger';
 import { fromGatewayMinorUnit } from '@/lib/payments/money';
@@ -59,6 +59,10 @@ function getStripeAmountAndCurrency(
 }
 
 export async function POST(request: Request) {
+  if (!isStripeConfigured || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Stripe webhook is not configured' }, { status: 503 });
+  }
+
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 

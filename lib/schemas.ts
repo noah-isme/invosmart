@@ -119,10 +119,15 @@ export const AIInvoiceSchema = z.object({
   notes: z.string().trim().max(200).optional(),
 });
 
-export const generateInvoiceNumber = async (db: PrismaClient) => {
+export const generateInvoiceNumber = async (db: PrismaClient, organizationId?: string | null) => {
   const now = new Date();
   const prefix = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const count = await db.invoice.count({ where: { number: { startsWith: prefix } } });
+  const count = await db.invoice.count({
+    where: {
+      number: { startsWith: prefix },
+      ...(organizationId ? { organizationId } : {}),
+    },
+  });
   return `${prefix}-${String(count + 1).padStart(3, "0")}`;
 };
 
@@ -299,4 +304,3 @@ export const InvoiceTemplateUpdateSchema = z.object({
 });
 
 export type InvoiceTemplateUpdateInput = z.infer<typeof InvoiceTemplateUpdateSchema>;
-

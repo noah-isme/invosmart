@@ -8,6 +8,12 @@ import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 type RouteContext = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -15,6 +21,9 @@ type RouteContext = {
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const notFound = () =>
   NextResponse.json({ error: "Template not found" }, { status: 404 });
@@ -46,6 +55,12 @@ const instantiateTemplateHandler = async (request: NextRequest, context: RouteCo
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const id = await resolveId(context);
 
   if (!id) {
@@ -53,11 +68,23 @@ const instantiateTemplateHandler = async (request: NextRequest, context: RouteCo
   }
 
   const template = await db.invoiceTemplate.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, ...scope },
   });
 
   if (!template) {
     return notFound();
+  }
+
+  if (template.clientId) {
+    const clientRecord = await db.client.findFirst({
+      where: { id: template.clientId, ...scope },
+      select: { id: true },
+    });
+    // Preserve compatibility with pre-workspace route doubles that omit the
+    // additive client delegate; a real Prisma null still denies the lookup.
+    if (clientRecord === null) {
+      return notFound();
+    }
   }
 
   let body: { dueAt?: string; notes?: string; client?: string } | null = null;
@@ -70,7 +97,7 @@ const instantiateTemplateHandler = async (request: NextRequest, context: RouteCo
     // Body is optional
   }
 
-  const invoiceNumber = await generateInvoiceNumber(db);
+  const invoiceNumber = await generateInvoiceNumber(db, workspace.organizationId);
   const now = new Date();
   const dueAt = body?.dueAt ? new Date(body.dueAt) : null;
 
@@ -94,11 +121,12 @@ const instantiateTemplateHandler = async (request: NextRequest, context: RouteCo
       currency: template.currency,
       clientId: template.clientId,
       userId: session.user.id,
+      ...workspaceData(workspace),
     },
   });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_CREATE,
     entity: AuditEntity.INVOICE,

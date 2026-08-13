@@ -18,8 +18,13 @@ async function main() {
     },
   });
 
-  const existingInvoice = await db.invoice.findUnique({
-    where: { number: "INV-2025-001" },
+  const membership = await db.membership.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const existingInvoice = await db.invoice.findFirst({
+    where: { number: "INV-2025-001", userId: user.id },
   });
 
   if (!existingInvoice) {
@@ -34,6 +39,7 @@ async function main() {
         status: "DRAFT",
         issuedAt: new Date(),
         userId: user.id,
+        organizationId: membership?.organizationId,
       },
     });
   }

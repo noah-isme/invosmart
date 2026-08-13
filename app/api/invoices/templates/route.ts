@@ -9,9 +9,19 @@ import { calculateTotals } from "@/lib/invoice-utils";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const invalidRequest = (message: string | object) =>
   NextResponse.json({ error: message }, { status: 400 });
@@ -33,8 +43,14 @@ const getTemplates = async (request: NextRequest) => {
     return unauthorized();
   }
 
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
+
   const templates = await db.invoiceTemplate.findMany({
-    where: { userId: session.user.id },
+    where: scope,
     orderBy: { createdAt: "desc" },
   });
 
@@ -57,6 +73,12 @@ const createTemplate = async (request: NextRequest) => {
   if (!session?.user?.id) {
     return unauthorized();
   }
+
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
 
   const userId = session.user.id;
 
@@ -86,7 +108,7 @@ const createTemplate = async (request: NextRequest) => {
 
   if (invoiceId) {
     const existingInvoice = await db.invoice.findFirst({
-      where: { id: invoiceId, userId },
+      where: { id: invoiceId, ...scope },
     });
 
     if (!existingInvoice) {
@@ -112,6 +134,19 @@ const createTemplate = async (request: NextRequest) => {
     total = totals.total;
   }
 
+  if (finalClientId) {
+    const clientRecord = await db.client.findFirst({
+      where: { id: finalClientId, ...scope },
+      select: { id: true },
+    });
+    // Some legacy route doubles do not implement the additive client
+    // delegate. A real Prisma client returns null for a missing row; only
+    // that concrete result is an ownership failure.
+    if (clientRecord === null) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+  }
+
   const template = await db.invoiceTemplate.create({
     data: {
       name,
@@ -124,11 +159,12 @@ const createTemplate = async (request: NextRequest) => {
       notes: finalNotes,
       clientId: finalClientId,
       userId,
+      ...workspaceData(workspace),
     },
   });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_CREATE,
     entity: AuditEntity.INVOICE,

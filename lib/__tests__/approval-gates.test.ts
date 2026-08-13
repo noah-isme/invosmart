@@ -5,6 +5,7 @@ import type { AutoActionStatus, AutoActionType, ExperimentAxis } from "@prisma/c
 type AiAutoActionMock = {
   count: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
+  findFirst: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
 };
 
@@ -12,6 +13,7 @@ const { aiAutoActionMock, prismaEnums } = vi.hoisted(() => ({
   aiAutoActionMock: {
     count: vi.fn(),
     create: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
   } as AiAutoActionMock,
   prismaEnums: {
@@ -116,6 +118,7 @@ describe("approval gates", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    aiAutoActionMock.findFirst.mockResolvedValue({ id: 1, organizationId: "org" });
 
     const action = await logAutoAction({
       organizationId: "org",

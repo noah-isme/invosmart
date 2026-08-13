@@ -17,9 +17,19 @@ import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { withSpan } from "@/lib/tracing";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
+import {
+  canReadWorkspace,
+  canWriteWorkspace,
+  resolveWorkspaceContextForRequest,
+  workspaceData,
+  workspaceScope,
+} from "@/lib/workspaces";
 
 const unauthorized = () =>
   NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+const forbidden = () =>
+  NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
 
 const invalidRequest = (message: string) =>
   NextResponse.json({ error: message }, { status: 400 });
@@ -42,8 +52,13 @@ const getInvoices = async (request: NextRequest) => {
   }
 
   const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canReadWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
 
-  await markUserOverdueInvoices(db, userId);
+  await markUserOverdueInvoices(db, userId, new Date(), workspace.organizationId);
 
   const statusParam = request.nextUrl?.searchParams?.get("status");
 
@@ -60,7 +75,7 @@ const getInvoices = async (request: NextRequest) => {
   }
 
   const where = {
-    userId,
+    ...scope,
     ...(statusFilter ? { status: statusFilter } : {}),
   };
 
@@ -77,15 +92,15 @@ const getInvoices = async (request: NextRequest) => {
       orderBy: { createdAt: "desc" },
     }),
     db.invoice.aggregate({
-      where: { userId, status: InvoiceStatusEnum.enum.PAID },
+      where: { ...scope, status: InvoiceStatusEnum.enum.PAID },
       _sum: { total: true },
     }),
-    db.invoice.count({ where: { userId, status: InvoiceStatusEnum.enum.UNPAID } }),
-    db.invoice.count({ where: { userId, status: InvoiceStatusEnum.enum.OVERDUE } }),
+    db.invoice.count({ where: { ...scope, status: InvoiceStatusEnum.enum.UNPAID } }),
+    db.invoice.count({ where: { ...scope, status: InvoiceStatusEnum.enum.OVERDUE } }),
     Promise.all(
       (Object.values(InvoiceStatusEnum.enum) as InvoiceStatusValue[]).map(async (status) => [
         status,
-        await db.invoice.count({ where: { userId, status } }),
+        await db.invoice.count({ where: { ...scope, status } }),
       ]),
     ),
   ]);
@@ -126,6 +141,11 @@ const createInvoice = async (request: NextRequest) => {
   }
 
   const userId = session.user.id;
+  const workspace = await resolveWorkspaceContextForRequest(request, session);
+  if (!workspace || !canWriteWorkspace(workspace)) {
+    return forbidden();
+  }
+  const scope = workspaceScope(workspace);
 
   const json = await request.json();
   const parsed = InvoiceCreateSchema.safeParse(json);
@@ -145,7 +165,16 @@ const createInvoice = async (request: NextRequest) => {
     return invalidRequest("Invalid dueAt value");
   }
 
-  const invoiceNumber = await generateInvoiceNumber(db);
+  if (parsed.data.clientId) {
+    const client = await db.client.findFirst({
+      where: { id: parsed.data.clientId, ...scope },
+    });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+  }
+
+  const invoiceNumber = await generateInvoiceNumber(db, workspace.organizationId);
 
   const now = new Date();
   const status: InvoiceStatusValue =
@@ -176,6 +205,7 @@ const createInvoice = async (request: NextRequest) => {
       currency: parsed.data.currency || "IDR",
       clientId: parsed.data.clientId ?? null,
       userId,
+      ...workspaceData(workspace),
     },
   });
 
@@ -186,7 +216,7 @@ const createInvoice = async (request: NextRequest) => {
   });
 
   void logAuditEvent({
-    tenantId: (session.user as { tenantId?: string })?.tenantId ?? null,
+    tenantId: workspace.organizationId,
     userId: session.user.id,
     action: AuditAction.INVOICE_CREATE,
     entity: AuditEntity.INVOICE,

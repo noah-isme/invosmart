@@ -61,10 +61,11 @@ export const markUserOverdueInvoices = async (
   db: PrismaClient,
   userId: string,
   now: Date = new Date(),
+  organizationId?: string | null,
 ) => {
   return db.invoice.updateMany({
     where: {
-      userId,
+      ...(organizationId ? { organizationId } : { userId }),
       dueAt: { lt: now },
       status: { in: [InvoiceStatusEnum.enum.SENT, InvoiceStatusEnum.enum.UNPAID] },
     },

@@ -1,5 +1,6 @@
 import { ExperimentAxis } from "@prisma/client";
-import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { notFound, redirect } from "next/navigation";
 
 import { recommendSchedule } from "@/lib/ai/scheduler";
 import { serializeExperimentSummary, summariseExperiment } from "@/lib/ai/content-local-optimizer";
@@ -7,6 +8,8 @@ import { serializeExperimentSummary, summariseExperiment } from "@/lib/ai/conten
 import { VariantActionPanel } from "./components/VariantActionPanel";
 import { VariantInsightTable } from "./components/VariantInsightTable";
 import { BayesianStatsPanel } from "./components/BayesianStatsPanel";
+import { authOptions } from "@/server/auth";
+import { resolveWorkspaceContext } from "@/lib/workspaces";
 
 type ExperimentDetailPageProps = {
   params: Promise<Record<string, string | string[] | undefined>>;
@@ -24,6 +27,11 @@ const resolveExperimentId = async (params: ExperimentDetailPageProps["params"]) 
 };
 
 export default async function ExperimentDetailPage({ params }: ExperimentDetailPageProps) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/auth/login");
+  const workspace = await resolveWorkspaceContext(session.user.id);
+  if (!workspace?.organizationId) redirect("/app/workspaces");
+
   const experimentIdParam = await resolveExperimentId(params);
   if (!experimentIdParam) {
     notFound();
@@ -34,7 +42,7 @@ export default async function ExperimentDetailPage({ params }: ExperimentDetailP
     notFound();
   }
 
-  const summary = await summariseExperiment(experimentId);
+  const summary = await summariseExperiment(experimentId, workspace.organizationId);
   if (!summary) {
     notFound();
   }
@@ -44,7 +52,7 @@ export default async function ExperimentDetailPage({ params }: ExperimentDetailP
   const scheduleRecommendation =
     summary.experiment.axis === ExperimentAxis.SCHEDULE
       ? await recommendSchedule({
-          organizationId: summary.experiment.organizationId ?? undefined,
+          organizationId: workspace.organizationId,
           contentId: summary.experiment.contentId,
         })
       : null;
@@ -67,7 +75,7 @@ export default async function ExperimentDetailPage({ params }: ExperimentDetailP
       <VariantActionPanel
         experimentId={summary.experiment.id}
         contentId={summary.experiment.contentId}
-        organizationId={summary.experiment.organizationId ?? undefined}
+        organizationId={workspace.organizationId}
         variants={serialized.variants}
         winnerVariantId={serialized.winnerVariantId ?? undefined}
         scheduleRecommendation={scheduleRecommendation}
