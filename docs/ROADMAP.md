@@ -16,6 +16,7 @@ The latest execution pass is focused on release readiness around the Phase 2 fou
 - **Invoice email hardening — 🚧 Sandbox validation:** Resend delivery states, bounded retries, provider event deduplication, signed webhook handling, audit events, and a signed payment link are implemented. Real provider webhook verification and bounce/complaint testing remain.
 - **Scheduled operations — ✅ Implemented:** uptime cron authentication fails closed in production, query-string secrets are rejected, and `vercel.json` schedules the health sweep every five minutes.
 - **Reminder delivery dispatcher — 🚧 Implemented; provider certification pending:** reminder occurrences now materialize per-channel delivery rows with atomic claims, paid-invoice suppression, bounded retries, Resend idempotency, encrypted Slack delivery, audit/telemetry events, and a five-minute dispatcher cron. Staging provider delivery evidence remains required.
+- **Customer API platform — 🚧 v1.3/v1.4 implementation in progress:** workspace-scoped API keys, digest-only secret storage, scoped invoice/client resources under `/api/v1`, cursor pagination, idempotency keys, rate-limit headers, audit events, and an OpenAPI 3 contract are implemented. Staging tenancy enforcement, distributed retry validation, and external integration evidence remain required.
 
 ---
 
@@ -144,9 +145,9 @@ gantt
 ## Next Execution
 
 - **v1.2.1 release certification:** apply the additive payment-attempt/event migration to staging PostgreSQL; run signed Midtrans and Stripe sandbox lifecycle scenarios; verify Resend delivery webhooks; and attach Node 20/Chromium plus mobile/PWA evidence before marking the remaining hardening items done.
-- **v1.3 enterprise foundation:** rehearse the implemented personal workspaces, organization-scoped ownership, database-backed memberships, and `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization on staging before organization scope becomes mandatory.
-- **v1.4 team operations — 🚧 Delivery implementation complete; certification pending:** workspace switching, invitation issuance/acceptance, member role/removal APIs, encrypted Slack endpoint configuration, reminder rules, idempotent occurrence materialization, Resend delivery, Slack dispatch worker, bounded retries, suppression, and delivery audit state are implemented; full device/provider certification remains.
-- **Deferred platform work:** WhatsApp, custom roles, API keys/OpenAPI, GraphQL, and realtime collaboration follow the tenancy and notification reliability gates.
+- **v1.3 enterprise foundation + API beta:** rehearse the implemented personal workspaces, organization-scoped ownership, database-backed memberships, and `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization on staging before organization scope becomes mandatory; expose the read/write invoice-client API beta and key-management UI behind the same workspace boundary.
+- **v1.4 team operations + API GA:** certify workspace invitations, member administration, encrypted Slack endpoints, reminder delivery, and provider/device evidence; then promote `/api/v1` to GA only after contract, idempotency, revocation, rate-limit, and cross-tenant tests pass on staging.
+- **Deferred platform work:** WhatsApp, custom roles, GraphQL, realtime collaboration, and broader API resources (templates, payments, reminders, workspace administration) follow the v1.4 reliability gates.
 
 ### Enterprise roadmap exit criteria
 
@@ -167,9 +168,10 @@ gantt
 | Workspace invitations, member administration, and audit activity | Enterprise | P1 | L | 🚧 v1.4 Foundation |
 | Idempotent recurring reminders with Email/Slack adapters | Integrations | P1 | L | 🚧 Implemented; provider certification |
 | Implement real-time notifications/WebSocket for invoice status changes | UX/UI | P2 | L | ⏸ Deferred |
-| Comprehensive API documentation (OpenAPI/Swagger) | API | P2 | M | 📅 Planned |
+| Comprehensive API documentation (OpenAPI/Swagger) | API | P2 | M | 🚧 v1.3 Beta |
 | AI: Implement full contextual bandit incorporating diverse user features | AI | P2 | L | 📅 Planned |
-| Add API versioning | API | P3 | S | 📅 Planned |
+| Add API versioning | API | P3 | S | 🚧 `/api/v1` implemented; GA pending |
+| Workspace-scoped API keys and scoped invoice/client resources | API | P1 | L | 🚧 v1.3/v1.4 certification |
 | Implement GraphQL API layer | API | P3 | L | 📅 Planned |
 
 ---

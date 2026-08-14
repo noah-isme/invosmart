@@ -33,6 +33,7 @@ model User {
   invoiceTemplates InvoiceTemplate[]
   memberships      Membership[]
   sentInvitations  WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
+  createdApiKeys   ApiKey[] @relation("ApiKeyCreator")
 }
 
 enum WorkspaceRole {
@@ -60,6 +61,7 @@ model Organization {
   notificationEndpoints WorkspaceNotificationEndpoint[]
   reminderRules         InvoiceReminderRule[]
   reminderOccurrences   InvoiceReminderOccurrence[]
+  apiKeys               ApiKey[]
 
   @@index([createdAt])
 }
@@ -78,6 +80,28 @@ model Membership {
   @@unique([organizationId, userId])
   @@index([userId])
   @@index([organizationId, role])
+}
+
+model ApiKey {
+  id             String   @id @default(cuid())
+  organizationId String
+  createdById    String
+  name           String
+  prefix         String
+  secretHash     String
+  scopes         String[]
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([prefix], map: "api_key_prefix")
+  @@index([organizationId, revokedAt])
+  @@index([organizationId, createdAt])
 }
 
 model WorkspaceInvitation {

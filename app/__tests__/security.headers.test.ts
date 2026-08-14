@@ -102,6 +102,17 @@ describe("Middleware CSRF Validation", () => {
     expect(res.status).toBe(200);
   });
 
+  it("exempts versioned API-key requests from browser CSRF validation", async () => {
+    process.env.NODE_ENV = "development";
+    const req = new NextRequest("http://localhost:3000/api/v1/invoices", {
+      method: "POST",
+      headers: { authorization: "Bearer inv_live_0123456789abcdef_secret" },
+    });
+
+    const res = handleCsrfAndResponse(req);
+    expect(res.status).toBe(200);
+  });
+
   it("exempts validation when process.env.NODE_ENV === 'test'", async () => {
     process.env.NODE_ENV = "test";
     const req = new NextRequest("http://localhost:3000/api/invoices", {
@@ -125,4 +136,3 @@ describe("Middleware CSRF Validation", () => {
     expect(cookieHeader).toContain(CSRF_COOKIE_NAME);
   });
 });
-

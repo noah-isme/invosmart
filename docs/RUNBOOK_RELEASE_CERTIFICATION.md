@@ -124,10 +124,36 @@ under `QA-report/mobile/`. Verify the following on both network states:
 Attach screenshots/traces for failures, include browser/device/viewport and
 build SHA in the evidence index, and keep all automated gates on Node 20 in CI.
 
+## Customer API gate
+
+For the v1.3 beta and v1.4 GA, apply the `20260814110000_api_keys` migration
+after the workspace backfill rehearsal. Verify that API key secrets are shown
+only at creation, digests are stored, and `OWNER`/`ADMIN` management cannot
+cross workspace boundaries. Exercise the OpenAPI contract at
+`/api/openapi.json` and the following API v1 matrix with a key created in one
+workspace:
+
+| Scenario | Expected result |
+| --- | --- |
+| list/detail invoice and client | `200`, workspace-scoped data only |
+| missing, malformed, expired, or revoked key | `401` with request ID |
+| missing read/write scope | `403` without data leakage |
+| unknown resource from another workspace | `404` |
+| cursor and limit validation | bounded `200` or stable `400` error |
+| create without `Idempotency-Key` | `400` |
+| same idempotency key and payload replay | one side effect and same response |
+| same idempotency key with changed payload | `409` |
+| rate-limit exhaustion | `429` with `Retry-After` and limit headers |
+
+Record the API key prefix, request IDs, redacted response status, migration
+state, and build SHA. Never attach raw keys, invoice contents, or authorization
+headers to release evidence. Keep the v1 surface limited to invoices and
+clients until provider and tenancy gates for broader resources are complete.
+
 ## Exit criteria
 
 The release is certified only when all commands pass, the Prisma database is
-current, every provider matrix row and browser/device row has evidence, no
-duplicate payment/email side effects are observed, and unresolved failures have
-an owner and rollback plan. Store the redacted JSON preflight report from
+current, every provider matrix row, browser/device row, and applicable API row
+has evidence, no duplicate payment/email/API side effects are observed, and
+unresolved failures have an owner and rollback plan. Store the redacted JSON preflight report from
 `QA-report/release-certification.json` with the release artifacts.

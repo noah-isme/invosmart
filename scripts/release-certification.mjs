@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REQUIRED_MIGRATION = "20260812173000_payment_attempts_events";
+export const REQUIRED_API_MIGRATION = "20260814110000_api_keys";
 
 export const REQUIRED_GATE_SCRIPTS = ["lint", "typecheck", "test", "build", "test:e2e"];
 
@@ -15,6 +16,14 @@ export const REQUIRED_REPOSITORY_FILES = [
   "prisma/schema.prisma",
   "playwright.config.ts",
   "test/e2e/invoice-delivery-payment.spec.ts",
+  "docs/API.md",
+  "app/api/openapi.json/route.ts",
+  "app/api/v1/invoices/route.ts",
+  "app/api/v1/clients/route.ts",
+  "app/api/workspaces/[id]/api-keys/route.ts",
+  "app/app/settings/api/page.tsx",
+  "lib/api-keys.ts",
+  "lib/api-v1/auth.ts",
 ];
 
 export const REQUIRED_STAGING_ENV = [
@@ -215,9 +224,14 @@ export function inspectRepository(cwd = process.cwd()) {
     }
   }
 
-  const migrationDirectory = resolve(cwd, "prisma/migrations", REQUIRED_MIGRATION);
-  if (!existsSync(resolve(migrationDirectory, "migration.sql"))) {
-    failures.push(`required payment migration is missing: prisma/migrations/${REQUIRED_MIGRATION}/migration.sql`);
+  for (const [label, migration] of [
+    ["payment", REQUIRED_MIGRATION],
+    ["API key", REQUIRED_API_MIGRATION],
+  ]) {
+    const migrationDirectory = resolve(cwd, "prisma/migrations", migration);
+    if (!existsSync(resolve(migrationDirectory, "migration.sql"))) {
+      failures.push(`required ${label} migration is missing: prisma/migrations/${migration}/migration.sql`);
+    }
   }
 
   let migrationCount = 0;

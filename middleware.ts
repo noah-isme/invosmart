@@ -15,10 +15,19 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
     cookies?: { get: (name: string) => { value?: string } | undefined };
   };
 
+  // API-key clients are not browser sessions and cannot safely participate in
+  // the double-submit-cookie flow. Their bearer credential is verified by the
+  // versioned route itself, so CSRF protection remains enabled for all other
+  // mutating /api routes.
+  const isVersionedApiKeyRequest =
+    pathname.startsWith("/api/v1/") &&
+    /^Bearer\s+inv_live_/i.test(req.headers.get("authorization") ?? "");
+
   // Enforce CSRF token validation on all mutating API routes (POST, PUT, DELETE, PATCH under /api/*)
   if (
     pathname.startsWith("/api/") &&
     !pathname.startsWith("/api/auth/") &&
+    !isVersionedApiKeyRequest &&
     process.env.NODE_ENV !== "test" &&
     ["POST", "PUT", "DELETE", "PATCH"].includes(method)
   ) {
@@ -70,4 +79,3 @@ export default withAuth(
 export const config = {
   matcher: ["/app/:path*", "/api/:path*"],
 };
-

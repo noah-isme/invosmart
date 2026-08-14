@@ -2,7 +2,7 @@
 
 import { type ComponentType, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Building2, GaugeCircle, LogOut, Palette, Sparkles, SunMoon, UserCircle2, Users, Copy, Globe } from "lucide-react";
+import { Building2, GaugeCircle, KeyRound, LogOut, Palette, Sparkles, SunMoon, UserCircle2, Users, Copy, Globe } from "lucide-react";
 import { BarChart3, FilePenLine, LayoutDashboard, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -112,6 +112,12 @@ const navItems: NavItem[] = [
     descriptionKey: "nav.languageDesc",
     description: "Pilih bahasa tampilan aplikasi",
     icon: Globe,
+  },
+  {
+    href: "/app/settings/api",
+    label: "API",
+    description: "Dokumentasi dan API key workspace",
+    icon: KeyRound,
   },
 ];
 

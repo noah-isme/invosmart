@@ -91,6 +91,15 @@ The additive payment lifecycle migration is located at:
 
 Apply it with `npx prisma migrate deploy` before enabling provider webhooks in a staging or production environment. It is safe for existing invoices and settled `Payment` rows: `PaymentAttempt` is nullable on legacy records, while new checkout and webhook flows persist attempts and events.
 
+### 3.6 Customer API Key Migration
+
+The additive API credential migration is located at:
+`prisma/migrations/20260814110000_api_keys/migration.sql`
+
+`ApiKey` records are workspace-scoped and persist only a SHA-256 digest of the
+private credential. Prefix lookup, scopes, expiry, revocation, and last-use
+timestamps support the versioned customer API without exposing raw secrets.
+
 ---
 
 ## 4. Database Schema Models Overview
@@ -130,6 +139,7 @@ The database schema is organized into four main functional domains:
 - **`WorkspaceInvitation`**: one-time, seven-day invitation records. Only a SHA-256 token digest is persisted; acceptance uses an atomic compare-and-set update.
 - **`WorkspaceNotificationEndpoint`**: workspace-scoped provider settings. Slack webhook credentials are encrypted with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` before storage.
 - **`InvoiceReminderRule`** and **`InvoiceReminderOccurrence`**: reminder policy and unique occurrence keys for retry-safe scheduled jobs.
+- **`ApiKey`**: workspace-scoped customer API credentials with digest-only secrets, explicit invoice/client scopes, expiry, revocation, and last-use telemetry.
 
 ---
 
@@ -149,6 +159,7 @@ Workspace/team migrations are additive and should be rehearsed on staging before
 
 - `20260813120000_workspace_rbac_foundation` provisions personal workspaces, memberships, and backfills business rows.
 - `20260813130000_team_operations` adds invitations, encrypted notification endpoint metadata, reminder rules, and idempotent occurrences.
+- `20260814110000_api_keys` adds workspace-scoped credentials for the `/api/v1` invoice/client API.
 
 ---
 
