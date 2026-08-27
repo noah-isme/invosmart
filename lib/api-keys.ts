@@ -220,11 +220,15 @@ export const verifyApiKey = async (
   }
 
   // Last-used telemetry must never turn a valid credential into an outage if
-  // the best-effort timestamp write is unavailable.
-  try {
-    await client.apiKey.update({ where: { id: record.id }, data: { lastUsedAt: now } });
-  } catch {
-    // Authentication remains valid; callers can monitor database failures.
+  // the best-effort timestamp write is unavailable.  Throttle to every 5 min
+  // to avoid a synchronous DB write on every single request.
+  const LAST_USED_THROTTLE_MS = 5 * 60_000;
+  const lastUsed = toDate(record.lastUsedAt, "lastUsedAt");
+  const needsUpdate = !lastUsed || now.getTime() - lastUsed.getTime() > LAST_USED_THROTTLE_MS;
+  if (needsUpdate) {
+    void client.apiKey
+      .update({ where: { id: record.id }, data: { lastUsedAt: now } })
+      .catch(() => {/* Authentication remains valid; callers can monitor database failures. */});
   }
 
   return {

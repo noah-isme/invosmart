@@ -243,6 +243,8 @@ model Invoice {
 
   @@unique([organizationId, number], map: "invoice_organization_number")
   @@index([organizationId, createdAt])
+  @@index([clientId])
+  @@index([organizationId, status, createdAt])
 }
 
 enum InvoiceStatus {
@@ -670,6 +672,7 @@ model Client {
   @@unique([organizationId, email], map: "client_organization_email")
   @@index([userId])
   @@index([organizationId])
+  @@index([organizationId, createdAt])
 }
 
 model InvoiceTemplate {

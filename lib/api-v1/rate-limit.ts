@@ -9,6 +9,28 @@ type Entry = { count: number; resetAt: number };
 const entries = new Map<string, Entry>();
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_LIMIT = 120;
+const MAX_ENTRIES = 10_000;
+const EVICTION_INTERVAL_MS = 60_000;
+
+let lastEviction = Date.now();
+
+/** Remove expired entries to prevent unbounded memory growth. */
+const evictExpired = (now: number): void => {
+  if (now - lastEviction < EVICTION_INTERVAL_MS) return;
+  lastEviction = now;
+  for (const [key, entry] of entries) {
+    if (entry.resetAt <= now) entries.delete(key);
+  }
+  // Hard cap: if still over limit after TTL eviction, drop oldest entries
+  if (entries.size > MAX_ENTRIES) {
+    const overflow = entries.size - MAX_ENTRIES;
+    const keys = entries.keys();
+    for (let i = 0; i < overflow; i++) {
+      const next = keys.next();
+      if (!next.done) entries.delete(next.value);
+    }
+  }
+};
 
 /**
  * A process-local guard for the beta API. The key verifier can replace this
@@ -21,6 +43,8 @@ export const consumeApiRateLimit = (
   now = Date.now(),
   windowMs = DEFAULT_WINDOW_MS,
 ): ApiRateLimitState => {
+  evictExpired(now);
+
   const mapKey = `${bucket}:${identifier}`;
   const existing = entries.get(mapKey);
   const entry = !existing || existing.resetAt <= now
@@ -37,7 +61,7 @@ export const consumeApiRateLimit = (
   };
 };
 
-export const isRateLimited = (state: ApiRateLimitState) => state.remaining < 0;
+export const isRateLimited = (state: ApiRateLimitState) => state.remaining <= 0;
 
 export const rateLimitHeaders = (state: ApiRateLimitState) => ({
   "x-ratelimit-limit": String(state.limit),

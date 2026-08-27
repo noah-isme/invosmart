@@ -158,7 +158,7 @@ describe("versioned public API", () => {
       _count: { invoices: 2 },
     };
     db.client.findMany.mockResolvedValue([client] as never);
-    db.invoice.aggregate.mockResolvedValue({ _sum: { total: 500 } } as never);
+    db.invoice.groupBy.mockResolvedValue([{ clientId: "client-a", _sum: { total: 500 } }] as never);
 
     const response = await listClients(request("/api/v1/clients"));
     const body = await response.json();

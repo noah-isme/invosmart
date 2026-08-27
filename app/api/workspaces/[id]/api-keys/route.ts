@@ -66,6 +66,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   const keys = await db.apiKey.findMany({
     where: { organizationId: id },
     orderBy: { createdAt: "desc" },
+    take: 100,
     select: publicSelect,
   });
   return NextResponse.json({ data: keys });

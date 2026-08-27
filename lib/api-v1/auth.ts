@@ -79,7 +79,7 @@ export const authenticateApiKey = async (
 export const hasApiScope = (
   identity: ApiKeyIdentity,
   requiredScope: ApiKeyScope | string,
-) => identity.scopes.includes(requiredScope) || identity.scopes.includes("*");
+) => identity.scopes.includes(requiredScope);
 
 /** Authenticate, enforce transport/workspace constraints, and rate-limit. */
 export const authorizeApiRequest = async (

@@ -122,13 +122,28 @@ export const AIInvoiceSchema = z.object({
 export const generateInvoiceNumber = async (db: PrismaClient, organizationId?: string | null) => {
   const now = new Date();
   const prefix = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const count = await db.invoice.count({
-    where: {
-      number: { startsWith: prefix },
-      ...(organizationId ? { organizationId } : {}),
-    },
-  });
-  return `${prefix}-${String(count + 1).padStart(3, "0")}`;
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const count = await db.invoice.count({
+      where: {
+        number: { startsWith: prefix },
+        ...(organizationId ? { organizationId } : {}),
+      },
+    });
+    const candidate = `${prefix}-${String(count + 1 + attempt).padStart(3, "0")}`;
+    // Verify uniqueness — if a concurrent request already took this number,
+    // the next attempt will pick a higher suffix.
+    const existing = await db.invoice.findFirst({
+      where: {
+        number: candidate,
+        ...(organizationId ? { organizationId } : {}),
+      },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  // Exhausted retries — fall back to timestamp-based number to guarantee uniqueness
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 };
 
 export const BrandingSchema = z.object({

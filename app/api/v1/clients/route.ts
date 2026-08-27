@@ -65,16 +65,24 @@ export async function GET(request: NextRequest) {
 
     const hasNext = clients.length > limit;
     const page = hasNext ? clients.slice(0, limit) : clients;
-    const data = await Promise.all(page.map(async (client) => {
-      const aggregate = await db.invoice.aggregate({
-        where: { ...scope, clientId: client.id, status: "PAID" },
-        _sum: { total: true },
-      });
-      return {
-        ...client,
-        invoiceCount: client._count.invoices,
-        revenue: aggregate._sum.total ?? 0,
-      };
+
+    // Batch revenue aggregation into a single query instead of N+1 per-client
+    const clientIds = page.map((c) => c.id);
+    const revenueByClient = clientIds.length
+      ? await db.invoice.groupBy({
+          by: ["clientId"],
+          where: { ...scope, clientId: { in: clientIds }, status: "PAID" },
+          _sum: { total: true },
+        })
+      : [];
+    const revenueMap = new Map(
+      revenueByClient.map((r) => [r.clientId, r._sum.total ?? 0]),
+    );
+
+    const data = page.map((client) => ({
+      ...client,
+      invoiceCount: client._count.invoices,
+      revenue: revenueMap.get(client.id) ?? 0,
     }));
 
     const last = page[page.length - 1];

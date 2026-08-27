@@ -47,6 +47,7 @@ class InvoiceDelegate {
   updateMany = vi.fn();
   delete = vi.fn();
   aggregate = vi.fn();
+  groupBy = vi.fn();
 }
 
 export enum InvoiceStatus {
