@@ -55,15 +55,6 @@ export const openApiDocument = {
               $ref: "#/components/schemas/InvoiceStatus",
             },
           },
-          {
-            name: "clientId",
-            in: "query",
-            description: "Filter by a client ID.",
-            required: false,
-            schema: {
-              type: "string",
-            },
-          },
         ],
         responses: {
           "200": {
@@ -215,7 +206,7 @@ export const openApiDocument = {
             required: false,
             schema: {
               type: "string",
-              maxLength: 100,
+              maxLength: 200,
             },
           },
         ],
@@ -387,7 +378,7 @@ export const openApiDocument = {
           format: "int32",
           minimum: 1,
           maximum: 100,
-          default: 20,
+          default: 50,
         },
       },
       IdempotencyKey: {
