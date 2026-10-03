@@ -10,21 +10,21 @@ InvoSmart mengintegrasikan enam agen AI utama yang berjalan secara terdistribusi
 
 | Nama Agen | Peran & Deskripsi | Berkas Kode Utama |
 |---|---|---|
-| **Optimizer Agent** | Mengambil metrik (PostHog/Sentry) dan menghasilkan rekomendasi optimasi visual, API, dan performa serta mengoptimalkan varian konten. | [lib/ai/optimizer.ts](file:///home/noah/project/invosmart/lib/ai/optimizer.ts)<br>[lib/ai/content-local-optimizer.ts](file:///home/noah/project/invosmart/lib/ai/content-local-optimizer.ts) |
-| **Learning Agent** | Mengevaluasi dampak rekomendasi setelah diterapkan, melakukan kalkulasi composite impact, dan memperbarui bobot kepercayaan (*confidence weight*). | [lib/ai/learning.ts](file:///home/noah/project/invosmart/lib/ai/learning.ts) |
-| **Governance Agent** | Menjaga keamanan sistem dengan membatasi *auto-apply* pada rute kritis, memantau skor kepercayaan AI, dan menghasilkan log penjelasan keputusan. | [lib/ai/policy.ts](file:///home/noah/project/invosmart/lib/ai/policy.ts)<br>[lib/ai/trustScore.ts](file:///home/noah/project/invosmart/lib/ai/trustScore.ts) |
-| **Insight Agent** | Melakukan analisis korelasi lintas metrik performa aplikasi untuk memberikan rekomendasi optimasi yang lebih akurat. | [lib/ai/insightAgent.ts](file:///home/noah/project/invosmart/lib/ai/insightAgent.ts)<br>[lib/ai/globalInsight.ts](file:///home/noah/project/invosmart/lib/ai/globalInsight.ts) |
-| **Recovery Agent** | Memantau anomali performa secara berkala (regresi >10%) dan melakukan *rollback* otomatis jika ada penurunan performa yang disebabkan oleh aksi AI. | [lib/ai/recoveryAgent.ts](file:///home/noah/project/invosmart/lib/ai/recoveryAgent.ts)<br>[lib/ai/rollback.ts](file:///home/noah/project/invosmart/lib/ai/rollback.ts) |
-| **Federation Agent** | Menghubungkan telemetri anonim lintas tenant melalui protokol FDP yang ditandatangani untuk konsensus bobot agen dan analisis kesehatan jaringan global. | [lib/ai/federationAgent.ts](file:///home/noah/project/invosmart/lib/ai/federationAgent.ts) |
+| **Optimizer Agent** | Mengambil metrik (PostHog/Sentry) dan menghasilkan rekomendasi optimasi visual, API, dan performa serta mengoptimalkan varian konten. | [lib/ai/optimizer.ts](./lib/ai/optimizer.ts)<br>[lib/ai/content-local-optimizer.ts](./lib/ai/content-local-optimizer.ts) |
+| **Learning Agent** | Mengevaluasi dampak rekomendasi setelah diterapkan, melakukan kalkulasi composite impact, dan memperbarui bobot kepercayaan (*confidence weight*). | [lib/ai/learning.ts](./lib/ai/learning.ts) |
+| **Governance Agent** | Menjaga keamanan sistem dengan membatasi *auto-apply* pada rute kritis, memantau skor kepercayaan AI, dan menghasilkan log penjelasan keputusan. | [lib/ai/policy.ts](./lib/ai/policy.ts)<br>[lib/ai/trustScore.ts](./lib/ai/trustScore.ts) |
+| **Insight Agent** | Melakukan analisis korelasi lintas metrik performa aplikasi untuk memberikan rekomendasi optimasi yang lebih akurat. | [lib/ai/insightAgent.ts](./lib/ai/insightAgent.ts)<br>[lib/ai/globalInsight.ts](./lib/ai/globalInsight.ts) |
+| **Recovery Agent** | Memantau anomali performa secara berkala (regresi >10%) dan melakukan *rollback* otomatis jika ada penurunan performa yang disebabkan oleh aksi AI. | [lib/ai/recoveryAgent.ts](./lib/ai/recoveryAgent.ts)<br>[lib/ai/rollback.ts](./lib/ai/rollback.ts) |
+| **Federation Agent** | Menghubungkan telemetri anonim lintas tenant melalui protokol FDP yang ditandatangani untuk konsensus bobot agen dan analisis kesehatan jaringan global. | [lib/ai/federationAgent.ts](./lib/ai/federationAgent.ts) |
 
 ---
 
 ## 2. Protokol MAP & Komunikasi Agen
 
-Semua agen berkomunikasi secara tidak langsung melalui broker pesan sentral di [lib/ai/orchestrator.ts](file:///home/noah/project/invosmart/lib/ai/orchestrator.ts) menggunakan **Multi-Agent Protocol (MAP)**.
+Semua agen berkomunikasi secara tidak langsung melalui broker pesan sentral di [lib/ai/orchestrator.ts](./lib/ai/orchestrator.ts) menggunakan **Multi-Agent Protocol (MAP)**.
 
 ### Skema Event MAP (Zod)
-Setiap pesan divalidasi menggunakan skema Zod di [lib/ai/protocol.ts](file:///home/noah/project/invosmart/lib/ai/protocol.ts):
+Setiap pesan divalidasi menggunakan skema Zod di [lib/ai/protocol.ts](./lib/ai/protocol.ts):
 ```typescript
 export const agentRoleSchema = z.enum(['optimizer', 'learning', 'governance', 'insight', 'recovery', 'federation']);
 export const mapEventTypeSchema = z.enum(['recommendation', 'evaluation', 'policy_update', 'insight_report', 'recovery_action']);
@@ -60,7 +60,7 @@ $$\text{Priority Order: } \text{Governance (90)} > \text{Recovery (85)} > \text{
 
 ## 3. Siklus Loop Otonom (Autonomous Loop)
 
-Modul [lib/ai/loop.ts](file:///home/noah/project/invosmart/lib/ai/loop.ts) menjalankan alur iteratif `runLoop()` sebagai berikut:
+Modul [lib/ai/loop.ts](./lib/ai/loop.ts) menjalankan alur iteratif `runLoop()` sebagai berikut:
 
 ```
 Telemetry Ingestion (PostHog/Sentry) 
@@ -76,7 +76,7 @@ Event Dispatching (Update DB & Redis Streams)
 
 1. **Sampling Metrik**: Membaca metrik performa p95 LCP, INP, dan latensi API. Setiap telemetri melacak `regressionDetected`, `recoveryAction`, dan `rollbackCount` untuk trend analysis.
 2. **Prioritization**: Memperbarui bobot agen di tabel `AgentPriority` berbasis beban kerja sistem melalui `PrioritySignal`.
-3. **Scaling**: Modul [lib/ai/scaler.ts](file:///home/noah/project/invosmart/lib/ai/scaler.ts) menghitung frekuensi interval baru agar sistem hemat daya saat idle dan agresif saat sibuk berdasarkan latency, backlog, dan trust score.
+3. **Scaling**: Modul [lib/ai/scaler.ts](./lib/ai/scaler.ts) menghitung frekuensi interval baru agar sistem hemat daya saat idle dan agresif saat sibuk berdasarkan latency, backlog, dan trust score.
 4. **Recovery Sweep**: `RecoveryAgent` memverifikasi apakah ada optimasi bermasalah dengan menganalisis regresi kepercayaan (>10%) atau error rate (>15%), lalu memicu action (noop/rollback/reevaluate). Recovery event didispatch ke stream agar agen lain dapat bereaksi.
 5. **Event Dispatching**: Semua events (recommendation, evaluation, policy_update, insight_report, recovery_action) dipersistensi ke DB dan Redis stream untuk audit trail dan cross-agent visibility.
 
@@ -85,7 +85,7 @@ Event Dispatching (Update DB & Redis Streams)
 ## 4. Instruksi Pengembangan bagi Developer
 
 ### Menambahkan Agen Baru
-1. Daftarkan tipe agen baru di `agentRoleSchema` enum pada berkas [lib/ai/protocol.ts](file:///home/noah/project/invosmart/lib/ai/protocol.ts).
+1. Daftarkan tipe agen baru di `agentRoleSchema` enum pada berkas [lib/ai/protocol.ts](./lib/ai/protocol.ts).
 2. Tambahkan prioritas agen ke `agentPriority` record (1-100, sesuaikan dengan hierarki sistem).
 3. Tambahkan entry ke `AGENT_NAMES` map untuk UI labeling.
 4. Buat kelas/modul agen baru di direktori `lib/ai/` (contoh: `myAgent.ts`).
