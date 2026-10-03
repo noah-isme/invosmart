@@ -136,6 +136,7 @@ export function InsightClient({ summary, revenueInsight }: InsightClientProps) {
   }, [notify, summary]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
     void fetchInsight();
   }, [fetchInsight]);
 

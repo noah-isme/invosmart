@@ -196,6 +196,7 @@ export const InvoiceFormClient = ({
 
   useEffect(() => {
     const nextItems = sanitizeInitialValues(initialValues);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
     setForm({
       client: initialValues?.client?.toString() ?? "",
       dueAt: formatDueAtInput(initialValues?.dueAt),

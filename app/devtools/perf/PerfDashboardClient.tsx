@@ -109,6 +109,7 @@ export default function PerfDashboardClient({ defaultSampleRate }: PerfDashboard
 
     const value = Number.parseFloat(stored);
     if (Number.isFinite(value)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
       setSampleRate(Math.min(Math.max(value, 0), 1));
     }
   }, []);
@@ -149,6 +150,7 @@ export default function PerfDashboardClient({ defaultSampleRate }: PerfDashboard
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
     void fetchSummary(range);
   }, [fetchSummary, range]);
 

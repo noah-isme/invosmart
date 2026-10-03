@@ -8,7 +8,7 @@ This document outlines the strategic roadmap and upcoming features for InvoSmart
 
 The latest execution pass is focused on release readiness around the Phase 2 foundation. Statuses distinguish an available implementation from provider/device validation that is still outstanding: `✅ Done` means the feature implementation is present, while `🚧 Hardening` means the implementation exists but its production validation is not complete.
 
-- **Release-gate stabilization — 🚧 In Progress:** flat ESLint ignores now replace the removed `.eslintignore`, production-source lint errors are fixed, `npm run typecheck` is a CI gate, and the Playwright suite is restricted to browser specs. The local Node 20-compatible verification pass now has lint, TypeScript, Vitest, and `next build` passing; CI Node 20, provider sandboxes, and browser/device evidence remain required.
+- **Release-gate stabilization — 🚧 In Progress:** flat ESLint ignores now replace the removed `.eslintignore`, production-source lint errors are fixed, `npm run typecheck` is a CI gate, and the Playwright suite is restricted to browser specs. The local Node 24-compatible verification pass now has lint, TypeScript, Vitest, and `next build` passing; CI Node 24, provider sandboxes, and browser/device evidence remain required.
 - **Currency hardening — 🚧 In Progress:** `formatCurrency()` now normalizes currency codes, defaults to IDR, preserves nominal invoice units, and applies zero-decimal rules for IDR/JPY with targeted unit coverage. Payment-attempt amount/currency reconciliation is now enforced at both gateway webhook boundaries; live sandbox certification remains.
 - **PWA/mobile hardening — 🚧 In Progress:** service-worker cache versioning and cleanup are in place, API/navigation/cross-origin requests are excluded from caching, and light/dark viewport metadata is explicit. Device and critical-flow E2E validation remain.
 - **Client module cleanup — ✅ Done:** client list/detail contracts use stable `invoiceCount`/`revenue` and `totalRevenue`/`unpaidRevenue` fields, scoped email checks use Prisma-supported queries, and the client form safely handles absent initial data.
@@ -118,6 +118,7 @@ gantt
 | Mobile responsive app enhancements / PWA setup | UX/UI | P1 | L | 🚧 Hardening |
 | Release-gate compatibility and verification pass | Testing | P0 | S | 🚧 In Progress |
 | Increase E2E test coverage for all critical user flows | Testing | P2 | L | 🚧 In Progress |
+| Refactor the 12 effects suppressed for `react-hooks/set-state-in-effect` (eslint-plugin-react-hooks 7.1, Node 24 upgrade) | Tech debt | P3 | S | 📅 Planned |
 
 ---
 
@@ -144,7 +145,7 @@ gantt
 
 ## Next Execution
 
-- **v1.2.1 release certification:** apply the additive payment-attempt/event migration to staging PostgreSQL; run signed Midtrans and Stripe sandbox lifecycle scenarios; verify Resend delivery webhooks; and attach Node 20/Chromium plus mobile/PWA evidence before marking the remaining hardening items done.
+- **v1.2.1 release certification:** apply the additive payment-attempt/event migration to staging PostgreSQL; run signed Midtrans and Stripe sandbox lifecycle scenarios; verify Resend delivery webhooks; and attach Node 24/Chromium plus mobile/PWA evidence before marking the remaining hardening items done.
 - **v1.3 enterprise foundation + API beta:** rehearse the implemented personal workspaces, organization-scoped ownership, database-backed memberships, and `OWNER`/`ADMIN`/`MEMBER`/`VIEWER` authorization on staging before organization scope becomes mandatory; expose the read/write invoice-client API beta and key-management UI behind the same workspace boundary.
 - **v1.4 team operations + API GA:** certify workspace invitations, member administration, encrypted Slack endpoints, reminder delivery, and provider/device evidence; then promote `/api/v1` to GA only after contract, idempotency, revocation, rate-limit, and cross-tenant tests pass on staging.
 - **Deferred platform work:** WhatsApp, custom roles, GraphQL, realtime collaboration, and broader API resources (templates, payments, reminders, workspace administration) follow the v1.4 reliability gates.

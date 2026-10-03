@@ -175,6 +175,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const stored = loadStoredTheme();
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
       setAndApplyTheme(stored);
     } else {
       setAndApplyTheme(DEFAULT_THEME);

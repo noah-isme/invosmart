@@ -26,7 +26,7 @@ Welcome to **InvoSmart**, a premium, developer-friendly platform for managing in
 
 Before you begin, ensure you have met the following requirements:
 
-- **Node.js**: 18.18+ or 20+
+- **Node.js**: 24 LTS
 - **npm**: 9+
 - **Database**: PostgreSQL (managed via Prisma ORM, see `docs/DATABASE.md`)
 - **Optional**: 

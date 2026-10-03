@@ -26,9 +26,10 @@ const validStagingEnvironment = () =>
   ]);
 
 describe("release certification preflight", () => {
-  it("accepts Node 20 and rejects other major versions", () => {
-    expect(checkNodeVersion("20.19.0").ok).toBe(true);
-    expect(checkNodeVersion("v20.1.0").ok).toBe(true);
+  it("accepts Node 24 and rejects other major versions", () => {
+    expect(checkNodeVersion("24.21.0").ok).toBe(true);
+    expect(checkNodeVersion("v24.1.0").ok).toBe(true);
+    expect(checkNodeVersion("20.19.0").ok).toBe(false);
     expect(checkNodeVersion("22.1.0").ok).toBe(false);
   });
 

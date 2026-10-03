@@ -121,9 +121,9 @@ export function parseArgs(argv = [], env = process.env) {
 export function checkNodeVersion(version = process.versions.node) {
   const major = String(version).replace(/^v/, "").split(".")[0];
   return {
-    name: "Node.js 20",
-    ok: major === "20",
-    detail: `Detected Node.js ${version}; certification requires major version 20.`,
+    name: "Node.js 24",
+    ok: major === "24",
+    detail: `Detected Node.js ${version}; certification requires major version 24.`,
   };
 }
 
@@ -207,8 +207,8 @@ export function inspectRepository(cwd = process.cwd()) {
   }
 
   if (packageJson) {
-    if (packageJson.engines?.node !== "20.x") {
-      failures.push('package.json engines.node must be "20.x"');
+    if (packageJson.engines?.node !== "24.x") {
+      failures.push('package.json engines.node must be "24.x"');
     }
 
     for (const script of REQUIRED_GATE_SCRIPTS) {
@@ -378,7 +378,7 @@ export function runCertification({ options, cwd = process.cwd(), env = process.e
     checks.push({
       name: "Critical application gates",
       ok: true,
-      detail: `Skipped because ${!nodeCheck.ok ? "Node.js 20 is required" : "staging environment configuration failed"}; no certification gate was attempted.`,
+      detail: `Skipped because ${!nodeCheck.ok ? "Node.js 24 is required" : "staging environment configuration failed"}; no certification gate was attempted.`,
       skipped: true,
     });
   }

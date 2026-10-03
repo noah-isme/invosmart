@@ -1,6 +1,6 @@
 # v1.2.1 Release Certification
 
-Run this checklist against a staging deployment on Node 20 with a real PostgreSQL database. Do not mark payment or email as production-ready from mocked unit tests alone.
+Run this checklist against a staging deployment on Node 24 with a real PostgreSQL database. Do not mark payment or email as production-ready from mocked unit tests alone.
 
 ## Local verification baseline (2026-08-13)
 
@@ -30,7 +30,7 @@ npm run release:check
 npm run release:certify
 ```
 
-`release:check` validates Node 20, the critical package scripts and files, and
+`release:check` validates Node 24, the critical package scripts and files, and
 the payment lifecycle migration while deliberately skipping database and
 provider checks. `release:certify` requires PostgreSQL `DATABASE_URL`, HTTPS
 `NEXTAUTH_URL`, application/cron secrets, Midtrans, Stripe, and Resend settings;
@@ -122,7 +122,7 @@ under `QA-report/mobile/`. Verify the following on both network states:
 | checkout and payment status | [ ] | [ ] | [ ] |
 
 Attach screenshots/traces for failures, include browser/device/viewport and
-build SHA in the evidence index, and keep all automated gates on Node 20 in CI.
+build SHA in the evidence index, and keep all automated gates on Node 24 in CI.
 
 ## Customer API gate
 

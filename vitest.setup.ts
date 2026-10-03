@@ -4,6 +4,32 @@ import React, { type AnchorHTMLAttributes, type PropsWithChildren } from "react"
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
+// Node 22+ ships an experimental global Web Storage that can shadow jsdom's
+// localStorage/sessionStorage (https://github.com/vitest-dev/vitest/issues/10867).
+// When the global is missing or throws on access, restore jsdom's implementation.
+// Dormant on Node 24, where `'localStorage' in globalThis` is false outside jsdom.
+const jsdomWindow = (globalThis as { jsdom?: { window?: Window } }).jsdom?.window;
+if (jsdomWindow) {
+  for (const key of ["localStorage", "sessionStorage"] as const) {
+    let usable = false;
+    try {
+      usable = globalThis[key] !== undefined && globalThis[key] !== null;
+      if (usable) {
+        void globalThis[key].length;
+      }
+    } catch {
+      usable = false;
+    }
+    if (!usable) {
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        writable: true,
+        value: jsdomWindow[key],
+      });
+    }
+  }
+}
+
 type MockedImageProps = ImageProps & { alt: string };
 
 type MockedLinkProps = PropsWithChildren<

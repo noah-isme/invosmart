@@ -89,6 +89,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
   const statusTextColor = accentLuminance < 0.35 ? "#F9FAFB" : accentColor;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
     setPreviewAnimating(true);
     const timeout = window.setTimeout(() => {
       setPreviewAnimating(false);

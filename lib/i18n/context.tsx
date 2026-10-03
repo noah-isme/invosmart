@@ -110,6 +110,7 @@ export function I18nProvider({
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (isValidLocale(stored)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing mount/sync effect newly flagged by eslint-plugin-react-hooks 7.1; refactor tracked separately
         setLocaleState(stored);
       }
     }
