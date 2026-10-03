@@ -9,6 +9,9 @@ import { decodeCursor, encodeCursor, parseLimit } from "@/lib/api-v1/pagination"
 import { ApiClientCreateSchema } from "@/lib/api-v1/schemas";
 import { rateLimitHeaders } from "@/lib/api-v1/rate-limit";
 
+// Keep below the idempotency claim TTL in lib/api-v1/idempotency.ts.
+export const maxDuration = 30;
+
 const responseInit = (requestId: string, rateLimit: { limit: number; remaining: number; resetAt: number }, status?: number): ApiResponseInit => ({
   requestId,
   status,
@@ -150,6 +153,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.kind === "conflict") return apiError("IDEMPOTENCY_CONFLICT", "Idempotency-Key was already used with a different payload", { ...init, status: 409 });
+    if (result.kind === "in_progress") return apiError("IDEMPOTENCY_IN_PROGRESS", "A request with this Idempotency-Key is still in progress", { ...init, status: 409, headers: { ...init.headers, "retry-after": "1" } });
+    if (result.kind === "unavailable") return apiError("SERVICE_UNAVAILABLE", "Idempotency store is temporarily unavailable; retry with the same Idempotency-Key", { ...init, status: 503, headers: { ...init.headers, "retry-after": "5" } });
     return apiSuccess(result.result!.data, init);
   } catch (error) {
     if (error instanceof Error && (error as Error & { code?: string }).code === "DUPLICATE_EMAIL") {

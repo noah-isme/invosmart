@@ -108,6 +108,7 @@ export const openApiDocument = {
           "409": { $ref: "#/components/responses/Conflict" },
           "422": { $ref: "#/components/responses/UnprocessableEntity" },
           "429": { $ref: "#/components/responses/RateLimited" },
+          "503": { $ref: "#/components/responses/ServiceUnavailable" },
         },
       },
     },
@@ -262,6 +263,7 @@ export const openApiDocument = {
           "409": { $ref: "#/components/responses/Conflict" },
           "422": { $ref: "#/components/responses/UnprocessableEntity" },
           "429": { $ref: "#/components/responses/RateLimited" },
+          "503": { $ref: "#/components/responses/ServiceUnavailable" },
         },
       },
     },
@@ -385,7 +387,7 @@ export const openApiDocument = {
         name: "Idempotency-Key",
         in: "header",
         description:
-          "Unique key for safely retrying a create request. Reusing a key with a different payload returns 409 Conflict.",
+          "Unique key for safely retrying a create request. Reusing a key with a different payload returns 409 Conflict; a retry that arrives while the original request is still running returns 409 with `IDEMPOTENCY_IN_PROGRESS` and a Retry-After header.",
         required: true,
         schema: {
           type: "string",
@@ -457,6 +459,25 @@ export const openApiDocument = {
       },
       UnprocessableEntity: {
         description: "The request is well formed but failed field validation.",
+        content: {
+          "application/json": {
+            schema: {
+              $ref: "#/components/schemas/ErrorResponse",
+            },
+          },
+        },
+      },
+      ServiceUnavailable: {
+        description: "The idempotency store is temporarily unavailable. Retry with the same Idempotency-Key after the indicated delay.",
+        headers: {
+          "Retry-After": {
+            description: "Seconds to wait before retrying.",
+            schema: {
+              type: "integer",
+              format: "int32",
+            },
+          },
+        },
         content: {
           "application/json": {
             schema: {

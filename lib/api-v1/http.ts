@@ -10,8 +10,10 @@ export type ApiErrorCode =
   | "INVALID_CURSOR"
   | "IDEMPOTENCY_KEY_REQUIRED"
   | "IDEMPOTENCY_CONFLICT"
+  | "IDEMPOTENCY_IN_PROGRESS"
   | "RATE_LIMITED"
   | "HTTPS_REQUIRED"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL_ERROR";
 
 export type ApiResponseInit = {
