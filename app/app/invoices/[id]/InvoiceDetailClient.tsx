@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
+import { getSnapScriptUrl } from "@/lib/security/csp";
 import { trackEvent } from "@/lib/telemetry";
 
 import { InvoiceItemsTable } from "./InvoiceItemsTable";
@@ -235,7 +236,7 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   return (
     <div className="space-y-6 p-6">
       <Script 
-        src={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith('SB-Mid') ? 'https://app.sandbox.midtrans.com/snap/snap.js' : 'https://app.midtrans.com/snap/snap.js'}
+        src={getSnapScriptUrl(process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY)}
         data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

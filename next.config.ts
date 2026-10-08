@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSentryConfig as sentryConfigFn } from "@sentry/nextjs";
+import { buildContentSecurityPolicy } from "./lib/security/csp";
 
 const nextConfig: NextConfig = {
   eslint: {
@@ -27,8 +28,7 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "geolocation=()" },
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://app.posthog.com https://*.ingest.sentry.io; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests",
+            value: buildContentSecurityPolicy(),
           },
         ],
       },
