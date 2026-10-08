@@ -98,7 +98,7 @@ export const authorizeApiRequest = async (
 
   const identity = await authenticateApiKey(request);
   const rateIdentifier = identity?.keyId || getClientIp(request);
-  const rateLimit = consumeApiRateLimit(rateIdentifier, bucket);
+  const rateLimit = await consumeApiRateLimit(rateIdentifier, bucket);
   const rateHeaders = rateLimitHeaders(rateLimit);
 
   if (isRateLimited(rateLimit)) {

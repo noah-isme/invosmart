@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as listInvoices, POST as createInvoice } from "@/app/api/v1/invoices/route";
 import { GET as getInvoice } from "@/app/api/v1/invoices/[id]/route";
 import { GET as listClients } from "@/app/api/v1/clients/route";
 import { db } from "@/lib/db";
 import { clearIdempotencyStore } from "@/lib/api-v1/idempotency";
+import { FakeRedis } from "@/test/mocks/fake-redis";
 
 const identity = {
   keyId: "key-a",
@@ -20,8 +21,13 @@ const context = {
   rateLimit: { limit: 120, remaining: 119, resetAt: Date.now() + 60_000 },
 };
 
-const { authorizeApiRequestMock } = vi.hoisted(() => ({
+const { authorizeApiRequestMock, redisRef } = vi.hoisted(() => ({
   authorizeApiRequestMock: vi.fn(),
+  redisRef: { current: null as unknown },
+}));
+
+vi.mock("@/lib/api-v1/redis", () => ({
+  getApiRedis: () => redisRef.current,
 }));
 
 vi.mock("@/lib/api-v1/auth", () => ({
@@ -52,6 +58,11 @@ describe("versioned public API", () => {
     vi.clearAllMocks();
     authorizeApiRequestMock.mockResolvedValue({ ok: true, context });
     clearIdempotencyStore();
+    redisRef.current = null;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns a stable auth error before touching workspace data", async () => {
@@ -148,6 +159,63 @@ describe("versioned public API", () => {
     expect((await first.json()).data).toEqual(invoice);
     expect((await second.json()).data).toEqual(invoice);
     expect(db.invoice.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 409 IDEMPOTENCY_IN_PROGRESS while another instance holds the key", async () => {
+    vi.useFakeTimers();
+    redisRef.current = new FakeRedis();
+    db.invoice.count.mockResolvedValue(0);
+    db.invoice.create.mockReturnValueOnce(new Promise(() => undefined) as never);
+
+    const init = {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer inv_live_test",
+        "idempotency-key": "create-1",
+      },
+      body: JSON.stringify({
+        client: "Acme",
+        items: [{ name: "Work", qty: 1, price: 100 }],
+        dueAt: null,
+      }),
+    } satisfies RequestInit;
+
+    void createInvoice(request("/api/v1/invoices", init));
+    const pending = createInvoice(request("/api/v1/invoices", init));
+    await vi.advanceTimersByTimeAsync(6_000);
+    const response = await pending;
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("retry-after")).toBe("1");
+    expect((await response.json()).error.code).toBe("IDEMPOTENCY_IN_PROGRESS");
+    expect(db.invoice.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 503 SERVICE_UNAVAILABLE without writing when Redis is unreachable", async () => {
+    const redis = new FakeRedis();
+    redis.failing = true;
+    redisRef.current = redis;
+    vi.spyOn(console, "warn").mockImplementationOnce(() => undefined);
+
+    const response = await createInvoice(request("/api/v1/invoices", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer inv_live_test",
+        "idempotency-key": "create-1",
+      },
+      body: JSON.stringify({
+        client: "Acme",
+        items: [{ name: "Work", qty: 1, price: 100 }],
+        dueAt: null,
+      }),
+    }));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("5");
+    expect((await response.json()).error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(db.invoice.create).not.toHaveBeenCalled();
   });
 
   it("lists clients with workspace scope and stable metadata", async () => {

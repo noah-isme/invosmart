@@ -55,3 +55,8 @@ graphify-out/graph.html
 .agents/teamwork_*/
 .agents/explorer_*/
 .agents/orchestrator_*/
+
+# local scratch output (curl session cookies, CSRF dumps, lint logs)
+cookiejar.txt
+csrf.json
+*.log

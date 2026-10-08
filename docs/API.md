@@ -44,8 +44,18 @@ filters before any resource identifier is resolved. Unknown resources return
 
 Create operations require an `Idempotency-Key`. Repeating a key with the same
 request returns the original result; reusing it with a different request
-returns `409`. The beta guard is process-local; the v1.4 GA gate requires the
-same contract to be verified through the durable/distributed deployment path.
+returns `409 IDEMPOTENCY_CONFLICT`. A retry that arrives while the original
+request is still running waits briefly, then returns `409
+IDEMPOTENCY_IN_PROGRESS` with `Retry-After`. Keys are retained for 24 hours.
+
+Idempotency keys and rate-limit windows are stored in Upstash Redis
+(`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, or the Vercel KV
+equivalents) so they hold across serverless instances. When Redis is not
+configured (local development) both use process-local stores. When Redis is
+configured but unreachable, rate limiting falls back to a process-local window,
+while create requests fail closed with `503 SERVICE_UNAVAILABLE` and
+`Retry-After` rather than risk a duplicate write. The v1.4 GA gate still
+requires this contract to be verified on the staging deployment.
 
 ## Response contract
 
