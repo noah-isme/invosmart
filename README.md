@@ -64,7 +64,16 @@ npm run dev      # → http://localhost:1234
 | `start` | `npm start` | Start production server |
 | `lint` | `npm run lint` | ESLint check |
 | `test` | `npm run test` | Vitest unit tests |
-| `test:e2e` | `npm run test:e2e` | Playwright E2E tests |
+| `test:e2e` | `npm run test:e2e` | Playwright E2E tests (excludes `@staging`) |
+| `test:e2e:smoke` | `npm run test:e2e:smoke` | Playwright `@smoke` subset |
+| `test:e2e:contract` | `npm run test:e2e:contract` | No-DB contract gate (app server only) |
+| `test:e2e:staging` | `npm run test:e2e:staging` | `@staging` specs against `PLAYWRIGHT_BASE_URL` |
+| `test:integration` | `npm run test:integration` | Vitest DB integration layer |
+| `e2e:build` | `npm run e2e:build` | Production build for e2e (see below) |
+| `e2e:db` | `npm run e2e:db` | In-memory PGlite Postgres server for e2e |
+| `e2e:stub` | `npm run e2e:stub` | Local provider stub server for e2e |
+| `e2e:db:probe` | `npm run e2e:db:probe` | PGlite connection probes (needs `e2e:db` running) |
+| `e2e:report` | `npm run e2e:report` | Open the Playwright HTML report |
 | `db:push` | `npm run db:push` | Push Prisma schema to database |
 | `db:studio` | `npm run db:studio` | Open Prisma Studio GUI |
 | `db:seed` | `npm run db:seed` | Seed database |
@@ -239,6 +248,7 @@ For a deep dive into the AI mechanics, refer to the following documentation:
 We ensure reliability through comprehensive testing:
 - **Unit Tests**: Powered by Vitest. Run using `npm run test`.
 - **E2E Tests**: Powered by Playwright. Run using `npm run test:e2e`.
+- **`e2e:build`**: runs `next build` with the fixed e2e `NEXT_PUBLIC_*` values and writes `.next/e2e-build.json` (a fingerprint of those values plus `git rev-parse HEAD`) so the Playwright config can detect a stale build. `next/font` fetches Google Fonts at build time, so `e2e:build` (like `npm run build`) needs network access.
 - **Coverage**: We maintain high coverage expectations across core business logic (`lib/`) and UI components (`components/`).
 
 ---

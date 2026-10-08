@@ -62,3 +62,8 @@ csrf.json
 *.log
 
 .e2e-tmp/
+
+# e2e tooling
+test/e2e/.auth/
+QA-report/
+.next/e2e-build.json
