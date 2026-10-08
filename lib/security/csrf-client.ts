@@ -1,5 +1,5 @@
 import {
-  CSRF_COOKIE_NAME,
+  getCsrfCookieName,
   CSRF_HEADER_NAME,
   CSRF_PROTECTED_METHODS,
 } from "@/lib/security/csrf";
@@ -7,7 +7,7 @@ import {
 /**
  * Browser-side half of the CSRF double-submit protection.
  *
- * The middleware issues a non-httpOnly `csrf-token` cookie; this helper reads
+ * The middleware issues a non-httpOnly cookie (see getCsrfCookieName); this helper reads
  * it and echoes it in the `x-csrf-token` header on same-origin mutating
  * requests. The token is never attached to cross-origin requests.
  */
@@ -28,7 +28,7 @@ export function getCsrfTokenFromCookie(): string | null {
   for (const part of cookieString.split(";")) {
     const separator = part.indexOf("=");
     if (separator === -1) continue;
-    if (part.slice(0, separator).trim() !== CSRF_COOKIE_NAME) continue;
+    if (part.slice(0, separator).trim() !== getCsrfCookieName()) continue;
 
     const raw = part.slice(separator + 1).trim();
     if (!raw) return null;

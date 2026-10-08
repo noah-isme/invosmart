@@ -6,11 +6,59 @@
  * only use Web Platform APIs: no `import crypto from "crypto"` and no `Buffer`.
  */
 
-export const CSRF_COOKIE_NAME = "csrf-token";
 export const CSRF_HEADER_NAME = "x-csrf-token";
-
-export const CSRF_COOKIE = CSRF_COOKIE_NAME;
 export const CSRF_HEADER = CSRF_HEADER_NAME;
+
+/**
+ * Name of the pre-fix cookie. It was issued HttpOnly, so browsers that still
+ * hold it cannot read it from JS and the middleware must expire it.
+ */
+export const LEGACY_CSRF_COOKIE_NAME = "csrf-token";
+
+/**
+ * Name of the CSRF cookie. Single source of truth for the middleware and the
+ * browser helper (Next inlines `process.env.NODE_ENV` in client bundles).
+ *
+ * - Production: `__Host-csrf-token`. The `__Host-` prefix makes browsers
+ *   require Secure + Path=/ and no Domain, which also stops sibling
+ *   subdomains from planting ("tossing") a cookie of that name.
+ * - Otherwise: `csrf-token-v2`, because `__Host-` needs Secure and local
+ *   development runs over plain http.
+ *
+ * Evaluated on each call so tests can switch NODE_ENV.
+ */
+export function getCsrfCookieName(): string {
+  return process.env.NODE_ENV === "production"
+    ? "__Host-csrf-token"
+    : "csrf-token-v2";
+}
+
+/**
+ * Provider webhooks that authenticate by verifying a signature over the raw
+ * body and therefore cannot carry a browser CSRF token. Matched by exact
+ * pathname and POST only; never use prefix matching.
+ *
+ * Any path added here MUST verify a signature before any side effect (DB
+ * access included), fail closed when its secret is missing, and MUST NOT read
+ * the user's session or cookies.
+ */
+const CSRF_EXEMPT_WEBHOOK_SET: ReadonlySet<string> = new Set([
+  "/api/payments/stripe/webhook",
+  "/api/payments/midtrans/notification",
+  "/api/webhooks/resend",
+]);
+
+/** Frozen copy of the allowlist, for documentation and tests. */
+export const CSRF_EXEMPT_WEBHOOK_PATHS: readonly string[] = Object.freeze([
+  ...CSRF_EXEMPT_WEBHOOK_SET,
+]);
+
+/** True for a POST to one of the signature-verified webhook endpoints. */
+export function isCsrfExemptWebhook(pathname: string, method: string): boolean {
+  return (
+    method.toUpperCase() === "POST" && CSRF_EXEMPT_WEBHOOK_SET.has(pathname)
+  );
+}
 
 /** HTTP methods that must carry a valid CSRF token. */
 export const CSRF_PROTECTED_METHODS: readonly string[] = [
@@ -113,13 +161,13 @@ export function verifyCsrfToken(req: Request): boolean {
 
   const requestWithCookies = req as RequestWithCookies;
   if (typeof requestWithCookies.cookies?.get === "function") {
-    cookieToken = requestWithCookies.cookies.get(CSRF_COOKIE_NAME)?.value;
+    cookieToken = requestWithCookies.cookies.get(getCsrfCookieName())?.value;
   }
 
   if (!cookieToken && req.headers) {
     const cookieHeader = req.headers.get("cookie") || "";
     const match = cookieHeader.match(
-      new RegExp(`(?:^|;\\s*)${CSRF_COOKIE_NAME}=([^;]*)`)
+      new RegExp(`(?:^|;\\s*)${getCsrfCookieName()}=([^;]*)`)
     );
     if (match) {
       cookieToken = decodeURIComponent(match[1]);

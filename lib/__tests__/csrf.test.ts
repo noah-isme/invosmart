@@ -6,7 +6,7 @@ import {
   validateCsrfToken,
   verifyCsrfToken,
   getCsrfCookieOptions,
-  CSRF_COOKIE_NAME,
+  getCsrfCookieName,
   CSRF_HEADER_NAME,
   CSRF_PROTECTED_METHODS,
 } from "../security/csrf";
@@ -152,7 +152,7 @@ describe("CSRF Utility (lib/security/csrf.ts)", () => {
       const token = generateCsrfToken();
       const headers = new Headers();
       headers.set(CSRF_HEADER_NAME, token);
-      headers.set("cookie", `${CSRF_COOKIE_NAME}=${token}`);
+      headers.set("cookie", `${getCsrfCookieName()}=${token}`);
 
       const req = new Request("https://example.com/api/test", {
         method: "POST",

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { csrfFetch, getCsrfTokenFromCookie } from "../security/csrf-client";
-import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "../security/csrf";
+import {
+  getCsrfCookieName,
+  CSRF_HEADER_NAME,
+  LEGACY_CSRF_COOKIE_NAME,
+} from "../security/csrf";
 
 function setCookie(value: string) {
   document.cookie = `${value}; path=/`;
@@ -20,7 +24,7 @@ describe("csrf-client", () => {
   });
 
   afterEach(() => {
-    clearCookie(CSRF_COOKIE_NAME);
+    clearCookie(getCsrfCookieName());
     clearCookie("other");
     vi.unstubAllGlobals();
   });
@@ -37,18 +41,37 @@ describe("csrf-client", () => {
 
     it("reads the token among other cookies", () => {
       setCookie("other=1");
-      setCookie(`${CSRF_COOKIE_NAME}=abc123`);
+      setCookie(`${getCsrfCookieName()}=abc123`);
       expect(getCsrfTokenFromCookie()).toBe("abc123");
     });
 
     it("does not match cookies whose name merely ends with the CSRF name", () => {
-      setCookie(`x-${CSRF_COOKIE_NAME}=evil`);
+      setCookie(`x-${getCsrfCookieName()}=evil`);
       expect(getCsrfTokenFromCookie()).toBeNull();
-      clearCookie(`x-${CSRF_COOKIE_NAME}`);
+      clearCookie(`x-${getCsrfCookieName()}`);
+    });
+
+    it("reads the rotated cookie name and ignores the legacy csrf-token cookie", () => {
+      setCookie(`${LEGACY_CSRF_COOKIE_NAME}=legacy`);
+      expect(getCsrfTokenFromCookie()).toBeNull();
+
+      setCookie(`${getCsrfCookieName()}=fresh`);
+      expect(getCsrfTokenFromCookie()).toBe("fresh");
+      clearCookie(LEGACY_CSRF_COOKIE_NAME);
+    });
+
+    it("reads the __Host- cookie in production", () => {
+      vi.stubEnv("NODE_ENV", "production");
+      const cookieSpy = vi
+        .spyOn(document, "cookie", "get")
+        .mockReturnValue("a=1; __Host-csrf-token=prod-token; csrf-token=legacy");
+      expect(getCsrfTokenFromCookie()).toBe("prod-token");
+      cookieSpy.mockRestore();
+      vi.unstubAllEnvs();
     });
 
     it("decodes percent-encoded values", () => {
-      setCookie(`${CSRF_COOKIE_NAME}=a%2Bb`);
+      setCookie(`${getCsrfCookieName()}=a%2Bb`);
       expect(getCsrfTokenFromCookie()).toBe("a+b");
     });
   });
@@ -57,7 +80,7 @@ describe("csrf-client", () => {
     it.each(["POST", "PUT", "PATCH", "DELETE", "post"])(
       "adds the token header to same-origin %s requests",
       async (method) => {
-        setCookie(`${CSRF_COOKIE_NAME}=tok`);
+        setCookie(`${getCsrfCookieName()}=tok`);
         await csrfFetch("/api/invoices", { method, body: "{}" });
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -68,7 +91,7 @@ describe("csrf-client", () => {
     );
 
     it("preserves existing headers", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,7 +102,7 @@ describe("csrf-client", () => {
     });
 
     it("preserves headers supplied as a Headers instance or tuple array", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch("/api/a", { method: "POST", headers: new Headers({ "x-a": "1" }) });
       expect(sentHeaders().get("x-a")).toBe("1");
 
@@ -90,7 +113,7 @@ describe("csrf-client", () => {
     });
 
     it("does not overwrite an explicitly supplied token header", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch("/api/invoices", {
         method: "POST",
         headers: { [CSRF_HEADER_NAME]: "explicit" },
@@ -99,7 +122,7 @@ describe("csrf-client", () => {
     });
 
     it("does not add the header to safe methods", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch("/api/invoices");
       await csrfFetch("/api/invoices", { method: "GET" });
       await csrfFetch("/api/invoices", { method: "HEAD" });
@@ -110,14 +133,14 @@ describe("csrf-client", () => {
     });
 
     it("never sends the token to a different origin", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch("https://evil.example.com/api/invoices", { method: "POST" });
       const init = fetchMock.mock.calls[0][1] as RequestInit;
       expect(new Headers(init.headers).has(CSRF_HEADER_NAME)).toBe(false);
     });
 
     it("adds the token for absolute same-origin URLs and URL objects", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       await csrfFetch(`${window.location.origin}/api/invoices`, { method: "POST" });
       expect(sentHeaders().get(CSRF_HEADER_NAME)).toBe("tok");
 
@@ -127,7 +150,7 @@ describe("csrf-client", () => {
     });
 
     it("uses the method and headers of a Request input", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       const request = new Request(`${window.location.origin}/api/invoices`, {
         method: "PUT",
         headers: { "x-keep": "yes" },
@@ -146,7 +169,7 @@ describe("csrf-client", () => {
     });
 
     it("returns the underlying fetch response", async () => {
-      setCookie(`${CSRF_COOKIE_NAME}=tok`);
+      setCookie(`${getCsrfCookieName()}=tok`);
       const response = await csrfFetch("/api/invoices", { method: "POST" });
       expect(response.status).toBe(200);
     });
