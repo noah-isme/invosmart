@@ -30,6 +30,8 @@ const eslintConfig = defineConfig([
     "graphify-out/**",
     "coverage/**",
     "QA-report/**",
+    // Local TMPDIR for e2e runs (Playwright transform cache, server logs).
+    ".e2e-tmp/**",
   ]),
 ]);
 
