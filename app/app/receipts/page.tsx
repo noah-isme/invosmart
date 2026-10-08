@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { RECEIPTS_COPY } from '@/lib/receipts/ui-copy';
 import { useSelectedPayment, useReceiptOptions } from '@/lib/receipts/state';
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 function ReceiptsTabs() {
   const [active, setActive] = useState<'select' | 'create'>('select');
@@ -64,7 +65,7 @@ export default function Page() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/receipts/create', {
+      const response = await csrfFetch('/api/receipts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

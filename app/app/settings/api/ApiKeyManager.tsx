@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type ApiKeyRecord = {
   id: string;
@@ -61,7 +62,7 @@ export function ApiKeyManager({
     setMessage(null);
     setToken(null);
     try {
-      const response = await fetch(`/api/workspaces/${organizationId}/api-keys`, {
+      const response = await csrfFetch(`/api/workspaces/${organizationId}/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -88,7 +89,7 @@ export function ApiKeyManager({
     if (!organizationId || !window.confirm("Revoke this API key? Existing integrations will stop working.")) return;
     setBusy(true);
     try {
-      await fetch(`/api/workspaces/${organizationId}/api-keys/${keyId}`, { method: "DELETE" });
+      await csrfFetch(`/api/workspaces/${organizationId}/api-keys/${keyId}`, { method: "DELETE" });
       await loadKeys();
     } finally {
       setBusy(false);

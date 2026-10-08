@@ -9,6 +9,7 @@ import type { InvoiceFormInitialValues } from "@/components/invoices/InvoiceForm
 
 import { AIInvoicePreview } from "./AIInvoicePreview";
 import { AIInvoicePrompt } from "./AIInvoicePrompt";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type AIInvoiceDraft = z.infer<typeof AIInvoiceSchema>;
 
@@ -49,7 +50,7 @@ export const AIInvoiceGeneratorClient = () => {
     let fallbackValues: InvoiceFormInitialValues | null = null;
 
     try {
-      const response = await fetch("/api/invoices/ai", {
+      const response = await csrfFetch("/api/invoices/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.trim() }),

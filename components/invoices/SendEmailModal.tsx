@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Dialog } from '@headlessui/react';
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 interface SendEmailModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export default function SendEmailModal({
     setError(null);
 
     try {
-      const res = await fetch(`/api/invoices/${invoiceId}/send-email`, {
+      const res = await csrfFetch(`/api/invoices/${invoiceId}/send-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: email }),

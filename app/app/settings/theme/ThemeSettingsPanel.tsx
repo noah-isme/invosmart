@@ -7,6 +7,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME, useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/context/ToastContext";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type ThemeMode = "light" | "dark";
 
@@ -138,7 +139,7 @@ export const ThemeSettingsPanel = ({ initialBrandingSync, brandName, brandLogoUr
       }
 
       try {
-        await fetch("/api/user/branding", {
+        await csrfFetch("/api/user/branding", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ primaryColor: color }),
@@ -188,7 +189,7 @@ export const ThemeSettingsPanel = ({ initialBrandingSync, brandName, brandLogoUr
     clearMessages();
 
     try {
-      const response = await fetch("/api/ai/theme-suggest", {
+      const response = await csrfFetch("/api/ai/theme-suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

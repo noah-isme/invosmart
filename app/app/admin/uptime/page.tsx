@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, AlertTriangle, CheckCircle2, Clock, RefreshCw, Server, XCircle } from "lucide-react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type UptimeRecord = {
   id?: string;
@@ -73,7 +74,7 @@ export default function UptimeMonitoringPage() {
       setErrorMessage(null);
       setSuccessMessage(null);
 
-      const res = await fetch("/api/admin/uptime", {
+      const res = await csrfFetch("/api/admin/uptime", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),

@@ -8,6 +8,7 @@ import { InvoiceFormSchema, InvoiceStatusEnum } from "@/lib/schemas";
 import { calculateTotals, type InvoiceItemInput } from "@/lib/invoice-utils";
 import { trackEvent } from "@/lib/telemetry";
 import { formatCurrency, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 const DEFAULT_TAX_RATE = 0.1;
 
@@ -308,7 +309,7 @@ export const InvoiceFormClient = ({
     }
 
     try {
-      const response = await fetch("/api/invoices", {
+      const response = await csrfFetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

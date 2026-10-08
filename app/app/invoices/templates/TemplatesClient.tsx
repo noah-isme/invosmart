@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/currency";
 import { FileText, Copy, Trash2, Edit3, Plus, Search, Check, X, Loader2 } from "lucide-react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 export type InvoiceTemplateItem = {
   name: string;
@@ -57,7 +58,7 @@ export default function TemplatesClient({ initialTemplates }: { initialTemplates
     setSuccessMsg(null);
 
     try {
-      const res = await fetch(`/api/invoices/templates/${template.id}/instantiate`, {
+      const res = await csrfFetch(`/api/invoices/templates/${template.id}/instantiate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -90,7 +91,7 @@ export default function TemplatesClient({ initialTemplates }: { initialTemplates
     setError(null);
 
     try {
-      const res = await fetch(`/api/invoices/templates/${id}`, {
+      const res = await csrfFetch(`/api/invoices/templates/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editingName.trim() }),
@@ -122,7 +123,7 @@ export default function TemplatesClient({ initialTemplates }: { initialTemplates
     setError(null);
 
     try {
-      const res = await fetch(`/api/invoices/templates/${id}`, {
+      const res = await csrfFetch(`/api/invoices/templates/${id}`, {
         method: "DELETE",
       });
 
@@ -158,7 +159,7 @@ export default function TemplatesClient({ initialTemplates }: { initialTemplates
     setError(null);
 
     try {
-      const res = await fetch("/api/invoices/templates", {
+      const res = await csrfFetch("/api/invoices/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

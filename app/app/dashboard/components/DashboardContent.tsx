@@ -16,6 +16,7 @@ import { InvoiceTable } from "./InvoiceTable";
 import { InvoiceStatusEnum, type InvoiceStatusValue } from "@/lib/schemas";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 const DEFAULT_STATS: InvoiceDashboardStats = {
   revenue: 0,
@@ -132,7 +133,7 @@ export const DashboardContent = () => {
       setError(null);
 
       try {
-        const response = await fetch(`/api/invoices/${invoiceId}`, {
+        const response = await csrfFetch(`/api/invoices/${invoiceId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -172,7 +173,7 @@ export const DashboardContent = () => {
       setError(null);
 
       try {
-        const response = await fetch(`/api/invoices/${invoiceId}`, {
+        const response = await csrfFetch(`/api/invoices/${invoiceId}`, {
           method: "DELETE",
         });
 

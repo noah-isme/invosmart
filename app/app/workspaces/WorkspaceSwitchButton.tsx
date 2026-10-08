@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 export function WorkspaceSwitchButton({ organizationId, active }: { organizationId: string; active: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -10,7 +11,7 @@ export function WorkspaceSwitchButton({ organizationId, active }: { organization
   const switchWorkspace = async () => {
     setBusy(true);
     try {
-      const response = await fetch("/api/workspaces/switch", {
+      const response = await csrfFetch("/api/workspaces/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ organizationId }),

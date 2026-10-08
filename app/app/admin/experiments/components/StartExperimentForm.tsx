@@ -3,6 +3,7 @@
 import { ExperimentAxis } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 const axisOptions: { value: ExperimentAxis; label: string; helper: string }[] = [
   { value: "HOOK", label: "Hook", helper: "Pembuka untuk menarik perhatian" },
@@ -57,7 +58,7 @@ export function StartExperimentForm() {
     }
 
     try {
-      const response = await fetch("/api/opt/local/start", {
+      const response = await csrfFetch("/api/opt/local/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

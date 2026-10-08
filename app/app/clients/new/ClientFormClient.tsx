@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type InitialClientData = {
   id?: string;
@@ -46,7 +47,7 @@ export default function ClientFormClient({ initialData }: { initialData?: Initia
       const url = initialData ? `/api/clients/${initialData.id}` : "/api/clients";
       const method = initialData ? "PUT" : "POST";
       
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)

@@ -23,6 +23,7 @@ import { useToast } from "@/context/ToastContext";
 import { trackEvent } from "@/lib/telemetry";
 import type { RevenueInsight } from "@/lib/analytics";
 import type { AiInvoiceInsight, InvoiceInsightSummary } from "@/lib/schemas";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 const formatCurrency = (value: number, currency: string) =>
   new Intl.NumberFormat("id-ID", {
@@ -90,7 +91,7 @@ export function InsightClient({ summary, revenueInsight }: InsightClientProps) {
     setIsFallback(false);
 
     try {
-      const response = await fetch("/api/ai/invoice-insight", {
+      const response = await csrfFetch("/api/ai/invoice-insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ summary }),

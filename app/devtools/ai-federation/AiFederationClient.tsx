@@ -25,6 +25,7 @@ import type {
   TrustAggregatePayload,
   ModelUpdatePayload,
 } from "@/lib/federation/protocol";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 export type FederationDashboardState = {
   enabled: boolean;
@@ -140,7 +141,7 @@ const EmptyState = ({ children }: { children: ReactNode }) => (
 );
 
 const fetchStatus = async (method: "GET" | "POST") => {
-  const response = await fetch("/api/federation/status", {
+  const response = await csrfFetch("/api/federation/status", {
     method,
     headers: { "x-federation-ui": "true" },
   });

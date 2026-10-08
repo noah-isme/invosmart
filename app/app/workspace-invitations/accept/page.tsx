@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 function AcceptWorkspaceInvitationContent() {
   const params = useSearchParams();
@@ -14,7 +15,7 @@ function AcceptWorkspaceInvitationContent() {
   useEffect(() => {
     if (!token) return;
 
-    void fetch(`/api/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: "POST" })
+    void csrfFetch(`/api/workspace-invitations/${encodeURIComponent(token)}/accept`, { method: "POST" })
       .then(async (response) => {
         const body = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error(body.error || "Unable to accept invitation");

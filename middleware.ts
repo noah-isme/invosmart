@@ -1,11 +1,19 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
+  CSRF_PROTECTED_METHODS,
+  LEGACY_CSRF_COOKIE_NAME,
   generateCsrfToken,
+  getCsrfCookieName,
+  getCsrfCookieOptions,
+  isCsrfExemptWebhook,
   validateCsrfToken,
 } from "@/lib/security/csrf";
+
+type ResponseCookies = {
+  set: (name: string, value: string, options?: Record<string, unknown>) => void;
+};
 
 export function handleCsrfAndResponse(req: NextRequest): Response {
   const pathname = req.nextUrl?.pathname || "";
@@ -23,15 +31,23 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
     pathname.startsWith("/api/v1/") &&
     /^Bearer\s+inv_live_/i.test(req.headers.get("authorization") ?? "");
 
+  // Provider webhooks (exact path, POST only; see lib/security/csrf.ts) are
+  // authenticated by a signature check inside the route, not by a browser
+  // session, so they bypass CSRF and do not receive a CSRF cookie.
+  const isSignedWebhook = isCsrfExemptWebhook(pathname, method);
+  if (isSignedWebhook) {
+    return NextResponse.next();
+  }
+
   // Enforce CSRF token validation on all mutating API routes (POST, PUT, DELETE, PATCH under /api/*)
   if (
     pathname.startsWith("/api/") &&
     !pathname.startsWith("/api/auth/") &&
     !isVersionedApiKeyRequest &&
     process.env.NODE_ENV !== "test" &&
-    ["POST", "PUT", "DELETE", "PATCH"].includes(method)
+    CSRF_PROTECTED_METHODS.includes(method)
   ) {
-    const cookieToken = reqWithCookies.cookies?.get(CSRF_COOKIE_NAME)?.value;
+    const cookieToken = reqWithCookies.cookies?.get(getCsrfCookieName())?.value;
     const headerToken = req.headers.get(CSRF_HEADER_NAME);
 
     if (!validateCsrfToken(cookieToken, headerToken)) {
@@ -45,15 +61,16 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
   const response = NextResponse.next();
 
   // Ensure CSRF cookie is set on outgoing responses when missing
-  let csrfToken = reqWithCookies.cookies?.get(CSRF_COOKIE_NAME)?.value;
-  if (!csrfToken) {
-    csrfToken = generateCsrfToken();
-    (response as unknown as { cookies: { set: (name: string, value: string, options?: Record<string, unknown>) => void } }).cookies.set(CSRF_COOKIE_NAME, csrfToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: process.env.NODE_ENV === "production",
-    });
+  const responseCookies = (response as unknown as { cookies: ResponseCookies }).cookies;
+  const cookieName = getCsrfCookieName();
+  if (!reqWithCookies.cookies?.get(cookieName)?.value) {
+    responseCookies.set(cookieName, generateCsrfToken(), getCsrfCookieOptions());
+  }
+
+  // Browsers that still hold the old HttpOnly cookie cannot read it from JS and
+  // it is no longer consulted, so expire it.
+  if (reqWithCookies.cookies?.get(LEGACY_CSRF_COOKIE_NAME)) {
+    responseCookies.set(LEGACY_CSRF_COOKIE_NAME, "", { maxAge: 0, path: "/" });
   }
 
   return response;

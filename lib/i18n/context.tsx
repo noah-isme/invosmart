@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import enDictionary from "./locales/en.json";
 import idDictionary from "./locales/id.json";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 export type Locale = "en" | "id";
 
@@ -158,7 +159,7 @@ export function I18nProvider({
     }
 
     try {
-      await fetch("/api/user/locale", {
+      await csrfFetch("/api/user/locale", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale: newLocale }),
