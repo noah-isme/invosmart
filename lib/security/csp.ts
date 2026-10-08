@@ -51,6 +51,18 @@ export function getMidtransCspHosts(
   };
 }
 
+/**
+ * URL of snap.js for the environment implied by the client key. Shared by the
+ * invoice page and the CSP so the loaded script and the allowed host cannot
+ * drift apart.
+ */
+export function getSnapScriptUrl(clientKey: string | undefined): string {
+  const [scriptOrigin] = getMidtransCspHosts(
+    getMidtransEnvironment(clientKey)
+  ).script;
+  return `${scriptOrigin}/snap/snap.js`;
+}
+
 export function buildContentSecurityPolicy(
   midtransClientKey: string | undefined = process.env
     .NEXT_PUBLIC_MIDTRANS_CLIENT_KEY

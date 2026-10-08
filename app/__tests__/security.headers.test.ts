@@ -2,6 +2,7 @@ import nextConfig from "@/next.config";
 import { describe, expect, it, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { handleCsrfAndResponse } from "@/middleware";
+import { buildContentSecurityPolicy } from "@/lib/security/csp";
 import {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
@@ -40,6 +41,35 @@ describe("Security headers and CSP", () => {
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("upgrade-insecure-requests");
+  });
+
+  it("serves the CSP produced by buildContentSecurityPolicy for the build-time key", async () => {
+    const headers = await nextConfig.headers?.();
+    const csp = headers?.[0].headers.find(
+      (header: { key: string }) => header.key === "Content-Security-Policy"
+    )?.value;
+
+    expect(csp).toBe(buildContentSecurityPolicy());
+  });
+
+  it("allows the production Midtrans Snap frame when no client key is set", async () => {
+    const original = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
+    try {
+      delete process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
+      const headers = await nextConfig.headers?.();
+      const csp = headers?.[0].headers.find(
+        (header: { key: string }) => header.key === "Content-Security-Policy"
+      )?.value;
+
+      expect(csp).toContain("frame-src 'self' https://app.midtrans.com;");
+      expect(csp).not.toContain("sandbox");
+    } finally {
+      if (original === undefined) {
+        delete process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
+      } else {
+        process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY = original;
+      }
+    }
   });
 });
 

@@ -2,7 +2,38 @@ import { describe, expect, it } from "vitest";
 import {
   buildContentSecurityPolicy,
   getMidtransEnvironment,
+  getSnapScriptUrl,
 } from "@/lib/security/csp";
+
+const EXPECTED_SANDBOX_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app.posthog.com https://app.sandbox.midtrans.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://app.posthog.com https://*.ingest.sentry.io",
+  "frame-src 'self' https://app.sandbox.midtrans.com",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "upgrade-insecure-requests",
+].join("; ");
+
+const EXPECTED_PRODUCTION_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app.posthog.com https://app.midtrans.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://app.posthog.com https://*.ingest.sentry.io",
+  "frame-src 'self' https://app.midtrans.com",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "upgrade-insecure-requests",
+].join("; ");
 
 function directive(csp: string, name: string): string[] {
   const found = csp
@@ -79,24 +110,37 @@ describe("buildContentSecurityPolicy", () => {
     ]);
   });
 
-  it.each([
-    ["sandbox", sandbox],
-    ["production", production],
-  ])("leaves the other directives unchanged (%s)", (_name, csp) => {
-    expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain(
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app.posthog.com"
+  it("produces exactly the expected sandbox policy", () => {
+    expect(sandbox).toBe(EXPECTED_SANDBOX_CSP);
+  });
+
+  it("produces exactly the expected production policy", () => {
+    expect(production).toBe(EXPECTED_PRODUCTION_CSP);
+  });
+});
+
+describe("getSnapScriptUrl", () => {
+  it("returns the sandbox snap.js URL for SB-Mid keys", () => {
+    expect(getSnapScriptUrl("SB-Mid-client-test")).toBe(
+      "https://app.sandbox.midtrans.com/snap/snap.js"
     );
-    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).toContain("img-src 'self' data: blob: https:");
-    expect(csp).toContain("font-src 'self' data:");
-    expect(csp).toContain(
-      "connect-src 'self' https://app.posthog.com https://*.ingest.sentry.io;"
+  });
+
+  it("returns the production snap.js URL for other or missing keys", () => {
+    expect(getSnapScriptUrl("Mid-client-test")).toBe(
+      "https://app.midtrans.com/snap/snap.js"
     );
-    expect(csp).toContain("frame-ancestors 'none'");
-    expect(csp).toContain("form-action 'self'");
-    expect(csp).toContain("base-uri 'self'");
-    expect(csp).toContain("object-src 'none'");
-    expect(csp.endsWith("upgrade-insecure-requests")).toBe(true);
+    expect(getSnapScriptUrl(undefined)).toBe(
+      "https://app.midtrans.com/snap/snap.js"
+    );
+  });
+
+  it("loads snap.js from the same origin the CSP allows in script-src", () => {
+    for (const key of ["SB-Mid-client-test", "Mid-client-test"]) {
+      const origin = new URL(getSnapScriptUrl(key)).origin;
+      expect(directive(buildContentSecurityPolicy(key), "script-src")).toContain(
+        origin
+      );
+    }
   });
 });
