@@ -5,7 +5,13 @@ declare module 'midtrans-client' {
     clientKey: string;
   };
 
+  interface ApiConfig {
+    isProduction: boolean;
+    getSnapApiBaseUrl(): string;
+  }
+
   interface Snap {
+    apiConfig: ApiConfig;
     createTransaction(payload: Record<string, unknown>): Promise<{
       token?: string;
       redirect_url?: string;

@@ -178,6 +178,10 @@ export function validateStagingEnvironment(env = process.env, { allowHttp = fals
     errors.push("RESEND_FROM_EMAIL must be a valid email address");
   }
 
+  if (env.INVOSMART_E2E_PROVIDER_BASE_URL?.trim()) {
+    errors.push("INVOSMART_E2E_PROVIDER_BASE_URL is test-only and must not be set for staging");
+  }
+
   return {
     name: "Staging environment configuration",
     ok: missing.length === 0 && placeholders.length === 0 && errors.length === 0,

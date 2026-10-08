@@ -135,6 +135,9 @@ Ensure the following environment variables are correctly configured in your `.en
 - `STRIPE_WEBHOOK_SECRET`
 - `MIDTRANS_SERVER_KEY`
 
+### Test-only
+- `INVOSMART_E2E_PROVIDER_BASE_URL`: **test-only, never set in any deployed environment.** Redirects the server-side Stripe and Midtrans Snap clients to the Playwright provider stub (`lib/payments/e2e-provider-base.ts`). Accepts loopback `http` URLs only (`127.0.0.1`, `localhost`, `[::1]`); the app refuses to start when it is set together with `VERCEL`/`VERCEL_ENV`, and `npm run release:certify` rejects it. Leave it unset outside the e2e suite.
+
 ---
 
 ## 📁 Project Structure

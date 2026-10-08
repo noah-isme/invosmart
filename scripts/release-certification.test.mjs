@@ -74,6 +74,16 @@ describe("release certification preflight", () => {
     );
   });
 
+  it("rejects the test-only e2e provider redirect flag", () => {
+    const flagged = validStagingEnvironment();
+    flagged.INVOSMART_E2E_PROVIDER_BASE_URL = "http://127.0.0.1:4010";
+    const result = validateStagingEnvironment(flagged);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "INVOSMART_E2E_PROVIDER_BASE_URL is test-only and must not be set for staging",
+    );
+  });
+
   it("finds the repository gate entrypoints and payment migration", () => {
     const result = inspectRepository(process.cwd());
     expect(result.ok).toBe(true);
