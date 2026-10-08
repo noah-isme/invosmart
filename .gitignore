@@ -60,3 +60,5 @@ graphify-out/graph.html
 cookiejar.txt
 csrf.json
 *.log
+
+.e2e-tmp/
