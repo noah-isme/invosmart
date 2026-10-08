@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type Invitation = {
   id: string;
@@ -43,7 +44,7 @@ export function WorkspaceInvitationPanel({ organizationId }: { organizationId: s
     event.preventDefault();
     setMessage(null);
     setTokenLink(null);
-    const response = await fetch(`/api/workspaces/${organizationId}/invitations`, {
+    const response = await csrfFetch(`/api/workspaces/${organizationId}/invitations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, role }),

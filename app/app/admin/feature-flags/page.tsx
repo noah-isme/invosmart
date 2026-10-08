@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Flag, Plus, RefreshCw, Trash2, UserCheck, Building } from "lucide-react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type FeatureFlagItem = {
   id: string;
@@ -101,7 +102,7 @@ export default function FeatureFlagsPage() {
         prev.map((f) => (f.id === flag.id ? { ...f, enabled: updatedEnabled } : f))
       );
 
-      const res = await fetch("/api/admin/feature-flags", {
+      const res = await csrfFetch("/api/admin/feature-flags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: flag.id, enabled: updatedEnabled }),
@@ -127,7 +128,7 @@ export default function FeatureFlagsPage() {
 
     try {
       setErrorMessage(null);
-      const res = await fetch(`/api/admin/feature-flags?id=${flag.id}`, {
+      const res = await csrfFetch(`/api/admin/feature-flags?id=${flag.id}`, {
         method: "DELETE",
       });
 
@@ -172,7 +173,7 @@ export default function FeatureFlagsPage() {
         targetUsers: parsedUsers,
       };
 
-      const res = await fetch("/api/admin/feature-flags", {
+      const res = await csrfFetch("/api/admin/feature-flags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

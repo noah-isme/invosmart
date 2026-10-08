@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { LoopTelemetry } from "@/lib/ai/loop";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 export type DashboardState = {
   enabled: boolean;
@@ -68,7 +69,7 @@ const AutonomyDashboardClient = ({ initialState }: { initialState: DashboardStat
 
   const toggleLoop = (action: "pause" | "resume") => {
     startTransition(async () => {
-      const response = await fetch("/api/devtools/autonomy", {
+      const response = await csrfFetch("/api/devtools/autonomy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 declare global {
   interface Window {
@@ -27,7 +28,7 @@ export default function PaymentGatewayModal({ invoiceId, isOpen, onClose }: Paym
     setLoading('stripe');
     setError(null);
     try {
-      const res = await fetch('/api/payments/stripe/create-session', {
+      const res = await csrfFetch('/api/payments/stripe/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId }),
@@ -46,7 +47,7 @@ export default function PaymentGatewayModal({ invoiceId, isOpen, onClose }: Paym
     setLoading('midtrans');
     setError(null);
     try {
-      const res = await fetch('/api/payments/midtrans/create', {
+      const res = await csrfFetch('/api/payments/midtrans/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId }),

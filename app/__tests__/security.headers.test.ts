@@ -135,4 +135,65 @@ describe("Middleware CSRF Validation", () => {
     expect(cookieHeader).toBeDefined();
     expect(cookieHeader).toContain(CSRF_COOKIE_NAME);
   });
+
+  it("issues the CSRF cookie readable by JS (no HttpOnly), SameSite=Lax, Path=/", async () => {
+    process.env.NODE_ENV = "development";
+    const req = new NextRequest("http://localhost:3000/api/public", {
+      method: "GET",
+    });
+
+    const res = handleCsrfAndResponse(req);
+    const cookieHeader = res.headers.get("set-cookie") ?? "";
+    expect(cookieHeader).toMatch(new RegExp(`${CSRF_COOKIE_NAME}=[0-9a-f]{64}`));
+    expect(cookieHeader).not.toMatch(/httponly/i);
+    expect(cookieHeader).toMatch(/samesite=lax/i);
+    expect(cookieHeader).toMatch(/path=\//i);
+    expect(cookieHeader).not.toMatch(/;\s*secure/i);
+  });
+
+  it("marks the CSRF cookie Secure in production", async () => {
+    process.env.NODE_ENV = "production";
+    const req = new NextRequest("http://localhost:3000/api/public", {
+      method: "GET",
+    });
+
+    const res = handleCsrfAndResponse(req);
+    const cookieHeader = res.headers.get("set-cookie") ?? "";
+    expect(cookieHeader).toMatch(/;\s*secure/i);
+    expect(cookieHeader).not.toMatch(/httponly/i);
+  });
+
+  it("does not reissue the CSRF cookie when one is already present", async () => {
+    process.env.NODE_ENV = "development";
+    const req = new NextRequest("http://localhost:3000/api/public", {
+      method: "GET",
+      headers: { cookie: `${CSRF_COOKIE_NAME}=existing-token` },
+    });
+
+    const res = handleCsrfAndResponse(req);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it.each(["PUT", "PATCH", "DELETE"])(
+    "rejects %s without a CSRF token and accepts it with a matching token",
+    async (method) => {
+      process.env.NODE_ENV = "development";
+      const rejected = handleCsrfAndResponse(
+        new NextRequest("http://localhost:3000/api/invoices/1", { method })
+      );
+      expect(rejected.status).toBe(403);
+
+      const token = generateCsrfToken();
+      const accepted = handleCsrfAndResponse(
+        new NextRequest("http://localhost:3000/api/invoices/1", {
+          method,
+          headers: {
+            [CSRF_HEADER_NAME]: token,
+            cookie: `${CSRF_COOKIE_NAME}=${token}`,
+          },
+        })
+      );
+      expect(accepted.status).toBe(200);
+    }
+  );
 });

@@ -2,6 +2,7 @@
 
 import { useState, useRef, ChangeEvent } from "react";
 import { UploadCloud, Camera, CheckCircle2, AlertCircle } from "lucide-react";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type ReceiptData = {
   client: string;
@@ -27,7 +28,7 @@ export const ReceiptScanner = ({
     setResult(null);
 
     try {
-      const res = await fetch("/api/receipts/ai-scan", {
+      const res = await csrfFetch("/api/receipts/ai-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64Image }),

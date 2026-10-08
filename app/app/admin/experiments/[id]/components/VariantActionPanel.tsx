@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { ScheduleRecommendation } from "@/lib/ai/scheduler";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 const formatDateTime = (value: string) => new Date(value).toLocaleString("id-ID", { hour12: false });
 
@@ -65,7 +66,7 @@ export function VariantActionPanel({
     setError(null);
 
     try {
-      const response = await fetch("/api/opt/local/variant", {
+      const response = await csrfFetch("/api/opt/local/variant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ experimentId }),
@@ -92,7 +93,7 @@ export function VariantActionPanel({
     setError(null);
 
     try {
-      const response = await fetch("/api/opt/local/metrics", {
+      const response = await csrfFetch("/api/opt/local/metrics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -126,7 +127,7 @@ export function VariantActionPanel({
     setError(null);
 
     try {
-      const response = await fetch("/api/opt/choose-winner", {
+      const response = await csrfFetch("/api/opt/choose-winner", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ experimentId, variantId: winnerCandidate }),
@@ -153,7 +154,7 @@ export function VariantActionPanel({
     setError(null);
 
     try {
-      const response = await fetch("/api/opt/schedule/apply", {
+      const response = await csrfFetch("/api/opt/schedule/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

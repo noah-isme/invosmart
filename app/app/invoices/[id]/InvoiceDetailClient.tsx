@@ -14,6 +14,7 @@ import Script from "next/script";
 import PaymentGatewayModal from "@/components/payments/PaymentGatewayModal";
 import SendEmailModal from "@/components/invoices/SendEmailModal";
 import { formatDistanceToNow } from "date-fns";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type DialogType = "send" | "paid" | "delete" | null;
 
@@ -74,7 +75,7 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
     setDownloadMessage(null);
 
     try {
-      const res = await fetch("/api/invoices/templates", {
+      const res = await csrfFetch("/api/invoices/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -152,7 +153,7 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   };
 
   const updateInvoice = async (status: InvoiceStatusValue) => {
-    const response = await fetch(`/api/invoices/${invoice.id}`, {
+    const response = await csrfFetch(`/api/invoices/${invoice.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -191,7 +192,7 @@ export const InvoiceDetailClient = ({ initialInvoice }: InvoiceDetailClientProps
   };
 
   const deleteInvoice = async () => {
-    const response = await fetch(`/api/invoices/${invoice.id}`, {
+    const response = await csrfFetch(`/api/invoices/${invoice.id}`, {
       method: "DELETE",
     });
 

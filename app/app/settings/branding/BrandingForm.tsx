@@ -5,6 +5,7 @@ import { type FormEvent, type MouseEvent, useEffect, useMemo, useState } from "r
 import { Button } from "@/components/ui/Button";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/context/ToastContext";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type BrandingFormState = {
   logoUrl: string;
@@ -117,7 +118,7 @@ export const BrandingForm = ({ initialBranding }: BrandingFormProps) => {
     } as const;
 
     try {
-      const response = await fetch("/api/user/branding", {
+      const response = await csrfFetch("/api/user/branding", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

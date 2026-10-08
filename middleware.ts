@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
+  CSRF_PROTECTED_METHODS,
   generateCsrfToken,
+  getCsrfCookieOptions,
   validateCsrfToken,
 } from "@/lib/security/csrf";
 
@@ -29,7 +31,7 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
     !pathname.startsWith("/api/auth/") &&
     !isVersionedApiKeyRequest &&
     process.env.NODE_ENV !== "test" &&
-    ["POST", "PUT", "DELETE", "PATCH"].includes(method)
+    CSRF_PROTECTED_METHODS.includes(method)
   ) {
     const cookieToken = reqWithCookies.cookies?.get(CSRF_COOKIE_NAME)?.value;
     const headerToken = req.headers.get(CSRF_HEADER_NAME);
@@ -48,12 +50,7 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
   let csrfToken = reqWithCookies.cookies?.get(CSRF_COOKIE_NAME)?.value;
   if (!csrfToken) {
     csrfToken = generateCsrfToken();
-    (response as unknown as { cookies: { set: (name: string, value: string, options?: Record<string, unknown>) => void } }).cookies.set(CSRF_COOKIE_NAME, csrfToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: process.env.NODE_ENV === "production",
-    });
+    (response as unknown as { cookies: { set: (name: string, value: string, options?: Record<string, unknown>) => void } }).cookies.set(CSRF_COOKIE_NAME, csrfToken, getCsrfCookieOptions());
   }
 
   return response;

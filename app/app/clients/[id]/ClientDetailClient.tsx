@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/currency";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type InvoiceRow = {
   id: string;
@@ -49,7 +50,7 @@ export default function ClientDetailClient({ client, stats }: { client: ClientDa
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/clients/${client.id}`, { method: 'DELETE' });
+      const res = await csrfFetch(`/api/clients/${client.id}`, { method: 'DELETE' });
       if (res.ok) {
         router.push("/app/clients");
         router.refresh();

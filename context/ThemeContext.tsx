@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { trackEvent } from "@/lib/telemetry";
+import { csrfFetch } from "@/lib/security/csrf-client";
 
 type ThemeMode = "light" | "dark";
 
@@ -246,7 +247,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
       setIsSaving(true);
       try {
-        const response = await fetch("/api/user/theme", {
+        const response = await csrfFetch("/api/user/theme", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
