@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const FLAG = "INVOSMART_E2E_PROVIDER_BASE_URL";
 const STUB = "http://127.0.0.1:4010";
 
-type StripeInternals = { _api: { host: string; port: string | number; protocol: string } };
+// getApiField exists at runtime in stripe 17.7 but is not in its public types.
+type StripeInternals = { getApiField(field: "host" | "port" | "protocol"): string | number };
 type SnapWithConfig = {
   apiConfig: { isProduction: boolean; getSnapApiBaseUrl(): string };
 };
@@ -14,7 +15,17 @@ async function loadClients() {
   const { stripe } = await import("@/lib/payments/stripe");
   const { midtransSnap } = await import("@/lib/payments/midtrans");
   return {
-    stripeApi: (stripe as unknown as StripeInternals)._api,
+    stripeApi: {
+      get host() {
+        return String((stripe as unknown as StripeInternals).getApiField("host"));
+      },
+      get port() {
+        return (stripe as unknown as StripeInternals).getApiField("port");
+      },
+      get protocol() {
+        return String((stripe as unknown as StripeInternals).getApiField("protocol"));
+      },
+    },
     snap: midtransSnap as unknown as SnapWithConfig,
   };
 }
@@ -25,6 +36,8 @@ describe("e2e provider base-URL seam", () => {
     vi.stubEnv("VERCEL", "");
     vi.stubEnv("VERCEL_ENV", "");
     vi.stubEnv(FLAG, "");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_e2e");
+    vi.stubEnv("MIDTRANS_SERVER_KEY", "SB-Mid-server-e2e");
   });
 
   afterEach(() => {
@@ -107,5 +120,57 @@ describe("e2e provider base-URL seam", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.resetModules();
     await expect(import("@/lib/payments/e2e-provider-base")).rejects.toThrow(/Vercel/);
+  });
+
+  it("is inert and does not throw when truly unset on Vercel production", async () => {
+    vi.stubEnv(FLAG, undefined);
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_realkey");
+    vi.stubEnv("MIDTRANS_SERVER_KEY", "Mid-server-live");
+    const { stripeApi, snap } = await loadClients();
+    expect(stripeApi.host).toBe("api.stripe.com");
+    expect(String(stripeApi.port)).toBe("443");
+    expect(stripeApi.protocol).toBe("https");
+    expect(snap.apiConfig.getSnapApiBaseUrl()).toBe("https://app.midtrans.com/snap/v1");
+    snap.apiConfig.isProduction = false;
+    expect(snap.apiConfig.getSnapApiBaseUrl()).toBe("https://app.sandbox.midtrans.com/snap/v1");
+  });
+
+  it.each([
+    "http://127.0.0.1@evil.com",
+    "http://127.0.0.1:4010@evil.com",
+    "http://user:pw@127.0.0.1:4010",
+    "http://0.0.0.0:4010",
+    "http://[::ffff:127.0.0.1]:4010",
+    "http://[::]:4010",
+    "http://localhost.:4010",
+  ])("rejects look-alike %s", async (url) => {
+    const { parseE2eProviderBaseUrl } = await import("@/lib/payments/e2e-provider-base");
+    expect(() => parseE2eProviderBaseUrl(url)).toThrow();
+  });
+
+  it("rejects port 0 and non-root paths, allows a bare slash", async () => {
+    const { parseE2eProviderBaseUrl } = await import("@/lib/payments/e2e-provider-base");
+    expect(() => parseE2eProviderBaseUrl("http://127.0.0.1:0")).toThrow(/port/);
+    expect(() => parseE2eProviderBaseUrl("http://127.0.0.1:4010/api")).toThrow(/path/);
+    expect(() => parseE2eProviderBaseUrl("http://127.0.0.1:4010/x/")).toThrow(/path/);
+    expect(parseE2eProviderBaseUrl("http://127.0.0.1:4010/")).toMatchObject({ port: 4010 });
+  });
+
+  it("refuses the flag together with a live Stripe key", async () => {
+    vi.stubEnv(FLAG, STUB);
+    for (const key of ["sk_live_abc", "rk_live_abc"]) {
+      vi.stubEnv("STRIPE_SECRET_KEY", key);
+      await expect(loadClients()).rejects.toThrow(/live Stripe key/);
+    }
+  });
+
+  it("refuses the flag together with a non-sandbox Midtrans key", async () => {
+    vi.stubEnv(FLAG, STUB);
+    vi.stubEnv("MIDTRANS_SERVER_KEY", "Mid-server-live");
+    await expect(loadClients()).rejects.toThrow(/sandbox/);
+    vi.stubEnv("MIDTRANS_SERVER_KEY", "");
+    await expect(loadClients()).resolves.toBeDefined();
   });
 });

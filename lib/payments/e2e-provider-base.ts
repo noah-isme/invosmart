@@ -39,16 +39,27 @@ export function parseE2eProviderBaseUrl(raw: string | undefined): E2eProviderBas
   if (parsed.protocol !== 'http:') {
     throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} must use http (loopback stub only)`);
   }
+  if (parsed.username || parsed.password) {
+    throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} must not contain credentials`);
+  }
   if (!LOOPBACK_HOSTNAMES.has(parsed.hostname)) {
     throw new Error(
       `${E2E_PROVIDER_BASE_URL_ENV} must point at a loopback host (127.0.0.1, localhost or [::1])`,
     );
   }
 
+  if (parsed.pathname !== '/' && parsed.pathname !== '') {
+    throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} must not contain a path`);
+  }
+  const port = parsed.port ? Number(parsed.port) : 80;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} must use a port between 1 and 65535`);
+  }
+
   return {
     origin: parsed.origin,
     host: parsed.hostname.replace(/^\[(.*)\]$/, '$1'),
-    port: parsed.port ? Number(parsed.port) : 80,
+    port,
     protocol: 'http',
   };
 }
@@ -57,6 +68,15 @@ export function readE2eProviderBase(env: Env = process.env): E2eProviderBase | n
   const base = parseE2eProviderBaseUrl(env[E2E_PROVIDER_BASE_URL_ENV]);
   if (base && (env.VERCEL?.trim() || env.VERCEL_ENV?.trim())) {
     throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} is test-only and must not be set on Vercel`);
+  }
+  if (base) {
+    if (/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY?.trim() ?? '')) {
+      throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} must not be set with a live Stripe key`);
+    }
+    const midtransKey = env.MIDTRANS_SERVER_KEY?.trim();
+    if (midtransKey && !midtransKey.startsWith('SB-')) {
+      throw new Error(`${E2E_PROVIDER_BASE_URL_ENV} requires a Midtrans sandbox server key (SB-)`);
+    }
   }
   return base;
 }
