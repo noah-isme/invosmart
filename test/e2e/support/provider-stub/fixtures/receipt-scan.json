@@ -1,0 +1,11 @@
+{
+  "content": {
+    "client": "Toko Stub Mart",
+    "items": [
+      { "name": "Kertas A4", "qty": 3, "price": 45000 },
+      { "name": "Tinta printer", "qty": 1, "price": 120000 }
+    ],
+    "dueAt": null,
+    "notes": "Receipt scanned by the e2e provider stub"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "content": {
+    "totalRevenue": "Rp 12.345.000",
+    "topClient": "Acme Stub Co",
+    "insight": "Canned stub insight: pendapatan stabil dengan sebagian besar invoice sudah dibayar.",
+    "recommendation": "Canned stub recommendation: tawarkan diskon early payment kepada klien utama."
+  }
+}

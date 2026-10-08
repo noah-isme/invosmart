@@ -1,0 +1,8 @@
+{
+  "content": {
+    "why": "Canned stub explanation: perubahan ini mengurangi LCP pada rute terkait.",
+    "context": "Dihasilkan oleh e2e provider stub.",
+    "data_basis": ["p95 LCP 3.1s", "INP 240ms"],
+    "confidence": 0.82
+  }
+}

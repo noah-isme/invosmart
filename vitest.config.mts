@@ -37,7 +37,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: true,
-    exclude: ["test/e2e/**/*.spec.ts", "**/node_modules/**", "**/dist/**"],
+    exclude: ["test/e2e/**/*.spec.ts", "test/e2e/**/*.test.mjs", "**/node_modules/**", "**/dist/**"],
     sequence: {
       concurrent: false,
     },
