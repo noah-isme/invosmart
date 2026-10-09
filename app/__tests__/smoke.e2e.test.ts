@@ -48,6 +48,8 @@ describe("Smoke tests for critical routes", () => {
       password: "hashed",
       name: "Tester",
     } as never);
+    db.organization.create.mockResolvedValueOnce({ id: "org-1", name: "Tester's Workspace" } as never);
+    db.membership.findFirst.mockResolvedValueOnce(null);
 
   const request = new Request("http://localhost/api/auth/register", {
       method: "POST",

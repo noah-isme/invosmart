@@ -1,22 +1,33 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 
+import {
+  createUserWithPersonalWorkspace,
+  ensurePersonalWorkspace,
+  type WorkspaceDatabase,
+} from "../lib/workspace-provisioning";
+
 const db = new PrismaClient();
 
 async function main() {
   const hashedPassword = await bcrypt.hash("demo123", 10);
   
-  const user = await db.user.upsert({
-    where: { email: "demo@invosmart.dev" },
-    update: {
-      password: hashedPassword
-    },
-    create: { 
-      email: "demo@invosmart.dev", 
-      name: "Demo User",
-      password: hashedPassword
-    },
-  });
+  const workspaceClient = db as unknown as WorkspaceDatabase;
+  const email = "demo@invosmart.dev";
+
+  // The demo account gets a personal workspace like any real signup, so it
+  // works under WORKSPACE_AUTH_MODE=enforce.
+  const existing = await db.user.findUnique({ where: { email } });
+  const user = existing
+    ? await db.user.update({ where: { id: existing.id }, data: { password: hashedPassword } })
+    : await createUserWithPersonalWorkspace<{ id: string; name: string | null; email: string }>(
+        { email, name: "Demo User", password: hashedPassword },
+        workspaceClient,
+      );
+
+  if (existing) {
+    await ensurePersonalWorkspace(user.id, user, workspaceClient);
+  }
 
   const membership = await db.membership.findFirst({
     where: { userId: user.id },

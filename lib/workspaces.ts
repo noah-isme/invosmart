@@ -2,31 +2,28 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 
+import {
+  contextFromMembership,
+  createUserWithPersonalWorkspace as createUserWithPersonalWorkspaceIn,
+  ensurePersonalWorkspace,
+  membershipSelect,
+  type NewUserData,
+  type WorkspaceContext,
+  type WorkspaceDatabase,
+} from "@/lib/workspace-provisioning";
+
 import type { WorkspaceRole } from "@prisma/client";
 
+export {
+  isUniqueConstraintError,
+  provisionPersonalWorkspace,
+  type NewUserData,
+  type WorkspaceContext,
+  type WorkspaceDatabase,
+  type WorkspaceMembership,
+} from "@/lib/workspace-provisioning";
+
 export type WorkspacePermission = "read" | "write" | "manage_members" | "manage_workspace";
-
-export type WorkspaceMembership = {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: WorkspaceRole;
-  organization?: {
-    id: string;
-    name: string;
-    logoUrl?: string | null;
-    primaryColor?: string | null;
-    fontFamily?: string | null;
-    defaultCurrency?: string;
-  } | null;
-};
-
-export type WorkspaceContext = {
-  userId: string;
-  organizationId: string | null;
-  role: WorkspaceRole | "LEGACY";
-  membership: WorkspaceMembership | null;
-};
 
 export type WorkspaceAuthMode = "compat" | "enforce";
 
@@ -42,41 +39,15 @@ export const getWorkspaceAuthMode = (): WorkspaceAuthMode =>
 const legacyFallback = (userId: string): WorkspaceContext | null =>
   getWorkspaceAuthMode() === "enforce" ? null : legacyContext(userId);
 
-export type WorkspaceDatabase = {
-  /**
-   * Present on a real Prisma client. Optional because lightweight test doubles
-   * (and pre-migration route mocks) do not implement it; callers fall back to
-   * running without a transaction in that case.
-   */
-  $transaction?: <T>(fn: (tx: WorkspaceDatabase) => Promise<T>) => Promise<T>;
-  user: {
-    findUnique: (args: unknown) => Promise<{
-      id?: string;
-      name?: string | null;
-      email?: string | null;
-      activeOrganizationId?: string | null;
-    } | null | undefined>;
-    create: (args: unknown) => Promise<unknown>;
-    update: (args: unknown) => Promise<unknown>;
-  };
-  membership: {
-    findUnique: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-    findFirst: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-    create: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-  };
-  organization: {
-    create: (args: unknown) => Promise<{
-      id: string;
-      name: string;
-      logoUrl?: string | null;
-      primaryColor?: string | null;
-      fontFamily?: string | null;
-      defaultCurrency?: string;
-    } | null | undefined>;
-  };
-};
-
 const workspaceDb = db as unknown as WorkspaceDatabase;
+
+/** See `createUserWithPersonalWorkspace` in lib/workspace-provisioning.ts; defaults to the app client. */
+export const createUserWithPersonalWorkspace = <
+  U extends { id: string; name?: string | null; email?: string | null },
+>(
+  data: NewUserData,
+  client: WorkspaceDatabase = workspaceDb,
+): Promise<U> => createUserWithPersonalWorkspaceIn<U>(data, client);
 
 const rolePermissions: Record<WorkspaceRole | "LEGACY", readonly WorkspacePermission[]> = {
   OWNER: ["read", "write", "manage_members", "manage_workspace"],
@@ -110,153 +81,6 @@ const legacyContext = (userId: string): WorkspaceContext => ({
 const membershipWhere = (organizationId: string, userId: string) => ({
   organizationId_userId: { organizationId, userId },
 });
-
-const membershipSelect = {
-  id: true,
-  organizationId: true,
-  userId: true,
-  role: true,
-  organization: {
-    select: {
-      id: true,
-      name: true,
-      logoUrl: true,
-      primaryColor: true,
-      fontFamily: true,
-      defaultCurrency: true,
-    },
-  },
-} as const;
-
-const contextFromMembership = (
-  userId: string,
-  membership: WorkspaceMembership,
-): WorkspaceContext => ({
-  userId,
-  organizationId: membership.organizationId,
-  role: membership.role,
-  membership,
-});
-
-/**
- * Create the personal workspace (Organization + OWNER Membership) for a user
- * and make it their active workspace.
- *
- * Idempotent: if the user already has any membership this is a no-op and the
- * existing context is returned, so signup and the compat-mode lazy path can
- * both call it without creating a second personal workspace.
- *
- * Callers should pass a transaction client so the check and the writes (and,
- * at signup, the user row itself) commit atomically.
- *
- * Residual race: there is no database uniqueness constraint that identifies "a
- * user's personal workspace" (Organization has no owner column and Membership
- * is only unique per organization+user). Two concurrent transactions can both
- * pass the membership check under READ COMMITTED and each create a workspace.
- * Signup is safe because the user row is created in the same transaction and
- * is not yet visible to any other request. Only compat-mode lazy provisioning
- * for an existing user can still race, and only on that user's first
- * concurrent requests. Closing it fully needs a schema change (for example a
- * partial unique index) or a row lock on the user, both of which are
- * deliberately out of scope here.
- */
-export const provisionPersonalWorkspace = async (
-  userId: string,
-  user: { name?: string | null; email?: string | null } | null | undefined,
-  client: WorkspaceDatabase,
-): Promise<WorkspaceContext | null> => {
-  const existing = await client.membership.findFirst({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-    select: membershipSelect,
-  });
-
-  if (existing) {
-    return contextFromMembership(userId, existing);
-  }
-
-  const name =
-    user?.name?.trim() ||
-    user?.email?.split("@")[0]?.trim() ||
-    "Personal Workspace";
-
-  const organization = await client.organization.create({
-    data: {
-      name: `${name}'s Workspace`,
-      defaultCurrency: "IDR",
-    },
-  });
-
-  // An undefined result is how the lightweight Prisma test double signals a
-  // delegate that was not configured. Fall back to legacy scoping in that
-  // environment; a real Prisma client returns a row or throws.
-  if (!organization) {
-    return null;
-  }
-
-  const membership = await client.membership.create({
-    data: {
-      organizationId: organization.id,
-      userId,
-      role: "OWNER",
-    },
-    include: { organization: true },
-  });
-
-  await client.user.update({
-    where: { id: userId },
-    data: { activeOrganizationId: organization.id },
-  });
-
-  return {
-    userId,
-    organizationId: organization.id,
-    role: "OWNER",
-    membership: membership ?? {
-      id: `owner:${userId}:${organization.id}`,
-      organizationId: organization.id,
-      userId,
-      role: "OWNER" as WorkspaceRole,
-      organization,
-    },
-  };
-};
-
-const inTransaction = <T>(
-  client: WorkspaceDatabase,
-  fn: (tx: WorkspaceDatabase) => Promise<T>,
-): Promise<T> => (client.$transaction ? client.$transaction(fn) : fn(client));
-
-/** Prisma unique-constraint violation (P2002), without importing the runtime error class. */
-export const isUniqueConstraintError = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  (error as { code?: unknown }).code === "P2002";
-
-export type NewUserData = {
-  name: string;
-  email: string;
-  password: string | null;
-};
-
-/**
- * Create a user together with their personal workspace, OWNER membership and
- * active-workspace hint in a single transaction. Used by credentials signup
- * and first-time OAuth sign-in so both behave identically in compat and
- * enforce modes. Any failure rolls back the user row as well; a unique-email
- * violation surfaces as a P2002 error (see isUniqueConstraintError).
- */
-export const createUserWithPersonalWorkspace = async <
-  U extends { id: string; name?: string | null; email?: string | null },
->(
-  data: NewUserData,
-  client: WorkspaceDatabase = workspaceDb,
-): Promise<U> =>
-  inTransaction(client, async (tx) => {
-    const created = (await tx.user.create({ data })) as U;
-    await provisionPersonalWorkspace(created.id, created, tx);
-    return created;
-  });
 
 /**
  * Resolve a workspace exclusively from database membership.
@@ -341,9 +165,7 @@ export const resolveWorkspaceContext = async (
     return null;
   }
 
-  const provisioned = await inTransaction(client, (tx) =>
-    provisionPersonalWorkspace(userId, user, tx),
-  );
+  const provisioned = await ensurePersonalWorkspace(userId, user, client);
   return provisioned ?? legacyContext(userId);
 };
 

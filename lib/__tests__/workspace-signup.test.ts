@@ -2,7 +2,13 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearRateLimiters } from "@/lib/rate-limit";
-import { provisionPersonalWorkspace, resolveWorkspaceContext, type WorkspaceDatabase } from "@/lib/workspaces";
+import { ensurePersonalWorkspace } from "@/lib/workspace-provisioning";
+import {
+  createUserWithPersonalWorkspace,
+  provisionPersonalWorkspace,
+  resolveWorkspaceContext,
+  type WorkspaceDatabase,
+} from "@/lib/workspaces";
 
 type Delegates = {
   user: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
@@ -115,6 +121,46 @@ describe("registration provisions a personal workspace", () => {
     });
   }
 
+  it("lets the new user resolve to their OWNER workspace under enforce (signup -> first request)", async () => {
+    vi.stubEnv("WORKSPACE_AUTH_MODE", "enforce");
+    root.user.findUnique.mockResolvedValue(null);
+
+    const { POST } = await import("@/app/api/auth/register/route");
+    expect((await POST(registerRequest())).status).toBe(201);
+
+    // Read-your-writes view of what the signup transaction persisted.
+    const stored = {
+      id: "membership-new",
+      organizationId: "org-new",
+      userId: "user-new",
+      role: "OWNER",
+      organization: { id: "org-new", name: "Ari's Workspace" },
+    };
+    const activeOrganizationId = tx.user.update.mock.calls[0][0].data.activeOrganizationId;
+    const afterSignup = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "user-new",
+          name: "Ari",
+          email: "ari@example.com",
+          activeOrganizationId,
+        }),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      membership: {
+        findUnique: vi.fn().mockResolvedValue(stored),
+        findFirst: vi.fn().mockResolvedValue(stored),
+        create: vi.fn(),
+      },
+      organization: { create: vi.fn() },
+    } as unknown as WorkspaceDatabase;
+
+    const context = await resolveWorkspaceContext("user-new", undefined, afterSignup);
+
+    expect(context).toMatchObject({ userId: "user-new", organizationId: "org-new", role: "OWNER" });
+  });
+
   it("returns 409 for a duplicate email and creates no workspace", async () => {
     vi.stubEnv("WORKSPACE_AUTH_MODE", "enforce");
     root.user.findUnique.mockResolvedValue({ id: "user-existing", email: "ari@example.com" });
@@ -197,6 +243,10 @@ describe("OAuth first sign-in provisions a personal workspace", () => {
 
     expect(result).toBe(true);
     expect(user.id).toBe("user-raced");
+    expect(root.user.update).toHaveBeenCalledWith({
+      where: { email: "ari@example.com" },
+      data: { name: "Ari" },
+    });
     expect(tx.organization.create).not.toHaveBeenCalled();
   });
 });
@@ -228,6 +278,48 @@ describe("provisioning is idempotent and enforce still fails closed for existing
     expect(tx.organization.create).toHaveBeenCalledTimes(1);
     expect(tx.membership.create).toHaveBeenCalledTimes(1);
     expect(tx.user.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes the user row lock inside the transaction before the membership check", async () => {
+    const order: string[] = [];
+    const lockedTx = {
+      ...mocks.delegates(),
+      $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        order.push(`lock:${strings.join("?")}:${values.join(",")}`);
+        return [];
+      }),
+    };
+    lockedTx.membership.findFirst.mockImplementation(async () => {
+      order.push("check");
+      return null;
+    });
+    lockedTx.organization.create.mockImplementation(async () => {
+      order.push("create");
+      return { id: "org-new", name: "Ari's Workspace" };
+    });
+    const client = {
+      ...mocks.delegates(),
+      $transaction: vi.fn(async (fn: (c: unknown) => Promise<unknown>) => fn(lockedTx)),
+    } as unknown as WorkspaceDatabase;
+
+    await ensurePersonalWorkspace("user-new", { name: "Ari" }, client);
+
+    expect(order).toEqual([
+      'lock:SELECT 1 FROM "User" WHERE "id" = ? FOR NO KEY UPDATE:user-new',
+      "check",
+      "create",
+    ]);
+  });
+
+  it("rolls back signup when no workspace can be provisioned", async () => {
+    tx.organization.create.mockResolvedValue(undefined);
+
+    await expect(
+      createUserWithPersonalWorkspace(
+        { name: "Ari", email: "ari@example.com", password: "x" },
+        root as unknown as WorkspaceDatabase,
+      ),
+    ).rejects.toThrow(/could not be provisioned/);
   });
 
   it("compat lazy provisioning runs inside a transaction and re-checks membership", async () => {
