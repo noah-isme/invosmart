@@ -5,12 +5,14 @@ import { fingerprint } from "./scripts/e2e-public-env.mjs";
 import {
   E2E_APP_PORT,
   E2E_APP_URL,
+  E2E_DB_LOG_FILE,
   E2E_DB_PORT,
   E2E_DB_READY_URL,
   E2E_STUB_PORT,
   E2E_STUB_URL,
   e2eAppEnv,
   e2eContractAppEnv,
+  personaStorageStatePath,
 } from "./test/e2e/playwright.env";
 
 const stagingBaseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim() || "";
@@ -87,7 +89,11 @@ function webServers(): PlaywrightTestConfig["webServer"] {
       // 200 only after applySchema(), so the app never sees an empty database.
       command: "node test/e2e/support/db/serve.mjs",
       url: E2E_DB_READY_URL,
-      env: { E2E_DB_PORT: String(E2E_DB_PORT), E2E_SCHEMA_MODE: process.env.E2E_SCHEMA_MODE ?? "push" },
+      env: {
+        E2E_DB_PORT: String(E2E_DB_PORT),
+        E2E_SCHEMA_MODE: process.env.E2E_SCHEMA_MODE ?? "push",
+        E2E_DB_LOG_FILE,
+      },
       reuseExistingServer: false,
       timeout: 90_000,
       stdout: "pipe",
@@ -105,15 +111,16 @@ function projects(): PlaywrightTestConfig["projects"] {
     return [{ name: "chromium", testMatch: [CONTRACT_SPEC_FILES, LEGACY_CONTRACT_SPEC], use: browser }];
   }
   return [
-    // Persona storageStates (Step 8). With no *.setup.ts files yet the project
-    // is empty and its dependants run normally.
+    // Registers the personas and writes test/e2e/.auth/<persona>.json.
     { name: "setup", testMatch: "**/*.setup.ts" },
     {
       name: "chromium",
       testMatch: [SPEC_FILES, LEGACY_CONTRACT_SPEC],
       testIgnore: API_SPEC_FILES,
       dependencies: ["setup"],
-      use: browser,
+      // Signed in as the owner persona by default; unauthenticated specs use
+      // test.use({ storageState: { cookies: [], origins: [] } }).
+      use: { ...browser, storageState: personaStorageStatePath("owner") },
     },
     { name: "api", testMatch: API_SPEC_FILES },
   ];

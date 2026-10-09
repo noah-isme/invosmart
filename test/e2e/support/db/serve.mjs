@@ -1,9 +1,10 @@
 // In-memory pglite-server + schema + readiness HTTP endpoint.
 import { spawn } from "node:child_process";
+import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applySchema } from "./schema.mjs";
+import { applySchemaAsync } from "./schema.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const check = process.argv.includes("--check");
@@ -11,6 +12,18 @@ const basePort = Number(process.env.E2E_DB_PORT ?? 54329);
 const dbPort = check ? basePort + 20 : basePort;
 const httpPort = basePort + 1;
 const databaseUrl = `postgresql://postgres:postgres@127.0.0.1:${dbPort}/postgres?connection_limit=1&pool_timeout=30`;
+
+// Optional copy of this process's log (pglite lines, `applying schema`,
+// `ready`) in arrival order, for asserting connection counts after a run.
+const logFile = process.env.E2E_DB_LOG_FILE ? resolve(repoRoot, process.env.E2E_DB_LOG_FILE) : null;
+if (logFile) {
+  mkdirSync(dirname(logFile), { recursive: true });
+  writeFileSync(logFile, "");
+}
+function logLine(stream, line) {
+  stream.write(`${line}\n`);
+  if (logFile) appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
+}
 
 const child = spawn(
   resolve(repoRoot, "node_modules/.bin/pglite-server"),
@@ -42,7 +55,7 @@ const listening = new Promise((resolveListening, reject) => {
   let buf = "";
   const onData = (chunk) => {
     const text = chunk.toString();
-    process.stderr.write(text.split("\n").filter(Boolean).map((l) => `[pglite] ${l}\n`).join(""));
+    for (const line of text.split("\n").filter(Boolean)) logLine(process.stderr, `[pglite] ${line}`);
     buf += text;
     if (buf.includes("PGLiteSocketServer listening")) resolveListening();
     if (buf.length > 4096) buf = buf.slice(-1024);
@@ -55,7 +68,10 @@ const listening = new Promise((resolveListening, reject) => {
 
 try {
   await listening;
-  applySchema({ databaseUrl, port: dbPort });
+  // Async so pglite lines emitted during the schema push are relayed as they
+  // happen, before `ready` (a sync push would buffer them until afterwards).
+  logLine(process.stdout, "applying schema");
+  await applySchemaAsync({ databaseUrl, port: dbPort });
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   if (child.exitCode === null) child.kill("SIGTERM");
@@ -77,6 +93,6 @@ if (check) {
     }
   });
   httpServer.listen(httpPort, "127.0.0.1", () => {
-    console.log("ready");
+    logLine(process.stdout, "ready");
   });
 }

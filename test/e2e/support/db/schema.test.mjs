@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applySchema, buildSchemaEnv, schemaArgs } from "./schema.mjs";
+import { applySchema, applySchemaAsync, buildSchemaEnv, schemaArgs } from "./schema.mjs";
 
 const url = "postgresql://postgres:postgres@127.0.0.1:54329/postgres";
 
@@ -48,4 +48,28 @@ test("guard runs before spawning and failures are surfaced", () => {
   );
   assert.equal(called, false);
   assert.throws(() => applySchema({ databaseUrl: url, port: 54329, run }), /P3018 boom/);
+});
+
+test("applySchemaAsync uses the same explicit env, guard and error surfacing", async () => {
+  let seen;
+  const out = await applySchemaAsync({
+    databaseUrl: url,
+    port: 54329,
+    mode: "push",
+    run: async (cmd, args, opts) => {
+      seen = { cmd, args, opts };
+      return { status: 0, stdout: "ok", stderr: "" };
+    },
+  });
+  assert.equal(out, "ok");
+  assert.deepEqual(Object.keys(seen.opts.env).sort(), ["DATABASE_URL", "DIRECT_URL", "HOME", "PATH"]);
+  assert.deepEqual(seen.args, schemaArgs("push"));
+  await assert.rejects(
+    applySchemaAsync({ databaseUrl: "postgresql://u@db.example.com:54329/x", port: 54329, run: async () => ({ status: 0 }) }),
+    /not loopback/,
+  );
+  await assert.rejects(
+    applySchemaAsync({ databaseUrl: url, port: 54329, run: async () => ({ status: 1, stdout: "", stderr: "P3018 boom" }) }),
+    /P3018 boom/,
+  );
 });

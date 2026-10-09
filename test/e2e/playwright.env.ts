@@ -5,6 +5,8 @@
 // or a blank string where the integration must be absent) so ambient shell
 // values can never leak into a test run. Next.js does not let `.env*` files
 // override variables that are already defined, blank strings included.
+import { resolve } from "node:path";
+
 import { E2E_PUBLIC_ENV } from "../../scripts/e2e-public-env.mjs";
 
 const intFromEnv = (name: string, fallback: number): number => {
@@ -43,6 +45,20 @@ export const E2E_PERSONAS = {
 } as const;
 export type E2ePersona = keyof typeof E2E_PERSONAS;
 export const E2E_PERSONA_PASSWORD = "E2e-Persona-Passw0rd!";
+export const E2E_PERSONA_NAMES = Object.keys(E2E_PERSONAS) as E2ePersona[];
+
+// owner, admin, member and viewer share this workspace (roles OWNER, ADMIN,
+// MEMBER, VIEWER); platformAdmin has its own personal workspace.
+export const E2E_RBAC_WORKSPACE_NAME = "E2E RBAC workspace";
+export const E2E_PERSONA_ROLES = { owner: "OWNER", admin: "ADMIN", member: "MEMBER", viewer: "VIEWER" } as const;
+
+// storageState files written by setup/personas.setup.ts (gitignored).
+export const E2E_AUTH_DIR = resolve(__dirname, ".auth");
+export const personaStorageStatePath = (persona: E2ePersona): string => resolve(E2E_AUTH_DIR, `${persona}.json`);
+
+// serve.mjs copies the pglite-server log here (QA-report/ is gitignored and
+// uploaded by CI), so connection counts can be checked after a run.
+export const E2E_DB_LOG_FILE = "QA-report/pglite-server.log";
 
 // Secrets used by the app and by tests that forge signed webhooks or tokens.
 export const E2E_SECRETS = {
