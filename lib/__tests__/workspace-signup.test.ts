@@ -195,6 +195,7 @@ describe("OAuth first sign-in provisions a personal workspace", () => {
     const result = await authOptions.callbacks!.signIn!({
       user,
       account: { provider: "google", type: "oauth", providerAccountId: "g-1" },
+      profile: { sub: "g-1", email: "Ari@Example.com", email_verified: true },
     } as never);
     return { result, user };
   };
@@ -235,7 +236,9 @@ describe("OAuth first sign-in provisions a personal workspace", () => {
   });
 
   it("falls back to the returning-user path when a concurrent first sign-in wins", async () => {
-    root.user.findUnique.mockResolvedValue(null);
+    root.user.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "user-raced", email: "ari@example.com", password: null });
     root.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
     root.user.update.mockResolvedValue({ id: "user-raced", email: "ari@example.com", name: "Ari" });
 

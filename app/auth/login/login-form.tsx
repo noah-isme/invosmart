@@ -14,6 +14,12 @@ import { trackEvent } from "@/lib/telemetry";
 const errorMap: Record<string, string> = {
   CredentialsSignin: "Email atau password salah.",
   OAuthAccountNotLinked: "Email sudah terdaftar dengan metode berbeda.",
+  GoogleEmailNotVerified:
+    "Email akun Google Anda belum diverifikasi. Verifikasi email di Google, lalu coba lagi.",
+  GooglePasswordAccountExists:
+    "Email ini sudah terdaftar dengan password. Silakan masuk menggunakan email dan password Anda.",
+  AccessDenied: "Akses ditolak. Silakan coba lagi atau gunakan metode masuk lain.",
+  OAuthCallback: "Gagal masuk dengan Google. Silakan coba lagi.",
 };
 
 type FieldErrors = Partial<Record<keyof LoginSchemaInput, string>>;
