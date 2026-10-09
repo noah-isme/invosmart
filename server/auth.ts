@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google";
 import { db } from "@/lib/db";
 import { verify } from "@/lib/hash";
 import { LoginSchema } from "@/lib/schemas";
+import { createUserWithPersonalWorkspace, isUniqueConstraintError } from "@/lib/workspaces";
 import { logAuditEvent, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
 const providers: NextAuthOptions["providers"] = [
@@ -73,6 +74,35 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
+/**
+ * Sign-in with Google has no adapter (JWT sessions), so the user row is
+ * created here. First sign-in creates the user together with a personal
+ * workspace; returning users only get their display name refreshed, so an
+ * existing user without a membership is not auto-provisioned (enforce mode
+ * keeps failing closed for them).
+ */
+const upsertGoogleUser = async (email: string, name: string) => {
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing) {
+    return db.user.update({ where: { email }, data: { name } });
+  }
+
+  try {
+    return await createUserWithPersonalWorkspace<{
+      id: string;
+      email: string;
+      name: string | null;
+    }>({ email, name, password: null });
+  } catch (error) {
+    // Lost a race with a concurrent first sign-in for the same email; that
+    // request provisioned the workspace, so just treat this as a returning user.
+    if (isUniqueConstraintError(error)) {
+      return db.user.update({ where: { email }, data: { name } });
+    }
+    throw error;
+  }
+};
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   providers,
@@ -113,17 +143,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const email = user.email.toLowerCase();
-        const dbUser = await db.user.upsert({
-          where: { email },
-          update: {
-            name: user.name ?? email,
-          },
-          create: {
-            email,
-            name: user.name ?? email,
-            password: null,
-          },
-        });
+        const dbUser = await upsertGoogleUser(email, user.name ?? email);
 
         user.id = dbUser.id;
         user.email = dbUser.email;

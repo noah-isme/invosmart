@@ -13,6 +13,8 @@ The initial roles are:
 | `MEMBER` | Create and manage invoices, clients, templates, delivery, payments, exports, and analytics |
 | `VIEWER` | Read-only invoices, clients, templates, analytics, PDFs, and exports |
 
+Signup provisions that workspace. Credentials registration (`/api/auth/register`) and first-time Google sign-in create the `User`, the personal `Organization`, the `OWNER` `Membership` and `User.activeOrganizationId` in a single transaction, in both `compat` and `enforce` modes (`createUserWithPersonalWorkspace` in `lib/workspaces.ts`). Provisioning is idempotent: a user who already has any membership is never given a second personal workspace. Only new signups are provisioned; an existing user with no membership is still denied (`403`) under `enforce` and must be backfilled (see the migration sequence). Under `compat`, such a user is still provisioned lazily on their first workspace-bound request.
+
 The platform administrator allowlist used by DevTools is separate from workspace administration.
 
 ## Authorization contract
@@ -44,6 +46,8 @@ missing membership/delegates then fail closed instead of falling back to
 user-owned rows. Keep the compatibility mode available for rollback until all
 business routes have been certified.
 
+Known limitation: there is no database constraint identifying a user's personal workspace, so two concurrent first requests from an existing user in `compat` mode can still each provision one (the check-then-create runs in a transaction but at READ COMMITTED). Signup itself is not affected because the user row does not exist outside its own transaction.
+
 1. Expand the schema with nullable organization references, `Organization`, `Membership`, and `User.activeOrganizationId`.
 2. Create one personal organization and `OWNER` membership per existing user.
 3. Backfill invoices, clients, and invoice templates from `userId` to the personal organization.
@@ -56,6 +60,7 @@ Rollback is performed by restoring the previous application version and leaving 
 
 ## Required test cases
 
+- Registration and first Google sign-in create the user, personal organization, `OWNER` membership, and `activeOrganizationId` atomically in both auth modes; a duplicate email returns `409` and creates no workspace.
 - Personal-workspace backfill is repeatable and creates exactly one owner membership per user.
 - A user can read and mutate resources in a workspace where they are a member, but cannot access another workspace by changing a URL or request body.
 - `VIEWER` mutations, `ADMIN` owner changes, and last-owner removal are rejected.
