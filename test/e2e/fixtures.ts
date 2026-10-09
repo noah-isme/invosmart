@@ -4,7 +4,8 @@
 //                whose calls carry the CSRF header and a fresh x-forwarded-for
 // - factory      the API factories bound to `api`
 // - stub         provider-stub control (auto: /__requests and /__fixtures are
-//                reset before every test)
+//                reset before every test; a no-op on staging, where no stub
+//                exists)
 // - payments     checkout helpers: wait for the stub checkout page, forge and
 //                post signed provider webhooks
 // - persona      open a browser context signed in as one of the five personas
@@ -12,7 +13,10 @@
 // - guards       (auto) the only place that maps the Midtrans snap.js hosts to
 //                the stub; aborts and fails any other browser request to a
 //                non-loopback host; fails on an unexpected 429; collects
-//                pageerror and securitypolicyviolation events (SEC-08)
+//                pageerror and securitypolicyviolation events (SEC-08). On
+//                staging (PLAYWRIGHT_BASE_URL set) it allows the deployed
+//                app's host and the sandbox provider hosts instead
+//                (stagingAllowedHosts) and maps nothing to the stub.
 //
 // Every browser context made here (the default `context`, persona and
 // isolatedUser contexts) gets its own x-forwarded-for and the guards.
@@ -30,8 +34,10 @@ import {
 } from "@playwright/test";
 
 import {
+  E2E_IS_STAGING_RUN,
   E2E_PERSONA_PASSWORD,
   E2E_PERSONAS,
+  E2E_STAGING_BASE_URL,
   E2E_STUB_URL,
   personaStorageStatePath,
   type E2ePersona,
@@ -159,6 +165,38 @@ const MIDTRANS_SNAP_HOSTS = new Set(["app.sandbox.midtrans.com", "app.midtrans.c
 const MIDTRANS_SNAP_PATH = "/snap/snap.js";
 export const EXPECTS_429 = "expects-429";
 
+/**
+ * Staging tier only (PLAYWRIGHT_BASE_URL set): the hosts a browser may reach
+ * besides the deployed app itself. These are the providers the @staging specs
+ * exercise for real: Google sign-in (AUTH-08) and the Midtrans/Stripe sandbox
+ * checkouts (PAY-12). A host matches itself and its subdomains.
+ * E2E_STAGING_ALLOWED_HOSTS (comma-separated) adds hosts the staging
+ * deployment loads on its own (e.g. a telemetry endpoint) without a code change.
+ */
+const STAGING_PROVIDER_HOSTS = [
+  "accounts.google.com",
+  "gstatic.com",
+  "googleapis.com",
+  "googleusercontent.com",
+  "sandbox.midtrans.com",
+  "stripe.com",
+  "stripe.network",
+];
+
+export function stagingAllowedHosts(
+  baseUrl: string = E2E_STAGING_BASE_URL,
+  extra: string = process.env.E2E_STAGING_ALLOWED_HOSTS ?? "",
+): string[] {
+  const hosts = [new URL(baseUrl).hostname, ...STAGING_PROVIDER_HOSTS];
+  for (const host of extra.split(",")) {
+    const trimmed = host.trim().toLowerCase();
+    if (trimmed) hosts.push(trimmed);
+  }
+  return hosts;
+}
+
+const hostMatches = (hostname: string, allowed: string) => hostname === allowed || hostname.endsWith(`.${allowed}`);
+
 export type CspViolation = {
   pageUrl: string;
   blockedURI: string;
@@ -185,6 +223,9 @@ export type Guards = {
 const expects429 = (testInfo: TestInfo) => testInfo.annotations.some((a) => a.type === EXPECTS_429);
 
 function makeGuards(testInfo: TestInfo): Guards {
+  // Staging: no stub to map snap.js to; the deployed app and the sandbox
+  // providers are reached for real, anything else is still blocked.
+  const stagingHosts = E2E_IS_STAGING_RUN ? stagingAllowedHosts() : null;
   const violations: string[] = [];
   const pageErrors: Error[] = [];
   const cspViolations: CspViolation[] = [];
@@ -203,6 +244,11 @@ function makeGuards(testInfo: TestInfo): Guards {
     const url = new URL(route.request().url());
     if (url.protocol === "data:" || url.protocol === "blob:" || LOOPBACK_HOSTS.has(url.hostname)) {
       return route.fallback();
+    }
+    if (stagingHosts) {
+      if (stagingHosts.some((allowed) => hostMatches(url.hostname, allowed))) return route.fallback();
+      violations.push(`guards: blocked browser request to a host outside the staging allowlist: ${route.request().method()} ${url.href}`);
+      return route.abort("blockedbyclient");
     }
     if (MIDTRANS_SNAP_HOSTS.has(url.hostname) && url.pathname === MIDTRANS_SNAP_PATH) {
       snapRequests.push(url.href);
@@ -362,6 +408,15 @@ export const test = base.extend<Fixtures>({
 
   stub: [
     async ({ playwright }, use) => {
+      if (E2E_IS_STAGING_RUN) {
+        // No provider stub exists on staging: nothing to reset, and a spec
+        // that reads or forces stub state is a local-only spec.
+        const unavailable = async (): Promise<never> => {
+          throw new Error("The provider stub is not available on staging (PLAYWRIGHT_BASE_URL is set)");
+        };
+        await use({ url: "", reset: async () => {}, requests: unavailable, force: unavailable });
+        return;
+      }
       const control = await playwright.request.newContext({ baseURL: E2E_STUB_URL });
       const reset = async () => {
         for (const path of ["/__requests", "/__fixtures"]) {

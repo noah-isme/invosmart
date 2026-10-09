@@ -201,7 +201,9 @@ test.describe("auth: signed out", () => {
       const providerRequest = page.waitForRequest((request) => new URL(request.url()).hostname === "accounts.google.com");
       await login.googleButton.click();
       expect(new URL((await providerRequest).url()).hostname).toBe("accounts.google.com");
-      // The loopback guard records the provider navigation; it is the point of this test.
+      // On staging the guards allow accounts.google.com (stagingAllowedHosts);
+      // the local loopback guard would record the provider navigation, which
+      // is the point of this test, so such a record is dropped either way.
       const kept = guards.violations.filter((message) => !message.includes("accounts.google.com"));
       guards.violations.splice(0, guards.violations.length, ...kept);
     },

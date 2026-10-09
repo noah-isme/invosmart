@@ -8,6 +8,8 @@ import {
   E2E_DB_LOG_FILE,
   E2E_DB_PORT,
   E2E_DB_READY_URL,
+  E2E_IS_STAGING_RUN,
+  E2E_STAGING_BASE_URL,
   E2E_STUB_PORT,
   E2E_STUB_URL,
   E2E_WORKSPACE_AUTH_MODE,
@@ -17,8 +19,8 @@ import {
   personaStorageStatePath,
 } from "./test/e2e/playwright.env";
 
-const stagingBaseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim() || "";
-const isStaging = stagingBaseUrl !== "";
+const stagingBaseUrl = E2E_STAGING_BASE_URL;
+const isStaging = E2E_IS_STAGING_RUN;
 const isContractOnly = !isStaging && process.env.E2E_CONTRACT_ONLY === "1";
 const isListOnly = process.argv.includes("--list");
 const isNightly = process.env.E2E_TIER === "nightly";
@@ -33,6 +35,10 @@ const SPEC_FILES = "**/test/e2e/specs/**/*.spec.ts";
 const CONTRACT_SPEC_FILES = "**/test/e2e/specs/contracts/**/*.spec.ts";
 // Request-only files run in the `api` project (no browser).
 const API_SPEC_FILES = ["**/test/e2e/specs/api-v1/**/*.spec.ts", "**/test/e2e/specs/security/**/*.api.spec.ts"];
+// Local run: personas against the in-memory DB. Staging run: one real account.
+const LOCAL_SETUP_FILE = "**/test/e2e/setup/personas.setup.ts";
+const STAGING_SETUP_FILE = "**/test/e2e/setup/staging.setup.ts";
+const STAGING_TAG = /@staging\b/;
 
 /**
  * NEXT_PUBLIC_* values are inlined by `next build`, so the local suite must run
@@ -118,9 +124,26 @@ function projects(): PlaywrightTestConfig["projects"] {
     // No DB, no personas: only the page.route-mocked contract specs.
     return [{ name: "chromium", testMatch: CONTRACT_SPEC_FILES, use: browser }];
   }
+  if (isStaging) {
+    // Deployed app: the setup logs in the E2E_STAGING_USER_* account and writes
+    // the owner storageState; only @staging specs run. The grep sits on the
+    // spec projects (not the config root) so the setup test itself still runs.
+    return [
+      { name: "setup", testMatch: STAGING_SETUP_FILE },
+      {
+        name: "chromium",
+        testMatch: SPEC_FILES,
+        testIgnore: API_SPEC_FILES,
+        dependencies: ["setup"],
+        grep: STAGING_TAG,
+        use: { ...browser, storageState: personaStorageStatePath("owner") },
+      },
+      { name: "api", testMatch: API_SPEC_FILES, grep: STAGING_TAG },
+    ];
+  }
   return [
     // Registers the personas and writes test/e2e/.auth/<persona>.json.
-    { name: "setup", testMatch: "**/*.setup.ts" },
+    { name: "setup", testMatch: LOCAL_SETUP_FILE },
     {
       name: "chromium",
       testMatch: SPEC_FILES,
@@ -144,7 +167,6 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  grep: isStaging ? /@staging/ : undefined,
   grepInvert: MODE_TAG_EXCLUDED,
   reporter: [
     ["list"],

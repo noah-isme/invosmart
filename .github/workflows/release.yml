@@ -63,15 +63,11 @@ jobs:
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      # Plain production build (no e2e stamp). The browser suite, including the
+      # critical contract spec (tagged @smoke), runs in the e2e-smoke job
+      # against its own `npm run e2e:build`.
       - name: Build
         run: npm run build
-        env:
-          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
-          ENABLE_TELEMETRY: "false"
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Critical browser contract
-        run: npm run test:e2e:contract
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
@@ -94,10 +90,79 @@ jobs:
           ENABLE_TELEMETRY: "false"
         run: npx semantic-release
 
+  # Local-DB smoke tier: in-memory PGlite, provider stub and `next start` on an
+  # e2e build, all started by playwright.config.ts (webServer). Includes the
+  # critical browser contract spec (@smoke). Playwright's globalTimeout is
+  # 15 min (E2E_TIER=smoke) so the artifacts still upload inside the 20 min job.
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
+      ENABLE_TELEMETRY: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('24.')) { throw new Error('The e2e suite requires Node.js 24'); }"
+      - name: Install dependencies
+        run: npm ci
+      # Until upgrade Phase 7 adds a postinstall hook.
+      - name: Generate Prisma client
+        run: npx --no-install prisma generate
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # https://playwright.dev/docs/ci: browsers are keyed on the exact
+      # @playwright/test version; OS packages are never cached.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # next build with the e2e NEXT_PUBLIC_* values and .next/e2e-build.json.
+      - name: E2E build
+        run: npm run e2e:build
+      # Added by Step 24 of .plans/e2e-scenarios.md; skipped until the script exists.
+      - name: E2E coverage check
+        if: hashFiles('scripts/e2e-coverage-check.mjs') != ''
+        run: node scripts/e2e-coverage-check.mjs
+      - name: E2E smoke tier
+        run: npm run test:e2e:smoke
+        env:
+          E2E_TIER: smoke
+          E2E_WORKSPACE_AUTH_MODE: enforce
+      - name: Per-spec durations
+        if: always()
+        run: node scripts/e2e-junit-durations.mjs
+      - name: Upload e2e smoke report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            QA-report
+            test-results
+          retention-days: 7
+          if-no-files-found: warn
+
   deploy:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
+    needs: [build-and-test, e2e-smoke]
     runs-on: ubuntu-latest
+    outputs:
+      deployment_url: ${{ steps.vercel.outputs.url }}
     env:
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
     steps:
@@ -115,40 +180,59 @@ jobs:
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      # `vercel deploy` prints the deployment URL on stdout; post-deploy-tests
+      # runs the @staging tier against it.
       - name: Deploy to Vercel
+        id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          url="$(npx vercel deploy --prod --token="$VERCEL_TOKEN")"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
 
+  # @staging tier: no database, no webServer, no provider stub
+  # (playwright.config.ts with PLAYWRIGHT_BASE_URL set). The account comes
+  # from the `staging` environment's E2E_STAGING_USER_* secrets. It targets
+  # the STAGING deployment, never the production URL `deploy` publishes: the
+  # @staging specs write data (workspaces, invoices, Slack endpoints) and need
+  # sandbox provider keys. (Open question for the owner: see Atlas report.)
   post-deploy-tests:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: deploy
+    environment: staging
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_NEXTAUTH_URL }}
+      E2E_TIER: staging
+      E2E_STAGING_USER_EMAIL: ${{ secrets.E2E_STAGING_USER_EMAIL }}
+      E2E_STAGING_USER_PASSWORD: ${{ secrets.E2E_STAGING_USER_PASSWORD }}
+      E2E_STAGING_INBOX: ${{ vars.E2E_STAGING_INBOX }}
+      E2E_STAGING_SLACK_WEBHOOK_URL: ${{ secrets.E2E_STAGING_SLACK_WEBHOOK_URL }}
+      E2E_STAGING_CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version-file: ".nvmrc"
           cache: "npm"
       - name: Assert supported Node.js runtime
         run: node -e "if (!process.versions.node.startsWith('24.')) { throw new Error('Release certification requires Node.js 24'); }"
       - name: Install dependencies
         run: npm ci
-      - name: Playwright install
-        run: npx playwright install --with-deps
-      - name: Playwright smoke tests
-        env:
-          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
-          ENABLE_TELEMETRY: "false"
-        run: npm run test:e2e
-      - name: Upload QA screenshots
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E staging tier
+        run: npm run test:e2e:staging
+      - name: Upload e2e staging report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: qa-report
-          path: QA-report
+          name: e2e-post-deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            QA-report
+            test-results
+          retention-days: 14
           if-no-files-found: warn
 
   staging-certification:
@@ -182,8 +266,20 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      # Secret-backed checks plus the no-DB contract gate (runCriticalGates).
+      # The local-DB smoke tier never runs here; it runs only in e2e-smoke.
       - name: Run staging certification
         run: npm run release:certify
+      - name: E2E staging tier
+        run: npm run test:e2e:staging
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_NEXTAUTH_URL }}
+          E2E_TIER: staging
+          E2E_STAGING_USER_EMAIL: ${{ secrets.E2E_STAGING_USER_EMAIL }}
+          E2E_STAGING_USER_PASSWORD: ${{ secrets.E2E_STAGING_USER_PASSWORD }}
+          E2E_STAGING_INBOX: ${{ vars.E2E_STAGING_INBOX }}
+          E2E_STAGING_SLACK_WEBHOOK_URL: ${{ secrets.E2E_STAGING_SLACK_WEBHOOK_URL }}
+          E2E_STAGING_CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
       - name: Upload staging certification evidence
         if: always()
         uses: actions/upload-artifact@v7

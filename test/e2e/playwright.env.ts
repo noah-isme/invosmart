@@ -34,6 +34,12 @@ export const E2E_PLACEHOLDER_DATABASE_URL = "postgresql://placeholder:placeholde
 
 export const E2E_WORKSPACE_AUTH_MODE = process.env.E2E_WORKSPACE_AUTH_MODE === "compat" ? "compat" : "enforce";
 
+// Staging tier: PLAYWRIGHT_BASE_URL points at a deployed app. No webServer,
+// no provider stub, no local personas; only @staging specs run, signed in as
+// the E2E_STAGING_USER_* account (setup/staging.setup.ts).
+export const E2E_STAGING_BASE_URL = process.env.PLAYWRIGHT_BASE_URL?.trim() || "";
+export const E2E_IS_STAGING_RUN = E2E_STAGING_BASE_URL !== "";
+
 // Fixed persona identities. Each run starts from a fresh in-memory database, so
 // these addresses are unique per run.
 export const E2E_PERSONAS = {

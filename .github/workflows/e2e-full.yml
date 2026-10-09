@@ -1,0 +1,94 @@
+name: E2E Full (nightly)
+
+# Full local-DB tier (everything except @staging) in both workspace auth
+# modes. Each matrix leg starts its own in-memory PGlite, provider stub and
+# `next start` through playwright.config.ts; no secrets are used.
+on:
+  schedule:
+    - cron: "30 19 * * *" # 02:30 WIB (UTC+7)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-full-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e-full:
+    name: e2e full (${{ matrix.auth_mode }})
+    runs-on: ubuntu-latest
+    # Playwright's globalTimeout is 22 min for E2E_TIER=nightly, so the
+    # report still uploads inside the job limit.
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        auth_mode: [enforce, compat]
+    env:
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
+      ENABLE_TELEMETRY: "false"
+      E2E_TIER: nightly
+      E2E_WORKSPACE_AUTH_MODE: ${{ matrix.auth_mode }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Assert supported Node.js runtime
+        run: node -e "if (!process.versions.node.startsWith('24.')) { throw new Error('The e2e suite requires Node.js 24'); }"
+      - name: Install dependencies
+        run: npm ci
+      # Until upgrade Phase 7 adds a postinstall hook.
+      - name: Generate Prisma client
+        run: npx --no-install prisma generate
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # https://playwright.dev/docs/ci: browsers are keyed on the exact
+      # @playwright/test version; OS packages are never cached.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # Applies prisma/migrations (instead of `db push`) to a throwaway PGlite
+      # on E2E_DB_PORT+20. Known red until the migration-order repair lands;
+      # it must not block the nightly run.
+      - name: Migration replay check (non-blocking)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node test/e2e/support/db/serve.mjs --check
+        env:
+          E2E_SCHEMA_MODE: migrate
+      # next build with the e2e NEXT_PUBLIC_* values and .next/e2e-build.json.
+      - name: E2E build
+        run: npm run e2e:build
+      - name: E2E full tier (${{ matrix.auth_mode }})
+        run: npm run test:e2e
+      # Measured gate: per-spec durations from QA-report/junit.xml; a warning
+      # (not a failure) above 18 min, the point where slow specs move out of
+      # the nightly default or sharding is enabled.
+      - name: Per-spec durations (measured gate)
+        if: always()
+        run: node scripts/e2e-junit-durations.mjs --budget-minutes=18
+      - name: Upload e2e report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-full-${{ matrix.auth_mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            QA-report
+            test-results
+          retention-days: 14
+          if-no-files-found: warn
