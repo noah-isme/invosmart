@@ -77,6 +77,31 @@ describe("export-utils", () => {
     it("returns empty string for null or undefined", () => {
       expect(formatDateForExport(null)).toBe("");
       expect(formatDateForExport(undefined)).toBe("");
+      expect(formatDateForExport(new Date("invalid"))).toBe("");
+    });
+
+    it("uses the Asia/Jakarta calendar date (UTC+7), not the UTC date", () => {
+      // 23:59:59 WIB stays on the same day; 00:00 WIB is the next day.
+      expect(formatDateForExport(new Date("2026-10-09T16:59:59.999Z"))).toBe("2026-10-09");
+      expect(formatDateForExport(new Date("2026-10-09T17:00:00.000Z"))).toBe("2026-10-10");
+      expect(formatDateForExport("2026-10-09T17:30:00.000Z")).toBe("2026-10-10");
+      // Month and year boundaries.
+      expect(formatDateForExport(new Date("2026-12-31T17:00:00.000Z"))).toBe("2027-01-01");
+      expect(formatDateForExport(new Date("2026-02-28T18:00:00.000Z"))).toBe("2026-03-01");
+      // UTC midnight (how date-only inputs are stored) keeps its date.
+      expect(formatDateForExport(new Date("2026-08-01"))).toBe("2026-08-01");
+    });
+
+    it("converts ISO strings with an offset and keeps zone-less calendar values", () => {
+      expect(formatDateForExport("2026-10-09T23:30:00+07:00")).toBe("2026-10-09");
+      expect(formatDateForExport("2026-10-09T20:00:00-05:00")).toBe("2026-10-10");
+      expect(formatDateForExport("2026-10-09T23:30:00")).toBe("2026-10-09");
+      expect(formatDateForExport("2026-10-09")).toBe("2026-10-09");
+    });
+
+    it("accepts another IANA timezone explicitly", () => {
+      expect(formatDateForExport(new Date("2026-10-09T17:30:00.000Z"), "UTC")).toBe("2026-10-09");
+      expect(formatDateForExport(new Date("2026-10-09T16:30:00.000Z"), "Asia/Jayapura")).toBe("2026-10-10");
     });
   });
 

@@ -38,16 +38,50 @@ export function escapeCSVCell(value: unknown): string {
 }
 
 /**
- * Formats a date into YYYY-MM-DD format for export output.
+ * Business timezone for exported calendar dates. Neither Invoice nor
+ * Organization stores a timezone, so every export uses the Indonesian
+ * business date (WIB, UTC+7, no DST).
  */
-export function formatDateForExport(val: string | Date | null | undefined): string {
+export const EXPORT_TIME_ZONE = "Asia/Jakarta";
+
+/** An ISO 8601 date-time that pins an instant (ends in Z or a ±hh:mm offset). */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:?\d{2})$/i;
+
+const calendarDateIn = (instant: Date, timeZone: string): string => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+
+/**
+ * Formats a date into YYYY-MM-DD format for export output, as the calendar
+ * date in `timeZone` (default Asia/Jakarta), not the UTC date.
+ *
+ * - Date objects and ISO strings with Z or an offset are instants and are
+ *   converted to the business date (2026-10-09T17:30:00Z -> 2026-10-10).
+ * - Date-only strings ("2026-10-09") and date-times without a zone are
+ *   already calendar values: their date part is kept unchanged.
+ */
+export function formatDateForExport(
+  val: string | Date | null | undefined,
+  timeZone: string = EXPORT_TIME_ZONE,
+): string {
   if (!val) return "";
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return "";
-    return val.toISOString().split("T")[0];
+    return calendarDateIn(val, timeZone);
   }
   const str = String(val).trim();
   if (!str) return "";
+  if (ISO_INSTANT.test(str)) {
+    const instant = new Date(str);
+    if (!isNaN(instant.getTime())) return calendarDateIn(instant, timeZone);
+  }
   if (str.includes("T")) {
     return str.split("T")[0];
   }

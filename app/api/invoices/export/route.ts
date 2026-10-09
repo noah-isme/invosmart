@@ -9,7 +9,7 @@ import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
 import { withSpan } from "@/lib/tracing";
 import { logAuditEvent, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
-import { exportToCSV, exportToXLSX, type InvoiceExportData } from "@/lib/export-utils";
+import { exportToCSV, exportToXLSX, formatDateForExport, type InvoiceExportData } from "@/lib/export-utils";
 import {
   canReadWorkspace,
   resolveWorkspaceContextForRequest,
@@ -98,7 +98,8 @@ const handleExport = async (request: NextRequest) => {
     ipAddress: getClientIp(request),
   });
 
-  const timestamp = new Date().toISOString().split("T")[0];
+  // Business date (Asia/Jakarta), the same calendar the exported cells use.
+  const timestamp = formatDateForExport(new Date());
 
   if (formatParam === "csv") {
     const csvContent = exportToCSV(exportData);

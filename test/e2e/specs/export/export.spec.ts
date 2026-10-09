@@ -11,12 +11,13 @@
 // - CSV: header "Invoice Number,Client Name,Status,Issued Date,Due Date,Total,Currency",
 //   CRLF line breaks, RFC 4180 quoting only for '"', ',', CR, LF
 //   (escapeCSVCell); text cells starting with = + - @ TAB CR get a leading
-//   single quote (CSV injection, EXP-05). Dates are
-//   toISOString().split("T")[0], i.e. the UTC date (EXP-06).
+//   single quote (CSV injection, EXP-05). Dates are the Asia/Jakarta
+//   calendar date of the stored instant (formatDateForExport, EXP-06).
 // - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text, served with the
 //   OOXML content type and an .xlsx file name (EXP-02 product bug).
 import { expect, test, type Api } from "../../fixtures";
 import type { InvoiceRecord } from "../../support/api-factories";
+import { jakartaDate } from "../../support/dates";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 const EXPORT = "/api/invoices/export";
@@ -98,8 +99,8 @@ test.describe("export", () => {
           "Invoice Number": invoice.number,
           "Client Name": invoice.client,
           Status: invoice.status,
-          "Issued Date": invoice.issuedAt.slice(0, 10),
-          "Due Date": invoice.dueAt?.slice(0, 10) ?? "",
+          "Issued Date": jakartaDate(invoice.issuedAt),
+          "Due Date": invoice.dueAt ? jakartaDate(invoice.dueAt) : "",
           Total: String(invoice.total),
           Currency: "IDR",
         });
@@ -222,35 +223,25 @@ test.describe("export", () => {
 
   test(
     "EXP-06 the exported due date is the Asia/Jakarta calendar date",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "formatDateForExport uses toISOString().split(\"T\")[0] (UTC), so dueAt <today>T17:30:00.000Z, which is 00:30 the next day in Asia/Jakarta (UTC+7), is exported as <today>. Desired: the Jakarta date (<today+1>).",
-        },
-      ],
-    },
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
-      test.fail(true, "product bug: export dates are UTC, not Asia/Jakarta (lib/export-utils.ts formatDateForExport, momus-gated)");
       const { api, factory } = await newApiUser("exp06");
       const utcToday = new Date().toISOString().slice(0, 10);
       const dueAt = `${utcToday}T17:30:00.000Z`;
-      const jakartaDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(dueAt));
+      const expected = jakartaDate(dueAt);
       // A DRAFT with a past dueAt stays DRAFT (only SENT/UNPAID turn OVERDUE).
       const invoice = await factory.createInvoice({ dueAt });
       expect(invoice.dueAt).toBe(dueAt);
-      expect(jakartaDate).not.toBe(utcToday);
+      expect(expected).not.toBe(utcToday);
 
       const { records } = await exportCsv(api);
       const record = byNumber(records, invoice);
       expect(record, "the invoice row is exported").toBeDefined();
       test.info().annotations.push(
-        { type: "observed-due-date", description: `dueAt ${dueAt} exported as ${record!["Due Date"]}; Jakarta date ${jakartaDate}` },
+        { type: "observed-due-date", description: `dueAt ${dueAt} exported as ${record!["Due Date"]}; Jakarta date ${expected}` },
       );
 
-      expect(record!["Due Date"], "due date must be the Asia/Jakarta date").toBe(jakartaDate);
+      expect(record!["Due Date"], "due date must be the Asia/Jakarta date").toBe(expected);
     },
   );
 });

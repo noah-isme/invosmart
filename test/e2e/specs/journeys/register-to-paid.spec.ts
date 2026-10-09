@@ -40,6 +40,7 @@ import {
   type InvoiceRecord,
 } from "../../support/api-factories";
 import { getSessionUser } from "../../support/auth";
+import { jakartaDate } from "../../support/dates";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 
@@ -195,7 +196,7 @@ test.describe("journey: register to paid", () => {
       const lines = (await csv.text()).trim().split(/\r?\n/);
       expect(lines[0]).toBe("Invoice Number,Client Name,Status,Issued Date,Due Date,Total,Currency");
       const csvRow = lines.find((line) => line.startsWith(`${invoice.number},`));
-      expect(csvRow?.split(",")).toEqual([invoice.number, clientName, "PAID", invoice.issuedAt.slice(0, 10), invoice.dueAt!.slice(0, 10), String(total), "IDR"]);
+      expect(csvRow?.split(",")).toEqual([invoice.number, clientName, "PAID", jakartaDate(invoice.issuedAt), jakartaDate(invoice.dueAt!), String(total), "IDR"]);
 
       // 9. Audit: the workspace listing has every tenanted step...
       await expect
