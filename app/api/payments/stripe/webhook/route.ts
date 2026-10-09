@@ -218,7 +218,7 @@ export async function POST(request: Request) {
         select: { id: true },
       });
       if (existingEvent) {
-        return { duplicate: true, ignored: false, paymentId: undefined as string | undefined, status: txAttempt.status, invoiceId: txAttempt.invoiceId, userId: txAttempt.invoice.userId };
+        return { duplicate: true, ignored: false, paymentId: undefined as string | undefined, status: txAttempt.status, invoiceId: txAttempt.invoiceId, userId: txAttempt.invoice.userId, organizationId: txAttempt.invoice.organizationId };
       }
 
       const decision = decidePaymentTransition(txAttempt.status, nextStatus);
@@ -370,6 +370,7 @@ export async function POST(request: Request) {
         status: decision === 'apply' ? nextStatus : txAttempt.status,
         invoiceId: txAttempt.invoiceId,
         userId: txAttempt.invoice.userId,
+        organizationId: txAttempt.invoice.organizationId,
         duplicateSettlement: marker ? { marker, firstDetection: !previousMarker } : undefined,
         manualReview: review && !previousReview ? review : undefined,
       };
@@ -377,6 +378,7 @@ export async function POST(request: Request) {
 
     if (result.paymentId && !result.duplicate) {
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,
@@ -396,6 +398,7 @@ export async function POST(request: Request) {
         `[payments] Duplicate settlement: Stripe payment ${paymentIntentId ?? event.id} (attempt ${attempt.id}) arrived for invoice ${result.invoiceId}, which is already settled. No Payment was created; manual refund required.`,
       );
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,
@@ -417,6 +420,7 @@ export async function POST(request: Request) {
         `[payments] Stripe payment ${paymentIntentId ?? event.id} was recorded for invoice ${result.invoiceId}, which was already marked PAID without a Payment. Review required.`,
       );
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,

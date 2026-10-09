@@ -19,11 +19,11 @@
 //   /api/invoices/export?format=csv in a new tab, so the CSV is read from that
 //   URL with the user's session (export.spec.ts does the same).
 // - Audit: GET /api/admin/audit-logs is workspace-scoped (rows whose tenantId
-//   is the caller's workspace). AUTH_REGISTER and the payment settlement rows
-//   are written WITHOUT a tenantId (app/api/auth/register/route.ts,
-//   app/api/payments/midtrans/notification/route.ts), so only the platform
-//   admin's global /app/admin/audit-logs page (User ID filter) lists every
-//   step; JRN-01b records the missing tenant on the payment row.
+//   is the caller's workspace). AUTH_REGISTER (the provisioned personal
+//   workspace), AUTH_LOGIN_SUCCESS (the active workspace) and the payment
+//   settlement row (invoice.organizationId) are tenanted, so the workspace
+//   listing shows every step; the platform admin's global page (User ID
+//   filter) lists them too. JRN-01b pins the tenant on the payment row.
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../../fixtures";
@@ -87,11 +87,6 @@ test.describe("journey: register to paid", () => {
           "/api/admin/audit-logs",
           "/app/admin/audit-logs",
         ),
-        {
-          type: "note",
-          description:
-            "AUTH_REGISTER and the Midtrans settlement INVOICE_UPDATE carry no tenantId, so the workspace audit API cannot show them; the full trail is asserted on the platform admin's global audit page (User ID filter). See JRN-01b.",
-        },
       ],
     },
     async ({ page, stub, persona }) => {
@@ -198,17 +193,29 @@ test.describe("journey: register to paid", () => {
       const csvRow = lines.find((line) => line.startsWith(`${invoice.number},`));
       expect(csvRow?.split(",")).toEqual([invoice.number, clientName, "PAID", jakartaDate(invoice.issuedAt), jakartaDate(invoice.dueAt!), String(total), "IDR"]);
 
-      // 9. Audit: the workspace listing has every tenanted step...
+      // 9. Audit: the workspace listing has every step, registration, sign-in
+      // and the payment settlement included...
       await expect
         .poll(async () => {
           const response = await apiRequest(request, "GET", "/api/admin/audit-logs?limit=100");
           const { logs } = (await response.json()) as { logs: AuditRow[] };
-          return logs
-            .filter((log) => [client.id, invoice.id, null].includes(log.entityId))
-            .map((log) => `${log.action}:${log.entity}`)
-            .sort();
+          return [
+            ...new Set(
+              logs
+                .filter((log) => [client.id, invoice.id, sessionUser.id, null].includes(log.entityId))
+                .map((log) => `${log.action}:${log.entity}`),
+            ),
+          ].sort();
         }, { message: "workspace audit trail" })
-        .toEqual(["CLIENT_CREATE:Client", "INVOICE_CREATE:Invoice", "INVOICE_EMAIL_ACCEPTED:Invoice", "INVOICE_EXPORT:Invoice"]);
+        .toEqual([
+          "AUTH_LOGIN_SUCCESS:Auth",
+          "AUTH_REGISTER:User",
+          "CLIENT_CREATE:Client",
+          "INVOICE_CREATE:Invoice",
+          "INVOICE_EMAIL_ACCEPTED:Invoice",
+          "INVOICE_EXPORT:Invoice",
+          "INVOICE_UPDATE:Invoice",
+        ]);
 
       // ...and the platform admin's global page (by user) lists every step.
       const admin = await persona("platformAdmin");
@@ -234,26 +241,19 @@ test.describe("journey: register to paid", () => {
 
   test(
     "JRN-01b the Midtrans settlement audit row belongs to the invoice's workspace",
-    {
-      annotation: [
-        ...covers("/api/payments/midtrans/notification", "/api/admin/audit-logs"),
-        {
-          type: "product-bug",
-          description:
-            "app/api/payments/midtrans/notification/route.ts (and the Stripe webhook) call logAuditEvent without tenantId, so the PAYMENT_RECEIVED INVOICE_UPDATE row has tenantId null and never appears in the workspace audit log (GET /api/admin/audit-logs filters by tenantId). Desired: tenantId = invoice.organizationId.",
-        },
-      ],
-    },
+    { annotation: covers("/api/payments/midtrans/notification", "/api/admin/audit-logs") },
     async ({ newApiUser }) => {
-      test.fail(true, "payment settlement audit rows have no tenantId (product bug, see annotation)");
       const { api, factory } = await newApiUser("jrn01b");
       const invoice = await factory.createInvoice({ status: "SENT" });
+      expect(invoice.organizationId).toBeTruthy();
       await factory.payInvoiceViaMidtrans(invoice);
       await expect
         .poll(
           async () => {
             const { logs } = (await (await api.get("/api/admin/audit-logs?entity=Invoice&action=INVOICE_UPDATE")).json()) as { logs: AuditRow[] };
-            return logs.some((log) => log.entityId === invoice.id && log.details?.event === "PAYMENT_RECEIVED");
+            return logs.some(
+              (log) => log.entityId === invoice.id && log.details?.event === "PAYMENT_RECEIVED" && log.tenantId === invoice.organizationId,
+            );
           },
           { timeout: 5_000 },
         )

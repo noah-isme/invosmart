@@ -47,7 +47,7 @@ export const createUserWithPersonalWorkspace = <
 >(
   data: NewUserData,
   client: WorkspaceDatabase = workspaceDb,
-): Promise<U> => createUserWithPersonalWorkspaceIn<U>(data, client);
+): Promise<U & { activeOrganizationId: string | null }> => createUserWithPersonalWorkspaceIn<U>(data, client);
 
 const rolePermissions: Record<WorkspaceRole | "LEGACY", readonly WorkspacePermission[]> = {
   OWNER: ["read", "write", "manage_members", "manage_workspace"],
