@@ -7,8 +7,38 @@ import { getInvoiceForCurrentUser } from "@/lib/invoices/get-invoice";
 import { InvoiceDetailClient } from "./InvoiceDetailClient";
 import type { InvoiceDetail } from "./types";
 
+const INVOICE_DETAIL_FIELDS = [
+  "id",
+  "number",
+  "client",
+  "items",
+  "subtotal",
+  "tax",
+  "total",
+  "status",
+  "issuedAt",
+  "dueAt",
+  "paidAt",
+  "emailedAt",
+  "notes",
+  "currency",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof InvoiceDetail)[];
+
 type PageProps = {
   params: Promise<{ id: string }>;
+};
+
+const toInvoiceDetail = (row: Record<string, unknown>): InvoiceDetail => {
+  const wire = JSON.parse(JSON.stringify(row)) as Record<string, unknown>;
+  const picked: Record<string, unknown> = {};
+  for (const key of INVOICE_DETAIL_FIELDS) {
+    if (key in wire) {
+      picked[key] = wire[key];
+    }
+  }
+  return picked as InvoiceDetail;
 };
 
 export default async function InvoiceDetailPage({ params }: PageProps) {
@@ -21,7 +51,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   // API route because both call the same function.
   const result = await getInvoiceForCurrentUser({
     id,
-    ipAddress: getClientIp({ headers: headers() } as unknown as Request),
+    ipAddress: getClientIp({ headers: await headers() } as unknown as Request),
   });
 
   if (!result.ok) {
@@ -35,8 +65,10 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   }
 
   // Same wire shape the API returned (dates as ISO strings, no class instances)
-  // so the client component receives identical props.
-  const invoice = JSON.parse(JSON.stringify(result.invoice)) as InvoiceDetail;
+  // so the client component receives identical props. Only the fields the
+  // client uses are forwarded; internal columns (emailLog, userId,
+  // organizationId, ...) must not end up in the RSC payload.
+  const invoice = toInvoiceDetail(result.invoice);
 
   return <InvoiceDetailClient initialInvoice={invoice} />;
 }

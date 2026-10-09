@@ -23,6 +23,12 @@ import { authOptions } from "@/server/auth";
  * directly instead of self-fetching their own API.
  */
 
+/** Statuses `isInvoiceOverdue` treats as overdue once `dueAt` has passed. */
+const OVERDUE_ELIGIBLE_STATUSES = [
+  InvoiceStatusEnum.enum.SENT,
+  InvoiceStatusEnum.enum.UNPAID,
+] as const;
+
 export type GetInvoiceFailure = "unauthorized" | "forbidden" | "invalid_id" | "not_found";
 
 export type GetInvoiceResult =
@@ -70,30 +76,49 @@ export const getInvoiceForCurrentUser = async ({
     return { ok: false, reason: "not_found" };
   }
 
-  if (invoice.status !== InvoiceStatusEnum.enum.OVERDUE && isInvoiceOverdue(invoice)) {
-    const updated = await db.invoice.update({
-      where: { id },
+  const now = new Date();
+  if (invoice.status !== InvoiceStatusEnum.enum.OVERDUE && isInvoiceOverdue(invoice, now)) {
+    // Compare-and-set: only flip rows that are still overdue-eligible. A
+    // concurrent view (or a PUT that just marked it PAID) makes this match 0
+    // rows, so we never write duplicate audit events or overwrite PAID.
+    const { count } = await db.invoice.updateMany({
+      where: {
+        id,
+        ...scope,
+        status: { in: [...OVERDUE_ELIGIBLE_STATUSES] },
+        dueAt: { lt: now },
+      },
       data: { status: InvoiceStatusEnum.enum.OVERDUE },
     });
-    void captureServerEvent("invoice_status_auto_overdue", {
-      invoiceId: id,
-    });
-    void logAuditEvent({
-      tenantId: workspace.organizationId,
-      userId: session.user.id,
-      action: AuditAction.INVOICE_AUTO_OVERDUE,
-      entity: AuditEntity.INVOICE,
-      entityId: id,
-      details: {
-        number: invoice.number,
-        previousStatus: invoice.status,
-        nextStatus: InvoiceStatusEnum.enum.OVERDUE,
-        dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
-        trigger: "lazy_get_evaluation",
-      },
-      ipAddress,
-    });
-    return { ok: true, invoice: updated };
+
+    if (count === 1) {
+      void captureServerEvent("invoice_status_auto_overdue", {
+        invoiceId: id,
+      });
+      void logAuditEvent({
+        tenantId: workspace.organizationId,
+        userId: session.user.id,
+        action: AuditAction.INVOICE_AUTO_OVERDUE,
+        entity: AuditEntity.INVOICE,
+        entityId: id,
+        details: {
+          number: invoice.number,
+          previousStatus: invoice.status,
+          nextStatus: InvoiceStatusEnum.enum.OVERDUE,
+          dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
+          trigger: "lazy_get_evaluation",
+        },
+        ipAddress,
+      });
+    }
+
+    // Re-read so the caller sees the row's real current state, whichever
+    // writer won the race.
+    const current = await db.invoice.findFirst({ where: { id, ...scope } });
+    if (!current) {
+      return { ok: false, reason: "not_found" };
+    }
+    return { ok: true, invoice: current };
   }
 
   return { ok: true, invoice };

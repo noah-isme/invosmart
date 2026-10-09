@@ -16,7 +16,7 @@ const notFoundMock = vi.hoisted(() =>
 );
 
 vi.mock("next/headers", () => ({
-  headers: () => new Headers({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" }),
+  headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" }),
   cookies: () => {
     throw new Error("page must not read cookies to self-fetch");
   },
@@ -63,6 +63,32 @@ describe("InvoiceDetailPage", () => {
       issuedAt: "2024-11-01T00:00:00.000Z",
       dueAt: null,
     });
+  });
+
+  it("forwards only the fields the client uses, not internal columns", async () => {
+    getInvoiceMock.mockResolvedValue({
+      ok: true,
+      invoice: {
+        id: "inv-1",
+        number: "INV-001",
+        total: 1000,
+        currency: "IDR",
+        issuedAt: new Date("2024-11-01T00:00:00.000Z"),
+        emailedAt: null,
+        emailLog: [{ to: "secret@example.com" }],
+        userId: "user-a",
+        organizationId: "org-a",
+        clientId: "client-1",
+      },
+    });
+
+    const { initialInvoice } = (await render()).props;
+
+    expect(initialInvoice).toMatchObject({ id: "inv-1", number: "INV-001", currency: "IDR" });
+    for (const internal of ["emailLog", "userId", "organizationId", "clientId"]) {
+      expect(initialInvoice).not.toHaveProperty(internal);
+    }
+    expect(JSON.stringify(initialInvoice)).not.toContain("secret@example.com");
   });
 
   it("calls notFound() for a missing or invisible invoice", async () => {

@@ -138,22 +138,30 @@ describe("getInvoiceForCurrentUser", () => {
       vi.setSystemTime(new Date("2024-11-15T10:00:00.000Z"));
     });
 
-    it("marks a past-due SENT invoice OVERDUE, returns the updated row and audits it", async () => {
+    it("marks a past-due SENT invoice OVERDUE atomically, re-reads it and audits once", async () => {
       const row = invoiceRow({ status: "SENT", dueAt: new Date("2024-11-10T00:00:00.000Z") });
       const updated = { ...row, status: "OVERDUE" };
-      db.invoice.findFirst.mockResolvedValue(row as never);
-      db.invoice.update.mockResolvedValue(updated as never);
+      db.invoice.findFirst.mockResolvedValueOnce(row as never).mockResolvedValueOnce(updated as never);
+      db.invoice.updateMany.mockResolvedValue({ count: 1 } as never);
 
       const result = await getInvoiceForCurrentUser({ id: "inv-1", ipAddress: "203.0.113.7" });
 
       expect(result).toEqual({ ok: true, invoice: updated });
-      expect(db.invoice.update).toHaveBeenCalledWith({
-        where: { id: "inv-1" },
+      expect(db.invoice.update).not.toHaveBeenCalled();
+      expect(db.invoice.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "inv-1",
+          organizationId: "org-a",
+          status: { in: ["SENT", "UNPAID"] },
+          dueAt: { lt: new Date("2024-11-15T10:00:00.000Z") },
+        },
         data: { status: "OVERDUE" },
       });
+      expect(captureServerEvent).toHaveBeenCalledTimes(1);
       expect(captureServerEvent).toHaveBeenCalledWith("invoice_status_auto_overdue", {
         invoiceId: "inv-1",
       });
+      expect(logAuditEvent).toHaveBeenCalledTimes(1);
       expect(logAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           tenantId: "org-a",
@@ -169,6 +177,33 @@ describe("getInvoiceForCurrentUser", () => {
       );
     });
 
+    it("emits no audit or telemetry and returns the current row when the compare-and-set matches 0 rows", async () => {
+      // Another view already flipped it, or a PUT marked it PAID in between.
+      const stale = invoiceRow({ status: "SENT", dueAt: new Date("2024-11-10T00:00:00.000Z") });
+      const paid = { ...stale, status: "PAID", paidAt: new Date("2024-11-15T09:59:59.000Z") };
+      db.invoice.findFirst.mockResolvedValueOnce(stale as never).mockResolvedValueOnce(paid as never);
+      db.invoice.updateMany.mockResolvedValue({ count: 0 } as never);
+
+      const result = await getInvoiceForCurrentUser({ id: "inv-1" });
+
+      expect(result).toEqual({ ok: true, invoice: paid });
+      expect(result.ok && result.invoice.status).toBe("PAID");
+      expect(db.invoice.update).not.toHaveBeenCalled();
+      expect(captureServerEvent).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it("returns not_found if the invoice was deleted between the check and the re-read", async () => {
+      const row = invoiceRow({ status: "UNPAID", dueAt: new Date("2024-11-10T00:00:00.000Z") });
+      db.invoice.findFirst.mockResolvedValueOnce(row as never).mockResolvedValueOnce(null);
+      db.invoice.updateMany.mockResolvedValue({ count: 0 } as never);
+
+      await expect(getInvoiceForCurrentUser({ id: "inv-1" })).resolves.toEqual({
+        ok: false,
+        reason: "not_found",
+      });
+    });
+
     it("does not transition a PAID invoice or one that is not yet due", async () => {
       db.invoice.findFirst.mockResolvedValueOnce(
         invoiceRow({ status: "PAID", dueAt: new Date("2024-11-10T00:00:00.000Z") }) as never,
@@ -180,7 +215,7 @@ describe("getInvoiceForCurrentUser", () => {
       );
       await getInvoiceForCurrentUser({ id: "inv-1" });
 
-      expect(db.invoice.update).not.toHaveBeenCalled();
+      expect(db.invoice.updateMany).not.toHaveBeenCalled();
       expect(logAuditEvent).not.toHaveBeenCalled();
     });
   });
