@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
  * The request assertions still protect the client contract (method, payload,
  * and the provider identifiers returned to the next step).
  */
-test.describe("Invoice delivery and payment handoff", () => {
+test.describe("Invoice delivery and payment handoff", { tag: "@smoke" }, () => {
   test("sends invoice email before starting a Midtrans checkout", async ({ page }) => {
     const invoiceId = "integration-invoice-001";
     const observedRequests: Array<{

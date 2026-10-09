@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  REQUIRED_GATE_SCRIPTS,
+  REQUIRED_REPOSITORY_FILES,
   REQUIRED_STAGING_ENV,
   checkNodeVersion,
+  criticalGateCommands,
   inspectRepository,
   parseArgs,
   validateStagingEnvironment,
@@ -82,6 +85,18 @@ describe("release certification preflight", () => {
     expect(result.errors).toContain(
       "INVOSMART_E2E_PROVIDER_BASE_URL is test-only and must not be set for staging",
     );
+  });
+
+  it("runs the no-DB contract gate, never the local-DB suite, in staging gates", () => {
+    const commands = criticalGateCommands();
+    const browserGate = commands.find((command) => command.label === "Critical Chromium browser contract");
+    expect(browserGate?.args).toEqual(["run", "test:e2e:contract"]);
+    for (const command of commands) {
+      expect(command.args).not.toContain("test:e2e");
+      expect(command.args).not.toContain("test:e2e:smoke");
+    }
+    expect(REQUIRED_GATE_SCRIPTS).toContain("test:e2e:contract");
+    expect(REQUIRED_REPOSITORY_FILES).toContain("test/e2e/specs/contracts/invoice-delivery-payment.spec.ts");
   });
 
   it("finds the repository gate entrypoints and payment migration", () => {

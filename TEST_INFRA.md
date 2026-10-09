@@ -14,12 +14,12 @@
 
 ## Test Architecture
 - Test runner: Vitest (`npm run test`) for unit/integration/E2E assertion suites; Playwright (`npm run test:e2e`) for E2E browser flows.
-- Invocation: `npx vitest run test/e2e/` or `npm run test`.
+- Invocation: `npx vitest run test/integration/` or `npm run test`.
 - Directory layout:
-  - `test/e2e/tier1-feature-coverage.test.ts` (Tier 1: Feature Coverage)
-  - `test/e2e/tier2-boundary-corner.test.ts` (Tier 2: Boundary & Corner Cases)
-  - `test/e2e/tier3-cross-feature.test.ts` (Tier 3: Cross-Feature Interactions)
-  - `test/e2e/tier4-realworld-scenarios.test.ts` (Tier 4: E2E Application Scenarios)
+  - `test/integration/tier1-feature-coverage.test.ts` (Tier 1: Feature Coverage)
+  - `test/integration/tier2-boundary-corner.test.ts` (Tier 2: Boundary & Corner Cases)
+  - `test/integration/tier3-cross-feature.test.ts` (Tier 3: Cross-Feature Interactions)
+  - `test/integration/tier4-realworld-scenarios.test.ts` (Tier 4: E2E Application Scenarios)
 
 ## Tier Breakdown & Test Cases
 

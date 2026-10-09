@@ -63,7 +63,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Critical browser contract
-        run: npm run test:e2e -- test/e2e/invoice-delivery-payment.spec.ts
+        run: npm run test:e2e:contract
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"

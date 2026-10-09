@@ -21,8 +21,6 @@ const isContractOnly = !isStaging && process.env.E2E_CONTRACT_ONLY === "1";
 const isListOnly = process.argv.includes("--list");
 const isNightly = process.env.E2E_TIER === "nightly";
 
-// Kept until Step 9 moves the spec to specs/contracts/.
-const LEGACY_CONTRACT_SPEC = "**/test/e2e/invoice-delivery-payment.spec.ts";
 const SPEC_FILES = "**/test/e2e/specs/**/*.spec.ts";
 const CONTRACT_SPEC_FILES = "**/test/e2e/specs/contracts/**/*.spec.ts";
 // Request-only files run in the `api` project (no browser).
@@ -108,14 +106,14 @@ function projects(): PlaywrightTestConfig["projects"] {
   const browser = { ...devices["Desktop Chrome"] };
   if (isContractOnly) {
     // No DB, no personas: only the page.route-mocked contract specs.
-    return [{ name: "chromium", testMatch: [CONTRACT_SPEC_FILES, LEGACY_CONTRACT_SPEC], use: browser }];
+    return [{ name: "chromium", testMatch: CONTRACT_SPEC_FILES, use: browser }];
   }
   return [
     // Registers the personas and writes test/e2e/.auth/<persona>.json.
     { name: "setup", testMatch: "**/*.setup.ts" },
     {
       name: "chromium",
-      testMatch: [SPEC_FILES, LEGACY_CONTRACT_SPEC],
+      testMatch: SPEC_FILES,
       testIgnore: API_SPEC_FILES,
       dependencies: ["setup"],
       // Signed in as the owner persona by default; unauthenticated specs use

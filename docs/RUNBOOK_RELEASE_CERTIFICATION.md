@@ -101,14 +101,44 @@ behavior, and that bounce/complaint states do not silently report success.
 
 ## Browser and device gate
 
-Run the critical invoice → email → payment Playwright spec on Chromium and
+Run the critical invoice → email → payment Playwright contract on Chromium and
 perform mobile viewport smoke checks for invoice creation, PDF, email,
-checkout, and payment status. The automated Chromium evidence is produced by:
+checkout, and payment status. The automated Chromium evidence comes from two
+tiers:
 
-```bash
-npx playwright install --with-deps chromium
-npm run test:e2e -- test/e2e/invoice-delivery-payment.spec.ts
-```
+- **Contract gate (no database).** `npm run test:e2e:contract` sets
+  `E2E_CONTRACT_ONLY=1`: Playwright starts only the app server (`next start`
+  with a placeholder `DATABASE_URL` and every provider key blank) and runs the
+  `page.route`-mocked specs under `test/e2e/specs/contracts/`
+  (`invoice-delivery-payment.spec.ts`). It needs no e2e build stamp, no database
+  and no provider stub, and its result does not depend on
+  `WORKSPACE_AUTH_MODE`. This is the browser gate that
+  `npm run release:certify` (`--run-gates`, `runCriticalGates`) and the CI
+  "Critical browser contract" step run.
+
+  ```bash
+  npx playwright install --with-deps chromium
+  npm run build
+  npm run test:e2e:contract
+  ```
+
+- **Smoke tier (local database).** `npm run test:e2e:smoke` runs every spec
+  tagged `@smoke` (the contract spec above plus the smoke scenarios) against the
+  full local stack Playwright starts: the provider stub, an in-memory PGlite
+  database and the app, after the `setup` project has created the personas.
+  It requires a build produced by `npm run e2e:build` (the config refuses to
+  start without a matching `.next/e2e-build.json`; a plain `npm run build`
+  deletes the stamp). It runs on every PR, never inside `release:certify` or
+  against staging.
+
+  ```bash
+  npm run e2e:build
+  npm run test:e2e:smoke
+  ```
+
+`npm run release:check` only inspects the repository (it confirms the
+`test:e2e` and `test:e2e:contract` scripts and the contract spec exist) and
+never runs browser gates.
 
 For mobile evidence, use the approved staging device runner or Chromium DevTools
 mobile emulation at the supported phone viewport and save screenshots/traces

@@ -8,14 +8,14 @@ import { fileURLToPath } from "node:url";
 export const REQUIRED_MIGRATION = "20260812173000_payment_attempts_events";
 export const REQUIRED_API_MIGRATION = "20260814110000_api_keys";
 
-export const REQUIRED_GATE_SCRIPTS = ["lint", "typecheck", "test", "build", "test:e2e"];
+export const REQUIRED_GATE_SCRIPTS = ["lint", "typecheck", "test", "build", "test:e2e", "test:e2e:contract"];
 
 export const REQUIRED_REPOSITORY_FILES = [
   "package.json",
   "package-lock.json",
   "prisma/schema.prisma",
   "playwright.config.ts",
-  "test/e2e/invoice-delivery-payment.spec.ts",
+  "test/e2e/specs/contracts/invoice-delivery-payment.spec.ts",
   "docs/API.md",
   "app/api/openapi.json/route.ts",
   "app/api/v1/invoices/route.ts",
@@ -295,14 +295,8 @@ const runGate = ({ label, command, args, cwd, env }) => {
   };
 };
 
-export function runCriticalGates({ cwd = process.cwd(), env = process.env } = {}) {
-  const gateEnv = {
-    ...env,
-    ENABLE_TELEMETRY: "false",
-    NEXT_PUBLIC_ENABLE_TELEMETRY: "false",
-  };
-
-  const commands = [
+export function criticalGateCommands() {
+  return [
     {
       label: "Prisma schema validation",
       command: npxCommand,
@@ -313,13 +307,25 @@ export function runCriticalGates({ cwd = process.cwd(), env = process.env } = {}
     { label: "Unit tests", command: npmCommand, args: ["run", "test", "--", "--reporter=dot"] },
     { label: "Production build", command: npmCommand, args: ["run", "build"] },
     {
+      // No-DB contract gate: E2E_CONTRACT_ONLY=1 starts only the app server with a
+      // placeholder DATABASE_URL and runs test/e2e/specs/contracts/** (page.route
+      // mocks), so it needs neither the e2e build stamp nor a database and passes
+      // under either WORKSPACE_AUTH_MODE. The local-DB smoke tier never runs here.
       label: "Critical Chromium browser contract",
       command: npmCommand,
-      args: ["run", "test:e2e", "--", "test/e2e/invoice-delivery-payment.spec.ts"],
+      args: ["run", "test:e2e:contract"],
     },
   ];
+}
 
-  return commands.map((command) => runGate({ ...command, cwd, env: gateEnv }));
+export function runCriticalGates({ cwd = process.cwd(), env = process.env } = {}) {
+  const gateEnv = {
+    ...env,
+    ENABLE_TELEMETRY: "false",
+    NEXT_PUBLIC_ENABLE_TELEMETRY: "false",
+  };
+
+  return criticalGateCommands().map((command) => runGate({ ...command, cwd, env: gateEnv }));
 }
 
 const printCheck = (check) => {
