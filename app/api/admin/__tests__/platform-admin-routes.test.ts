@@ -150,9 +150,9 @@ describe("platform-admin gate on admin/devtools API routes", () => {
       expect(res.status).toBe(403);
     });
 
-    it("GET /api/federation/status (session path)", async () => {
+    it("GET /api/federation/status (wrong bearer, non-admin session)", async () => {
       const res = await federationRoute.GET(req("/api/federation/status", { headers: { authorization: "Bearer nope" } }));
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
   });
 
