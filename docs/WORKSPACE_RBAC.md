@@ -13,6 +13,8 @@ The initial roles are:
 | `MEMBER` | Create and manage invoices, clients, templates, delivery, payments, exports, and analytics |
 | `VIEWER` | Read-only invoices, clients, templates, analytics, PDFs, and exports |
 
+Signup provisions that workspace. Credentials registration (`/api/auth/register`) and first-time Google sign-in create the `User`, the personal `Organization`, the `OWNER` `Membership` and `User.activeOrganizationId` in a single transaction, in both `compat` and `enforce` modes (`createUserWithPersonalWorkspace` in `lib/workspace-provisioning.ts`); if the workspace cannot be created the user is not created either. Provisioning is idempotent and race-safe: it takes a `FOR NO KEY UPDATE` row lock on the user and a user who already has any membership is never given a second personal workspace. Only new signups are provisioned automatically; an existing user with no membership is still denied (`403`) under `enforce` until they are backfilled (see [Backfilling stranded users](#backfilling-stranded-users)). Under `compat`, such a user is still provisioned lazily on their first workspace-bound request.
+
 The platform administrator allowlist used by DevTools is separate from workspace administration.
 
 ## Authorization contract
@@ -44,8 +46,10 @@ missing membership/delegates then fail closed instead of falling back to
 user-owned rows. Keep the compatibility mode available for rollback until all
 business routes have been certified.
 
+Concurrency: personal-workspace provisioning (signup, the compat lazy path, the backfill script) runs in a transaction that first takes a `FOR NO KEY UPDATE` lock on the user row, so concurrent first requests serialise and only one workspace is created. There is still no database constraint identifying a "personal" workspace; deliberate extra workspaces (`POST /api/workspaces`, invitations) are separate and unaffected.
+
 1. Expand the schema with nullable organization references, `Organization`, `Membership`, and `User.activeOrganizationId`.
-2. Create one personal organization and `OWNER` membership per existing user.
+2. Create one personal organization and `OWNER` membership per existing user. The foundation migration does this once for users that exist when it runs; it is not a general-purpose backfill (see below).
 3. Backfill invoices, clients, and invoice templates from `userId` to the personal organization.
 4. Verify there are no orphaned rows, duplicate invoice numbers within a workspace, or clients violating workspace uniqueness.
 5. Deploy application code that reads workspace scope while retaining the legacy `userId` fallback during the compatibility window.
@@ -54,9 +58,27 @@ business routes have been certified.
 
 Rollback is performed by restoring the previous application version and leaving the additive organization columns in place; destructive column removal is deferred until all downstream consumers have migrated.
 
+### Backfilling stranded users
+
+Users who registered under `enforce` before signup provisioning existed (or any user with no membership) are backfilled with the script, not with SQL:
+
+```bash
+# Who is affected (should be empty once backfilled and for all new signups):
+psql "$DATABASE_URL" -c 'SELECT u."id", u."email" FROM "User" u WHERE NOT EXISTS (SELECT 1 FROM "Membership" m WHERE m."userId" = u."id")'
+
+DATABASE_URL=postgresql://... npm run db:backfill-workspaces            # dry run (default): prints target host, count and ids
+DATABASE_URL=postgresql://... npm run db:backfill-workspaces -- --apply # provisions, one transaction per user
+```
+
+`DATABASE_URL` must be exported explicitly (a value that exists only in `.env` is not used) and the target host is printed before anything is written. The script only selects users with no membership and provisions each through the same code as signup, so it is safe to re-run; a second run changes nothing.
+
+Do NOT re-run the personal-workspace block of `prisma/migrations/20260813120000_workspace_rbac_foundation/migration.sql` to backfill. It is keyed on a deterministic `personal_<md5>` id for every user without checking for existing memberships, so on a database with application-provisioned workspaces (cuid ids) it would give those users a second organization and a second `OWNER` membership, and the later `UPDATE ... FROM "Membership"` joins could move rows into an unintended workspace.
+
 ## Required test cases
 
-- Personal-workspace backfill is repeatable and creates exactly one owner membership per user.
+- Registration and first Google sign-in create the user, personal organization, `OWNER` membership, and `activeOrganizationId` atomically in both auth modes; a duplicate email returns `409` and creates no workspace.
+- Personal-workspace backfill (`npm run db:backfill-workspaces`) selects only users without a membership, is a no-op on a second run, and writes nothing in dry-run mode.
+- Concurrent provisioning for the same user yields exactly one personal workspace.
 - A user can read and mutate resources in a workspace where they are a member, but cannot access another workspace by changing a URL or request body.
 - `VIEWER` mutations, `ADMIN` owner changes, and last-owner removal are rejected.
 - Switching workspaces updates the active selector but does not bypass membership checks.

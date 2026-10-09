@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { hash } from "@/lib/hash";
 import { RegisterSchema } from "@/lib/schemas";
 import { enforceHttps } from "@/lib/security";
+import { createUserWithPersonalWorkspace, isUniqueConstraintError } from "@/lib/workspaces";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAuditEvent, getClientIp, AuditAction, AuditEntity } from "@/lib/audit/auditLogger";
 
@@ -54,13 +55,14 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hash(password);
 
-    const user = await db.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
-    });
+    // User, personal workspace, OWNER membership and activeOrganizationId are
+    // written in one transaction so a new account never exists without a
+    // workspace (required under WORKSPACE_AUTH_MODE=enforce).
+    const user = await createUserWithPersonalWorkspace<{
+      id: string;
+      email: string;
+      name: string | null;
+    }>({ name, email, password: hashedPassword });
 
     void logAuditEvent({
       userId: user.id,
@@ -75,7 +77,16 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ ok: true }, { status: 201 });
-  } catch {
+  } catch (error) {
+    // Concurrent registration with the same email: the transaction (and its
+    // workspace) rolled back; report it the same way as the pre-check.
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "Email sudah terdaftar." },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { error: "Terjadi kesalahan internal. Silakan coba lagi." },
       { status: 500 },

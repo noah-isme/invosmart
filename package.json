@@ -19,7 +19,8 @@
     "qa:lighthouse": "npx @lhci/cli autorun",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts"
+    "db:seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts",
+    "db:backfill-workspaces": "ts-node --project tsconfig.prisma.json scripts/backfill-personal-workspaces.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.10",

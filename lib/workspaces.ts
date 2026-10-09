@@ -2,31 +2,28 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 
+import {
+  contextFromMembership,
+  createUserWithPersonalWorkspace as createUserWithPersonalWorkspaceIn,
+  ensurePersonalWorkspace,
+  membershipSelect,
+  type NewUserData,
+  type WorkspaceContext,
+  type WorkspaceDatabase,
+} from "@/lib/workspace-provisioning";
+
 import type { WorkspaceRole } from "@prisma/client";
 
+export {
+  isUniqueConstraintError,
+  provisionPersonalWorkspace,
+  type NewUserData,
+  type WorkspaceContext,
+  type WorkspaceDatabase,
+  type WorkspaceMembership,
+} from "@/lib/workspace-provisioning";
+
 export type WorkspacePermission = "read" | "write" | "manage_members" | "manage_workspace";
-
-export type WorkspaceMembership = {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: WorkspaceRole;
-  organization?: {
-    id: string;
-    name: string;
-    logoUrl?: string | null;
-    primaryColor?: string | null;
-    fontFamily?: string | null;
-    defaultCurrency?: string;
-  } | null;
-};
-
-export type WorkspaceContext = {
-  userId: string;
-  organizationId: string | null;
-  role: WorkspaceRole | "LEGACY";
-  membership: WorkspaceMembership | null;
-};
 
 export type WorkspaceAuthMode = "compat" | "enforce";
 
@@ -42,34 +39,15 @@ export const getWorkspaceAuthMode = (): WorkspaceAuthMode =>
 const legacyFallback = (userId: string): WorkspaceContext | null =>
   getWorkspaceAuthMode() === "enforce" ? null : legacyContext(userId);
 
-export type WorkspaceDatabase = {
-  user: {
-    findUnique: (args: unknown) => Promise<{
-      id?: string;
-      name?: string | null;
-      email?: string | null;
-      activeOrganizationId?: string | null;
-    } | null | undefined>;
-    update: (args: unknown) => Promise<unknown>;
-  };
-  membership: {
-    findUnique: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-    findFirst: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-    create: (args: unknown) => Promise<WorkspaceMembership | null | undefined>;
-  };
-  organization: {
-    create: (args: unknown) => Promise<{
-      id: string;
-      name: string;
-      logoUrl?: string | null;
-      primaryColor?: string | null;
-      fontFamily?: string | null;
-      defaultCurrency?: string;
-    } | null | undefined>;
-  };
-};
-
 const workspaceDb = db as unknown as WorkspaceDatabase;
+
+/** See `createUserWithPersonalWorkspace` in lib/workspace-provisioning.ts; defaults to the app client. */
+export const createUserWithPersonalWorkspace = <
+  U extends { id: string; name?: string | null; email?: string | null },
+>(
+  data: NewUserData,
+  client: WorkspaceDatabase = workspaceDb,
+): Promise<U> => createUserWithPersonalWorkspaceIn<U>(data, client);
 
 const rolePermissions: Record<WorkspaceRole | "LEGACY", readonly WorkspacePermission[]> = {
   OWNER: ["read", "write", "manage_members", "manage_workspace"],
@@ -103,85 +81,6 @@ const legacyContext = (userId: string): WorkspaceContext => ({
 const membershipWhere = (organizationId: string, userId: string) => ({
   organizationId_userId: { organizationId, userId },
 });
-
-const membershipSelect = {
-  id: true,
-  organizationId: true,
-  userId: true,
-  role: true,
-  organization: {
-    select: {
-      id: true,
-      name: true,
-      logoUrl: true,
-      primaryColor: true,
-      fontFamily: true,
-      defaultCurrency: true,
-    },
-  },
-} as const;
-
-const contextFromMembership = (
-  userId: string,
-  membership: WorkspaceMembership,
-): WorkspaceContext => ({
-  userId,
-  organizationId: membership.organizationId,
-  role: membership.role,
-  membership,
-});
-
-const provisionPersonalWorkspace = async (
-  userId: string,
-  user: { name?: string | null; email?: string | null } | null | undefined,
-  client: WorkspaceDatabase,
-): Promise<WorkspaceContext | null> => {
-  const name =
-    user?.name?.trim() ||
-    user?.email?.split("@")[0]?.trim() ||
-    "Personal Workspace";
-
-  const organization = await client.organization.create({
-    data: {
-      name: `${name}'s Workspace`,
-      defaultCurrency: "IDR",
-    },
-  });
-
-  // An undefined result is how the lightweight Prisma test double signals a
-  // delegate that was not configured. Fall back to legacy scoping in that
-  // environment; a real Prisma client returns a row or throws.
-  if (!organization) {
-    return null;
-  }
-
-  const membership = await client.membership.create({
-    data: {
-      organizationId: organization.id,
-      userId,
-      role: "OWNER",
-    },
-    include: { organization: true },
-  });
-
-  await client.user.update({
-    where: { id: userId },
-    data: { activeOrganizationId: organization.id },
-  });
-
-  return {
-    userId,
-    organizationId: organization.id,
-    role: "OWNER",
-    membership: membership ?? {
-      id: `owner:${userId}:${organization.id}`,
-      organizationId: organization.id,
-      userId,
-      role: "OWNER" as WorkspaceRole,
-      organization,
-    },
-  };
-};
 
 /**
  * Resolve a workspace exclusively from database membership.
@@ -266,7 +165,7 @@ export const resolveWorkspaceContext = async (
     return null;
   }
 
-  const provisioned = await provisionPersonalWorkspace(userId, user, client);
+  const provisioned = await ensurePersonalWorkspace(userId, user, client);
   return provisioned ?? legacyContext(userId);
 };
 

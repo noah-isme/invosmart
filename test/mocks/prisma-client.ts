@@ -163,6 +163,8 @@ class AuditLogDelegate {
 }
 
 export class PrismaClient {
+  // Interactive transactions run the callback against this same client.
+  $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(this));
   user = new UserDelegate();
   organization = new OrganizationDelegate();
   membership = new MembershipDelegate();
