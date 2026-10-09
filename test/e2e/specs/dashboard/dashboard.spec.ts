@@ -18,7 +18,7 @@
 //   returns the same RevenueInsight: months (6), revenue/paid/overdue per month
 //   by issuedAt, topClient, overdueClients.
 // - Paid invoices come from factory.payInvoiceViaMidtrans (real attempt +
-//   signed settlement); it works with the current (unmerged-fix) payment code.
+//   signed settlement), which records exactly one Payment per invoice.
 import type { Page } from "@playwright/test";
 
 import { expect, test, type Api, type IsolatedUser } from "../../fixtures";

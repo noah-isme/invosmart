@@ -25,7 +25,6 @@ import type { Page } from "@playwright/test";
 import { expect, test, type Api } from "../../fixtures";
 import { E2E_SECRETS } from "../../playwright.env";
 import { uniqueForwardedFor } from "../../support/auth";
-import { reserveInvoiceDetailLoads } from "../../support/invoice-detail-budget";
 import { signResend } from "../../support/webhooks";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
@@ -107,10 +106,6 @@ test.describe("email delivery", () => {
       const invoice = await factory.createInvoice();
       const to = recipient("mail01");
 
-      // Data first, then one reservation for every render, then the page:
-      // a reservation must stay close to its render (support/invoice-detail-budget.ts).
-      // goto + router.refresh() after the send succeeds: two renders.
-      await reserveInvoiceDetailLoads(2);
       const { page } = await persona("owner");
       await page.goto(`/app/invoices/${invoice.id}`);
       const dialog = await openSendEmailDialog(page);
@@ -215,8 +210,6 @@ test.describe("email delivery", () => {
       const to = recipient("mail04");
       await stub.force({ target: "/resend/emails", status: 500, count: 1 });
 
-      // goto only (a failed send does not refresh); reserved before the page opens.
-      await reserveInvoiceDetailLoads(1);
       const { page } = await persona("owner");
       await page.goto(`/app/invoices/${invoice.id}`);
       const dialog = await openSendEmailDialog(page);

@@ -17,10 +17,15 @@
 //   403 "Workspace access denied" (SEC-06), as does ?tenantId=<orgA> on the
 //   audit-log list.
 // - Mutating rows are followed by an owner read proving A's row is intact.
-import type { APIRequestContext, APIResponse } from "@playwright/test";
+// - Global resources (feature flags, /api/ai/explain) are platform-admin only:
+//   ADMIN_USER_IDS (session user id), never workspace OWNER/ADMIN
+//   (lib/devtools/access.ts). The platformAdmin persona is the only admin; its
+//   User row is pre-seeded with E2E_PLATFORM_ADMIN_ID (ADMIN_EMAILS is ignored).
+import type { APIRequestContext, APIResponse, PlaywrightWorkerArgs, TestInfo } from "@playwright/test";
 
 import { expect, test } from "../../fixtures";
-import { E2E_APP_URL } from "../../playwright.env";
+import { E2E_APP_URL, E2E_PERSONA_PASSWORD, E2E_PERSONAS, E2E_PLATFORM_ADMIN_ID } from "../../playwright.env";
+import { loginViaCredentialsApi } from "../../support/auth";
 import {
   apiRequest,
   createApiKey,
@@ -61,6 +66,21 @@ type World = {
 };
 
 let world: World;
+
+/**
+ * A request context logged in as the platformAdmin persona. Its User row is
+ * pre-seeded with the fixed id E2E_PLATFORM_ADMIN_ID before the app starts
+ * (support/db/seed-platform-admin.mjs) and the app gets
+ * ADMIN_USER_IDS=E2E_PLATFORM_ADMIN_ID. The `api` project does not depend on
+ * the setup project, so this logs in directly instead of using a storageState.
+ */
+async function platformAdminRequest(playwright: PlaywrightWorkerArgs["playwright"], testInfo: TestInfo): Promise<APIRequestContext> {
+  const baseURL = (testInfo.project.use.baseURL as string | undefined) ?? E2E_APP_URL;
+  const request = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  const session = await loginViaCredentialsApi(request, { email: E2E_PERSONAS.platformAdmin, password: E2E_PERSONA_PASSWORD });
+  expect(session.id).toBe(E2E_PLATFORM_ADMIN_ID);
+  return request;
+}
 
 test.beforeAll(async ({ playwright }, testInfo) => {
   test.setTimeout(120_000);
@@ -452,18 +472,76 @@ test.describe("SEC-11 cross-workspace verb matrix", () => {
   }
 
   test(
-    "SEC-11 FeatureFlag: a workspace OWNER who is not a platform admin cannot change global flags (desired 403)",
-    { annotation: [...covers("/api/admin/feature-flags"), { type: "issue", description: "product bug: any workspace OWNER can toggle global flags (app/api/admin/feature-flags/route.ts:19-21)" }] },
-    async () => {
-      // Product bug (plan Follow-ups): requireWorkspaceAdmin only checks the
-      // caller's role in their own workspace, so B (OWNER of workspace B) can
-      // create and toggle global flags. The desired 403 is asserted; the fix
-      // flips this test green (then drop test.fail).
-      test.fail();
+    "SEC-11 FeatureFlag: a workspace OWNER who is not a platform admin cannot change global flags; the platform admin can",
+    { annotation: covers("/api/admin/feature-flags") },
+    async ({ playwright }, testInfo) => {
+      // Global flags are gated on platform admin (ADMIN_USER_IDS), never on
+      // workspace role (app/api/admin/feature-flags/route.ts, fixed on main by
+      // fix/admin-access-by-user-id). B owns workspace B and is still refused.
       const key = `e2e_sec11_${Date.now()}`;
       const create = await asB("POST", "/api/admin/feature-flags", { data: { key, name: "SEC-11 probe", enabled: false } });
-      test.info().annotations.push({ type: "observed-status", description: String(create.status()) });
-      expect(create.status()).toBe(403);
+      await expectStatus(create, 403, "POST /api/admin/feature-flags as workspace OWNER");
+      await expectStatus(await asB("GET", "/api/admin/feature-flags"), 403, "GET /api/admin/feature-flags as workspace OWNER");
+
+      // Control: the pre-seeded platformAdmin persona (E2E_PLATFORM_ADMIN_ID).
+      const admin = await platformAdminRequest(playwright, testInfo);
+      try {
+        const created = await apiRequest(admin, "POST", "/api/admin/feature-flags", { data: { key, name: "SEC-11 probe", enabled: false } });
+        await expectStatus(created, 201, "POST /api/admin/feature-flags as platform admin");
+        const flag = ((await created.json()) as { flag: { id: string; key: string; enabled: boolean } }).flag;
+        expect(flag).toMatchObject({ key, enabled: false });
+        const toggled = await apiRequest(admin, "POST", "/api/admin/feature-flags", { data: { id: flag.id, enabled: true } });
+        await expectStatus(toggled, 200, "toggle as platform admin");
+        expect(((await toggled.json()) as { flag: { enabled: boolean } }).flag.enabled).toBe(true);
+        // B still cannot toggle or delete the existing flag.
+        await expectStatus(await asB("POST", "/api/admin/feature-flags", { data: { id: flag.id, enabled: false } }), 403, "toggle as OWNER");
+        await expectStatus(await asB("DELETE", `/api/admin/feature-flags?id=${flag.id}`), 403, "delete as OWNER");
+        await expectStatus(await apiRequest(admin, "DELETE", `/api/admin/feature-flags?id=${flag.id}`), 200, "delete as platform admin");
+      } finally {
+        await admin.dispose();
+      }
+    },
+  );
+});
+
+test.describe("SEC-12 platform-admin gates (ADMIN_USER_IDS, not workspace role)", () => {
+  test(
+    "SEC-12 /api/ai/explain is platform-admin only: anonymous 401, workspace OWNER 403, platform admin passes the gate",
+    { annotation: covers("/api/ai/explain") },
+    async ({ playwright }, testInfo) => {
+      const baseURL = (testInfo.project.use.baseURL as string | undefined) ?? E2E_APP_URL;
+      const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+      const admin = await platformAdminRequest(playwright, testInfo);
+      try {
+        await expectStatus(await apiRequest(anonymous, "POST", "/api/ai/explain", { data: { recommendation_id: "x" } }), 401, "anonymous");
+        const owner = await asB("POST", "/api/ai/explain", { data: { recommendation_id: "x" } });
+        await expectStatus(owner, 403, "workspace OWNER");
+        // Past the gate an empty body is a validation error (no model call is made).
+        await expectStatus(await apiRequest(admin, "POST", "/api/ai/explain", { data: {} }), 400, "platform admin, invalid body");
+      } finally {
+        await anonymous.dispose();
+        await admin.dispose();
+      }
+    },
+  );
+
+  test(
+    "SEC-12 /api/ai-optimizer/recommendations exposes only route and confidence",
+    { annotation: covers("/api/ai-optimizer/recommendations") },
+    async ({ playwright }, testInfo) => {
+      const baseURL = (testInfo.project.use.baseURL as string | undefined) ?? E2E_APP_URL;
+      const anonymous = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+      try {
+        const response = await apiRequest(anonymous, "GET", "/api/ai-optimizer/recommendations");
+        await expectStatus(response, 200, "GET /api/ai-optimizer/recommendations");
+        const body = (await response.json()) as { recommendations: Array<Record<string, unknown>> };
+        expect(Object.keys(body)).toEqual(["recommendations"]);
+        for (const entry of body.recommendations) {
+          expect(Object.keys(entry).sort()).toEqual(["confidence", "route"]);
+        }
+      } finally {
+        await anonymous.dispose();
+      }
     },
   );
 });

@@ -178,6 +178,13 @@ describe("WS-14 compat legacy-row fallback", () => {
   // workspace instead of the userId fallback); kept as an expected failure,
   // consistent with EXP-05/06. The passing pin test below asserts the actual
   // behaviour.
+  //
+  // Re-checked on origin/main 700a3a9: lib/workspaces.ts is unchanged here and
+  // docs/WORKSPACE_RBAC.md now says both things - the signup section documents
+  // "Under compat, such a user is still provisioned lazily on their first
+  // workspace-bound request" (matches the pin test) while "Migration sequence"
+  // step 5 still promises the legacy `userId` fallback. The mismatch with step 5
+  // remains, so this stays an expected failure.
   it.fails("compat: the user's legacy null-organization rows are listed via the userId fallback", async () => {
     process.env.WORKSPACE_AUTH_MODE = "compat";
     const { user, legacy } = await legacyUserWithoutMembership();

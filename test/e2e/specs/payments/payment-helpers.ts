@@ -6,9 +6,6 @@ import type { InvoiceRecord, PaymentAttemptView } from "../../support/api-factor
 
 export const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 
-/** Branch that fixes Midtrans/Stripe line items and cross-attempt double settlement (unmerged). */
-export const PAYMENT_FIX_BRANCH = "fix/payment-items-and-double-settlement";
-
 export const uniqueTag = (prefix: string) => `${prefix} ${randomUUID().slice(0, 8)}`;
 
 export type MidtransCreated = {

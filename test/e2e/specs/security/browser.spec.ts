@@ -4,18 +4,19 @@
 // Verified against the code:
 // - app/app/clients/new/ClientFormClient.tsx posts with csrfFetch
 //   (lib/security/csrf-client.ts), which echoes the CSRF cookie in x-csrf-token.
-// - app/app/invoices/[id]/page.tsx calls notFound() when GET /api/invoices/<id>
-//   answers 404 (workspace-scoped findFirst).
+// - app/app/invoices/[id]/page.tsx loads through getInvoiceForCurrentUser
+//   (lib/invoices/get-invoice.ts, same workspace-scoped lookup as
+//   GET /api/invoices/<id>) and calls notFound() when it is not found.
 // - InvoiceDetailClient renders "Pay Now" for SENT/UNPAID/OVERDUE and always
 //   loads Midtrans snap.js from getSnapScriptUrl() (sandbox host for SB-Mid keys);
 //   the guards fixture serves it from the stub and records the request.
-// - Detail page renders are paced by support/invoice-detail-budget.ts (INV-RL-01).
-// - /devtools/perf needs canViewPerfTools: in production only ADMIN_EMAILS
-//   (the platformAdmin persona).
+// - /devtools/perf is a platform-admin page (requirePlatformAdminPage): only
+//   ids in ADMIN_USER_IDS, i.e. the pre-seeded platformAdmin persona
+//   (E2E_PLATFORM_ADMIN_ID). Before fix/admin-access-by-user-id this spec
+//   relied on ADMIN_EMAILS, which the app now ignores.
 import { expect, test, type Guards } from "../../fixtures";
 import { E2E_CSRF_COOKIE, CSRF_HEADER_NAME } from "../../support/auth";
 import { uniqueEmail } from "../../support/api-factories";
-import { gotoInvoiceDetail } from "../../support/invoice-detail-budget";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 
@@ -58,7 +59,7 @@ test(
     const { page, api } = isolatedUser;
     expect((await api.get(`/api/invoices/${invoice.id}`)).status()).toBe(404);
 
-    const response = await gotoInvoiceDetail(page, invoice.id);
+    const response = await page.goto(`/app/invoices/${invoice.id}`);
     expect(response?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "Detail Invoice" })).toHaveCount(0);
     await expect(page.getByText(invoice.number)).toHaveCount(0);
@@ -97,7 +98,7 @@ test.describe("SEC-08 no CSP violation and no page error per page", () => {
     async ({ isolatedUser, guards }) => {
       const { page, factory } = isolatedUser;
       const invoice = await factory.createInvoice({ status: "SENT" });
-      await gotoInvoiceDetail(page, invoice.id);
+      await page.goto(`/app/invoices/${invoice.id}`);
       await expect(page.getByRole("heading", { name: "Detail Invoice" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Pay Now" })).toBeVisible();
 

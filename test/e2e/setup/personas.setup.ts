@@ -13,6 +13,7 @@ import {
   E2E_AUTH_DIR,
   E2E_DB_READY_URL,
   E2E_PERSONA_PASSWORD,
+  E2E_PLATFORM_ADMIN_ID,
   E2E_PERSONA_ROLES,
   E2E_PERSONAS,
   E2E_RBAC_WORKSPACE_NAME,
@@ -111,9 +112,20 @@ setup("personas, RBAC workspace and storageStates", async ({ baseURL }) => {
       await saveStorageState(request, persona);
     }
 
-    // platformAdmin (ADMIN_EMAILS): its own personal workspace.
-    const platformAdmin = await personaContext(baseURL, "platformAdmin");
+    // platformAdmin: a platform admin through ADMIN_USER_IDS (ADMIN_EMAILS is
+    // ignored by the app). Its User row was pre-created with the fixed id
+    // E2E_PLATFORM_ADMIN_ID by support/db/seed-platform-admin.mjs before the
+    // app started, so registration must answer 409 here; the session id
+    // proves the login is the seeded row. The seed writes no workspace, so the
+    // personal workspace is created through the API (ensureActiveWorkspace).
+    const platformAdmin = await playwrightRequest.newContext({ baseURL });
     contexts.push(platformAdmin);
+    expect(await registerOrReuse(platformAdmin, "platformAdmin"), "platformAdmin must be pre-seeded by serve.mjs").toBe("reused");
+    const adminSession = await loginViaCredentialsApi(platformAdmin, {
+      email: E2E_PERSONAS.platformAdmin,
+      password: E2E_PERSONA_PASSWORD,
+    });
+    expect(adminSession.id).toBe(E2E_PLATFORM_ADMIN_ID);
     await ensureActiveWorkspace(platformAdmin);
     await saveStorageState(platformAdmin, "platformAdmin");
 

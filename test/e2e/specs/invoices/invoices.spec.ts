@@ -26,13 +26,12 @@
 // - Audit entries use entity "Invoice" / "Client" (lib/audit/auditLogger.ts
 //   AuditEntity); the audit-logs `entity` filter is an exact, case-sensitive
 //   match, so the plan's `?entity=invoice` is written as `?entity=Invoice`.
-// - Every /app/invoices/<id> render goes through support/invoice-detail-budget.ts
-//   (shared rate-limit bucket, INV-RL-01).
+// - /app/invoices/<id> loads the invoice directly (lib/invoices/get-invoice.ts),
+//   so detail renders no longer share one rate-limit bucket (INV-RL-01).
 import type { Download, Page } from "@playwright/test";
 
 import { expect, test } from "../../fixtures";
 import { InvoiceFormPage } from "../../pages/InvoiceFormPage";
-import { gotoInvoiceDetail, reserveInvoiceDetailLoads } from "../../support/invoice-detail-budget";
 import { mintInvoiceShareToken, tamperShareToken } from "../../support/share";
 import type { InvoiceRecord } from "../../support/api-factories";
 
@@ -73,9 +72,6 @@ test.describe("invoices: create and validate", () => {
     "INV-01 a member creates an invoice through the form; the detail page shows number, total and DRAFT; the list API has it",
     { tag: "@smoke", annotation: covers("/app/invoices/new", "/api/invoices", "/app/invoices/[id]", "/api/invoices/[id]") },
     async ({ persona }) => {
-      // Submit = router.push to the detail page + router.refresh: two renders.
-      // Reserved before any page is open, so no page idles while waiting.
-      await reserveInvoiceDetailLoads(2);
       const { page, api, factory } = await persona("member");
       const client = await factory.createClient();
       const items = [{ name: "E2E consulting", qty: 2, price: 500_000 }];
@@ -204,7 +200,7 @@ test.describe("invoices: detail, status, delete", () => {
       });
       expect(mismatch.status()).toBe(400);
 
-      await gotoInvoiceDetail(page, invoice.id);
+      await page.goto(`/app/invoices/${invoice.id}`);
       await expect(detailHeading(page)).toBeVisible();
       await expect(summaryValue(page, "Total Tagihan")).toHaveText(idr(totals.total));
       await expect(footerRow(page, "Pajak (10%)")).toContainText(idr(totals.tax));
@@ -268,7 +264,7 @@ test.describe("invoices: detail, status, delete", () => {
       const { page, api, factory } = isolatedUser;
       const invoice = await factory.createInvoice();
 
-      await gotoInvoiceDetail(page, invoice.id);
+      await page.goto(`/app/invoices/${invoice.id}`);
       await expect(detailHeading(page)).toBeVisible();
       await page.getByRole("button", { name: "Hapus Invoice" }).click();
       const dialog = page.getByRole("alertdialog");
@@ -294,7 +290,7 @@ test.describe("invoices: detail, status, delete", () => {
       const { page, factory } = isolatedUser;
       const invoice = await factory.createInvoice({ status: "SENT" });
 
-      await gotoInvoiceDetail(page, invoice.id);
+      await page.goto(`/app/invoices/${invoice.id}`);
       await expect(detailHeading(page)).toBeVisible();
 
       const pdfResponse = page.waitForResponse(
@@ -409,8 +405,11 @@ test.describe("invoices: dashboard list and home", () => {
       const { page, user } = isolatedUser;
       await page.goto("/app");
       await expect(page.getByText("Selamat datang kembali")).toBeVisible();
-      await expect(page.getByRole("heading", { level: 1, name: user.name, exact: true })).toBeVisible();
-      await expect(page.getByText(user.email, { exact: true })).toBeVisible();
+      const heading = page.getByRole("heading", { level: 1, name: user.name, exact: true });
+      await expect(heading).toBeVisible();
+      // The sidebar (AppSidebar) also shows the email once useSession resolves,
+      // so the greeting's email is scoped to the greeting card.
+      await expect(page.locator("section").filter({ has: heading }).getByText(user.email, { exact: true })).toBeVisible();
     },
   );
 });

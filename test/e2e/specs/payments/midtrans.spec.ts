@@ -18,19 +18,21 @@
 //   against the attempt (400), transitions per lib/payments/lifecycle.ts
 //   (expire -> EXPIRED, deny -> FAILED, cancel -> CANCELLED), an identical
 //   replay is acknowledged as `duplicate`.
-// - Create returns 409 for a PAID invoice (both providers).
-// - Current create route builds item_details from item.rate/quantity/description,
-//   but invoice items are {name, qty, price}: every line goes out as price 0,
-//   "Item". Only gross_amount is asserted against current behaviour; the item
-//   lines are asserted against the fixed behaviour (test.fixme, PAYMENT_FIX_BRANCH).
+// - Create returns 409 for a PAID invoice (both providers) and 422 for a
+//   non-IDR invoice (Midtrans only takes whole-rupiah IDR).
+// - item_details come from the invoice items {name, qty, price} plus a "Tax"
+//   line (lib/payments/line-items.ts buildMidtransItemDetails); zero-priced items
+//   are dropped and any remainder falls back to one "Invoice <number>" line.
+// - Double settlement (lib/payments/settlement.ts): a second provider settling
+//   an already PAID invoice keeps its attempt SETTLED, records no Payment and
+//   marks the attempt metadata.duplicateSettlement { refundRequired: true }.
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "../../fixtures";
+import { toStripeMinorUnit } from "../../../../lib/payments/money";
 import { midtransNotification } from "../../support/api-factories";
 import { E2E_SECRETS } from "../../playwright.env";
-import { reserveInvoiceDetailLoads } from "../../support/invoice-detail-budget";
 import {
-  PAYMENT_FIX_BRANCH,
   covers,
   createMidtransAttempt,
   createStripeSession,
@@ -58,10 +60,6 @@ test.describe("payments: Midtrans checkout", () => {
     },
     async ({ persona, factory, api, stub, guards }) => {
       const invoice = await factory.createInvoice({ status: "SENT" });
-      // Data first, then one reservation for every render, then the page:
-      // a reservation must stay close to its render (support/invoice-detail-budget.ts).
-      // goto + router.push(?payment=success) from snap's onSuccess: two renders.
-      await reserveInvoiceDetailLoads(2);
       const { page } = await persona("owner");
 
       // Record the tokens the page hands to the fake snap.pay (the stub's
@@ -140,7 +138,6 @@ test.describe("payments: Midtrans checkout", () => {
     "PAY-01b Snap item_details are the invoice lines plus tax and sum to gross_amount",
     { annotation: covers("/api/payments/midtrans/create") },
     async ({ factory, api, stub }) => {
-      test.fixme(true, `Needs ${PAYMENT_FIX_BRANCH} (unmerged): current item_details read item.rate/description, so every line is price 0 "Item".`);
       const items = [
         { name: "E2E consulting", qty: 2, price: 500_000 },
         { name: "E2E hosting", qty: 1, price: 250_000 },
@@ -184,7 +181,6 @@ test.describe("payments: Midtrans checkout", () => {
       expect(attempt.payments[0]).toMatchObject({ paidAmount: invoice.total, paidCurrency: "IDR", refundedAmount: 0, gatewayStatus: "settlement" });
       expect((await getInvoice(api, invoice.id)).status).toBe("PAID");
 
-      await reserveInvoiceDetailLoads(1);
       const { page } = await persona("owner");
       await page.goto(`/app/invoices/${invoice.id}`);
       await expect(page.getByRole("heading", { name: "Detail Invoice" })).toBeVisible();
@@ -349,23 +345,19 @@ test.describe("payments: Midtrans notification rules", () => {
     "PAY-15b a second provider settling an already PAID invoice records no second payment and is flagged for refund",
     { annotation: covers("/api/payments/stripe/webhook", "/api/payments/midtrans/notification") },
     async ({ factory, api, payments }) => {
-      test.fixme(
-        true,
-        `Needs ${PAYMENT_FIX_BRANCH} (unmerged): today the late Stripe settlement creates a second Payment for the PAID invoice (double settlement).`,
-      );
       const client = uniqueTag("PAY-15b");
       const invoice = await factory.createInvoice({ status: "SENT", client });
       // Stripe checkout opened first, then the customer pays through Midtrans.
       const stripeSession = await createStripeSession(api, invoice.id);
       const paid = await factory.payInvoiceViaMidtrans(invoice);
 
-      // On the fix branch IDR is two-decimal on Stripe (amount x 100).
+      // IDR is two-decimal on Stripe: amount_total is the invoice total x 100.
       const late = await payments.postStripeEvent(
         payments.stripeCheckoutCompletedEvent({
           sessionId: stripeSession.sessionId,
           attemptId: stripeSession.attemptId,
           invoiceId: invoice.id,
-          amountMinor: invoice.total * 100,
+          amountMinor: toStripeMinorUnit(invoice.total, "IDR"),
           currency: "IDR",
         }),
       );
@@ -400,13 +392,10 @@ test.describe("payments: Midtrans notification rules", () => {
     "PAY-17b a non-IDR invoice cannot open a Midtrans checkout (gross_amount has no currency)",
     { annotation: covers("/api/payments/midtrans/create") },
     async ({ factory, api, stub }) => {
-      test.fixme(
-        true,
-        `Needs ${PAYMENT_FIX_BRANCH} (unmerged): today a USD invoice is sent to Snap with its USD total as an IDR gross_amount.`,
-      );
       const invoice = await factory.createInvoice({ status: "SENT", currency: "USD", items: [{ name: "E2E design", qty: 3, price: 120 }] });
       const response = await api.post("/api/payments/midtrans/create", { data: { invoiceId: invoice.id } });
       expect(response.status()).toBe(422);
+      expect(await response.json()).toEqual({ error: "Midtrans only supports IDR invoices" });
       expect(snapTransactionRequests(await stub.requests())).toHaveLength(0);
     },
   );

@@ -7,14 +7,14 @@
 //   sends the Stripe call to the stub, whose session url is its /checkout/<id> page.
 // - create-session metadata: invoiceId, userId, attemptId, orderId; client_reference_id
 //   = orderId = invo_<attemptId>; success_url <origin>/app/invoices/<id>?payment=success.
-// - Current line items read item.rate/description, which invoice items do not
-//   have ({name, qty, price}), so the lines never add up and the route falls
-//   back to one "Invoice <number>" line for the total. The total is asserted
-//   (true before and after the fix); the per-item lines are asserted against
-//   the fixed behaviour (test.fixme, PAYMENT_FIX_BRANCH).
-// - Amounts: USD is two-decimal on Stripe in both the current
-//   lib/payments/money.ts and the fix branch, so these specs use USD invoices
-//   (IDR is zero-decimal today and x100 on the fix branch).
+// - Line items come from the invoice items {name, qty, price} plus a "Tax"
+//   line (lib/payments/line-items.ts buildStripeLineItems), in Stripe minor
+//   units; zero-priced items are dropped and any remainder falls back to one
+//   "Invoice <number>" line for the total.
+// - Amounts: Stripe minor units (lib/payments/money.ts toStripeMinorUnit /
+//   fromStripeMinorUnit). USD and IDR are both two-decimal on Stripe (x100).
+// - create-session answers 422 for a currency outside lib/currency.ts
+//   SUPPORTED_CURRENCIES (invoice currency is free text).
 // - Webhook (app/api/payments/stripe/webhook/route.ts): 400 without a
 //   Stripe-Signature header or when constructEvent fails (wrong secret, timestamp
 //   outside the default 300 s tolerance); attempt by metadata.attemptId, then
@@ -24,9 +24,8 @@
 import { expect, test } from "../../fixtures";
 import { uniqueForwardedFor } from "../../support/auth";
 import { signStripe } from "../../support/webhooks";
-import { reserveInvoiceDetailLoads } from "../../support/invoice-detail-budget";
+import { toStripeMinorUnit } from "../../../../lib/payments/money";
 import {
-  PAYMENT_FIX_BRANCH,
   covers,
   createStripeSession,
   getAttempt,
@@ -45,8 +44,6 @@ test.describe("payments: Stripe checkout", () => {
       const invoice = await factory.createInvoice({ status: "SENT", currency: "USD", items: USD_ITEMS });
       expect(invoice.total).toBe(396);
 
-      // goto only (the Stripe button leaves the app); reserved before the page opens.
-      await reserveInvoiceDetailLoads(1);
       const { page } = await persona("owner");
       await page.goto(`/app/invoices/${invoice.id}`);
       await page.getByRole("button", { name: "Pay Now" }).click();
@@ -93,16 +90,17 @@ test.describe("payments: Stripe checkout", () => {
     "PAY-06b Checkout line items are the invoice lines plus tax in Stripe minor units",
     { annotation: covers("/api/payments/stripe/create-session") },
     async ({ factory, api, stub }) => {
-      test.fixme(true, `Needs ${PAYMENT_FIX_BRANCH} (unmerged): current lines read item.rate/description and collapse into one total line.`);
       const invoice = await factory.createInvoice({ status: "SENT" });
       await createStripeSession(api, invoice.id);
       const [call] = (await stub.requests("/v1/checkout/sessions")).filter((entry) => entry.method === "POST");
       const session = parseStripeSessionForm(call.body);
-      // IDR is two-decimal on Stripe on the fix branch.
+      // IDR is two-decimal on Stripe: every amount is x100.
+      expect(invoice.currency).toBe("IDR");
       expect(session.lineItems).toEqual([
         { name: "E2E consulting", currency: "idr", unitAmount: 500_000 * 100, quantity: 2 },
         { name: "Tax", currency: "idr", unitAmount: invoice.tax * 100, quantity: 1 },
       ]);
+      expect(session.lineItemsTotal).toBe(toStripeMinorUnit(invoice.total, "IDR"));
       expect(session.lineItemsTotal).toBe(invoice.total * 100);
     },
   );
@@ -237,6 +235,49 @@ test.describe("payments: Stripe webhook rules", () => {
       expect(response.status()).toBe(400);
       expect(await response.json()).toEqual({ error: "Payment currency does not match invoice" });
       expect(await getAttempt(api, created.attemptId)).toMatchObject({ status: "PENDING", payments: [], invoice: { status: "SENT" } });
+    },
+  );
+  test(
+    "PAY-07b an IDR checkout settles with amount_total in Stripe minor units (x100); the major-unit amount is rejected",
+    { annotation: covers("/api/payments/stripe/webhook", "/api/payments/[attemptId]") },
+    async ({ factory, api, payments }) => {
+      const invoice = await factory.createInvoice({ status: "SENT" });
+      expect(invoice.currency).toBe("IDR");
+      const created = await createStripeSession(api, invoice.id);
+      const event = (amountMinor: number) =>
+        payments.stripeCheckoutCompletedEvent({
+          sessionId: created.sessionId,
+          attemptId: created.attemptId,
+          invoiceId: invoice.id,
+          amountMinor,
+          currency: "IDR",
+        });
+
+      // Whole rupiah (the pre-fix zero-decimal reading) no longer matches.
+      const majorUnits = await payments.postStripeEvent(event(invoice.total));
+      expect(majorUnits.status()).toBe(400);
+      expect(await getAttempt(api, created.attemptId)).toMatchObject({ status: "PENDING", payments: [] });
+
+      const response = await payments.postStripeEvent(event(invoice.total * 100));
+      expect(response.status()).toBe(200);
+      expect(await response.json()).toMatchObject({ duplicate: false, status: "SETTLED" });
+      const attempt = await getAttempt(api, created.attemptId);
+      expect(attempt).toMatchObject({ status: "SETTLED", invoice: { status: "PAID" } });
+      expect(attempt.payments).toHaveLength(1);
+      expect(attempt.payments[0]).toMatchObject({ paidAmount: invoice.total, paidCurrency: "IDR" });
+    },
+  );
+
+  test(
+    "PAY-17c a Stripe checkout for an unsupported invoice currency is 422 and no session is created",
+    { annotation: covers("/api/payments/stripe/create-session") },
+    async ({ factory, api, stub }) => {
+      // Invoice currency is free text on the API; XTS (ISO "testing" code) is not in SUPPORTED_CURRENCIES.
+      const invoice = await factory.createInvoice({ status: "SENT", currency: "XTS", items: USD_ITEMS });
+      const response = await api.post("/api/payments/stripe/create-session", { data: { invoiceId: invoice.id } });
+      expect(response.status()).toBe(422);
+      expect(await response.json()).toEqual({ error: "Unsupported invoice currency: XTS" });
+      expect((await stub.requests("/v1/checkout/sessions")).filter((entry) => entry.method === "POST")).toHaveLength(0);
     },
   );
 });

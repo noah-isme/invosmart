@@ -12,6 +12,7 @@ import {
   E2E_STUB_URL,
   e2eAppEnv,
   e2eContractAppEnv,
+  e2ePlatformAdminSeedEnv,
   personaStorageStatePath,
 } from "./test/e2e/playwright.env";
 
@@ -84,13 +85,15 @@ function webServers(): PlaywrightTestConfig["webServer"] {
     },
     {
       // pglite-server on 127.0.0.1:E2E_DB_PORT; /ready on E2E_DB_PORT+1 answers
-      // 200 only after applySchema(), so the app never sees an empty database.
+      // 200 only after applySchema() and the platformAdmin seed
+      // (seed-platform-admin.mjs), so the app never sees an empty database.
       command: "node test/e2e/support/db/serve.mjs",
       url: E2E_DB_READY_URL,
       env: {
         E2E_DB_PORT: String(E2E_DB_PORT),
         E2E_SCHEMA_MODE: process.env.E2E_SCHEMA_MODE ?? "push",
         E2E_DB_LOG_FILE,
+        ...e2ePlatformAdminSeedEnv(),
       },
       reuseExistingServer: false,
       timeout: 90_000,

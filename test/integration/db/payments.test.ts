@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { POST as midtransNotification } from "@/app/api/payments/midtrans/notification/route";
 import { POST as stripeWebhook } from "@/app/api/payments/stripe/webhook/route";
+import { toStripeMinorUnit } from "@/lib/payments/money";
 import { signMidtrans, signStripe } from "../../e2e/support/webhooks";
 
 import { createInvoice, createUserWithWorkspace, db, request, uid, waitFor } from "./harness/fixtures";
@@ -99,7 +100,8 @@ function stripeEvent(
         mode: "payment",
         status: "complete",
         payment_status: "paid",
-        amount_total: TOTAL,
+        // Stripe minor units: IDR is two-decimal on Stripe (x100).
+        amount_total: toStripeMinorUnit(TOTAL, "IDR"),
         currency: "idr",
         payment_intent: paymentIntent,
         client_reference_id: attempt.providerOrderId,
@@ -226,26 +228,12 @@ describe("PAY-INT-02 competing-webhooks", () => {
     return { stripeRes, midtransRes, ...result };
   }
 
-  it("concurrent Stripe and Midtrans settlements leave the invoice PAID and both webhooks acknowledged", async () => {
-    const { stripeRes, midtransRes, invoice, attempts } = await race();
-    expect(stripeRes.status).toBe(200);
-    expect(midtransRes.status).toBe(200);
-    expect(invoice.status).toBe("PAID");
-    expect(attempts.filter((a) => a.status === "SETTLED").length).toBeGreaterThanOrEqual(1);
-  });
-
-  // Observed pre-fix behaviour on main: each webhook's $transaction only
-  // guards its own PaymentAttempt, so both attempts settle and TWO Payment
-  // rows of 150000 are written for one invoice (double charge).
-  //
-  // Fixed behaviour (unmerged local branch fix/payment-items-and-double-settlement,
-  // lib/payments/settlement.ts + both webhook routes): the first settlement
-  // claims the invoice (PAID); the losing provider's attempt stays SETTLED but
-  // creates no Payment and carries metadata.duplicateSettlement
-  // { reason: "invoice_already_settled", refundRequired: true, ... }.
-  //
-  // FIXME(fix/payment-items-and-double-settlement): enable after the branch merges to main and this branch rebases
-  it.skip("settles the invoice once: one Payment, one attempt flagged metadata.duplicateSettlement (refundRequired)", async () => {
+  // Each webhook locks its PaymentAttempt and the first settlement claims the
+  // invoice (lib/payments/settlement.ts). The losing provider's attempt stays
+  // SETTLED (the provider did capture the money) but creates no Payment and
+  // carries metadata.duplicateSettlement { reason: "invoice_already_settled",
+  // refundRequired: true }. Both webhooks are acknowledged with 200.
+  it("settles the invoice once: one Payment, one attempt flagged metadata.duplicateSettlement (refundRequired)", async () => {
     const assertSingleSettlement = async (r: Awaited<ReturnType<typeof race>>) => {
       expect(r.stripeRes.status).toBe(200);
       expect(r.midtransRes.status).toBe(200);

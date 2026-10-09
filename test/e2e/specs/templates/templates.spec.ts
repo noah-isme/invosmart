@@ -14,11 +14,10 @@
 //   before any lookup, so a VIEWER gets 403 in both WORKSPACE_AUTH_MODE values.
 // - Instantiate creates a DRAFT invoice with the template's items and totals
 //   (dueAt null unless given) and the UI router.push()es to
-//   /app/invoices/<id>: one detail render, paced via invoice-detail-budget.
+//   /app/invoices/<id>.
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../../fixtures";
-import { reserveInvoiceDetailLoads } from "../../support/invoice-detail-budget";
 import type { InvoiceItemInput, InvoiceRecord } from "../../support/api-factories";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
@@ -89,8 +88,6 @@ test.describe("templates", () => {
     "TPL-02 'Buat Invoice' instantiates a DRAFT invoice with the template items and opens it",
     { annotation: covers("/app/invoices/templates", "/api/invoices/templates/[id]/instantiate", "/app/invoices/[id]", "/api/invoices/[id]") },
     async ({ isolatedUser }) => {
-      // router.push to the detail page: one server-side detail render.
-      await reserveInvoiceDetailLoads(1);
       const { page, api, factory } = isolatedUser;
       const items = [
         { name: `Desain logo ${tag()}`, qty: 1, price: 1_500_000 },

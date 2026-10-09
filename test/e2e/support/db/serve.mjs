@@ -5,6 +5,7 @@ import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applySchemaAsync } from "./schema.mjs";
+import { assertE2eDatabaseUrl } from "./guard.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const check = process.argv.includes("--check");
@@ -35,6 +36,48 @@ const child = spawn(
   ],
   { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], env: { PATH: process.env.PATH, HOME: process.env.HOME } },
 );
+
+/**
+ * Platform-admin persona (see seed-platform-admin.mjs for the why). Runs as a
+ * short-lived child with an explicit env, after the schema and BEFORE `ready`:
+ * the child exits (and so has disconnected) before /ready answers 200, so the
+ * app is still the only client connected after `ready`. Skipped when
+ * E2E_PLATFORM_ADMIN_ID is not set (e.g. a bare `npm run e2e:db`).
+ */
+async function seedPlatformAdmin() {
+  const id = process.env.E2E_PLATFORM_ADMIN_ID;
+  if (!id) {
+    logLine(process.stdout, "platformAdmin seed skipped (E2E_PLATFORM_ADMIN_ID unset)");
+    return;
+  }
+  assertE2eDatabaseUrl(databaseUrl, dbPort, "DATABASE_URL");
+  logLine(process.stdout, "seeding platformAdmin");
+  const env = {
+    PATH: process.env.PATH ?? "",
+    HOME: process.env.HOME ?? "",
+    DATABASE_URL: databaseUrl,
+    DIRECT_URL: databaseUrl,
+    E2E_DB_PORT: String(dbPort),
+    E2E_PLATFORM_ADMIN_ID: id,
+    E2E_PLATFORM_ADMIN_EMAIL: process.env.E2E_PLATFORM_ADMIN_EMAIL ?? "",
+    E2E_PLATFORM_ADMIN_PASSWORD: process.env.E2E_PLATFORM_ADMIN_PASSWORD ?? "",
+    E2E_PLATFORM_ADMIN_NAME: process.env.E2E_PLATFORM_ADMIN_NAME ?? "",
+  };
+  const result = await new Promise((resolveRun) => {
+    const seed = spawn(process.execPath, [resolve(repoRoot, "test/e2e/support/db/seed-platform-admin.mjs")], {
+      cwd: repoRoot,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    seed.stdout.setEncoding("utf8").on("data", (chunk) => (out += chunk));
+    seed.stderr.setEncoding("utf8").on("data", (chunk) => (out += chunk));
+    seed.on("error", (error) => resolveRun({ code: null, out: `${out}${error.message}` }));
+    seed.on("close", (code) => resolveRun({ code, out }));
+  });
+  for (const line of result.out.split("\n").filter(Boolean)) logLine(process.stdout, `[seed] ${line}`);
+  if (result.code !== 0) throw new Error(`platformAdmin seed failed (exit ${result.code})`);
+}
 
 let ready = false;
 let httpServer = null;
@@ -77,6 +120,7 @@ try {
   // happen, before `ready` (a sync push would buffer them until afterwards).
   logLine(process.stdout, "applying schema");
   await applySchemaAsync({ databaseUrl, port: dbPort });
+  if (!check) await seedPlatformAdmin();
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   if (child.exitCode === null) child.kill("SIGTERM");

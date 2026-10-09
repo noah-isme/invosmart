@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { APIRequestContext, APIResponse } from "@playwright/test";
 
-import { toGatewayMinorUnit } from "../../../lib/payments/money";
+import { toStripeMinorUnit } from "../../../lib/payments/money";
 import { csrfHeaders, loginViaCredentialsApi, uniqueForwardedFor, type SessionUser } from "./auth";
 import { signMidtrans, signStripe } from "./webhooks";
 
@@ -582,7 +582,11 @@ export async function payInvoiceViaMidtrans(
   return paidInvoice(await getPaymentAttempt(request, created.attemptId), "payInvoiceViaMidtrans");
 }
 
-/** `checkout.session.completed` event for a Stripe attempt. */
+/**
+ * `checkout.session.completed` event for a Stripe attempt. `amountMinor` is in
+ * Stripe minor units (lib/payments/money.ts toStripeMinorUnit): IDR and USD are
+ * both x100 on Stripe (Rp150.000 -> 15000000).
+ */
 export function stripeCheckoutCompletedEvent(input: {
   sessionId: string;
   attemptId: string;
@@ -639,7 +643,8 @@ export async function payInvoiceViaStripe(
         sessionId: created.sessionId,
         attemptId: created.attemptId,
         invoiceId: invoice.id,
-        amountMinor: toGatewayMinorUnit(pending.amount, pending.currency),
+        // Stripe minor units (IDR x100), as the webhook verifies amount_total.
+        amountMinor: toStripeMinorUnit(pending.amount, pending.currency),
         currency: pending.currency,
       }),
     ),

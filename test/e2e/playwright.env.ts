@@ -35,7 +35,7 @@ export const E2E_PLACEHOLDER_DATABASE_URL = "postgresql://placeholder:placeholde
 export const E2E_WORKSPACE_AUTH_MODE = process.env.E2E_WORKSPACE_AUTH_MODE === "compat" ? "compat" : "enforce";
 
 // Fixed persona identities. Each run starts from a fresh in-memory database, so
-// these addresses are unique per run and ADMIN_EMAILS can list platform-admin.
+// these addresses are unique per run.
 export const E2E_PERSONAS = {
   owner: "e2e-owner@invosmart.test",
   admin: "e2e-admin@invosmart.test",
@@ -46,6 +46,23 @@ export const E2E_PERSONAS = {
 export type E2ePersona = keyof typeof E2E_PERSONAS;
 export const E2E_PERSONA_PASSWORD = "E2e-Persona-Passw0rd!";
 export const E2E_PERSONA_NAMES = Object.keys(E2E_PERSONAS) as E2ePersona[];
+
+// Platform admin is decided by ADMIN_USER_IDS (session user id,
+// lib/devtools/access.ts); ADMIN_EMAILS is deprecated and ignored by the app.
+// The app reads ADMIN_USER_IDS at start, before any user can register, so the
+// platformAdmin User row is pre-created with this FIXED id by
+// support/db/seed-platform-admin.mjs (run by serve.mjs after the schema and
+// before `ready`). setup/personas.setup.ts then only logs it in.
+export const E2E_PLATFORM_ADMIN_ID = "e2e-platform-admin";
+export const E2E_PLATFORM_ADMIN_NAME = "E2E Platform Admin";
+
+/** Env for serve.mjs: which platformAdmin row to seed before `ready`. */
+export const e2ePlatformAdminSeedEnv = (): Record<string, string> => ({
+  E2E_PLATFORM_ADMIN_ID,
+  E2E_PLATFORM_ADMIN_EMAIL: E2E_PERSONAS.platformAdmin,
+  E2E_PLATFORM_ADMIN_PASSWORD: E2E_PERSONA_PASSWORD,
+  E2E_PLATFORM_ADMIN_NAME,
+});
 
 // owner, admin, member and viewer share this workspace (roles OWNER, ADMIN,
 // MEMBER, VIEWER); platformAdmin has its own personal workspace.
@@ -119,7 +136,9 @@ export const e2eAppEnv = (): Record<string, string> => ({
   NEXTAUTH_SECRET: E2E_SECRETS.NEXTAUTH_SECRET,
   CRON_SECRET: E2E_SECRETS.CRON_SECRET,
   INVOICE_SHARE_SECRET: E2E_SECRETS.INVOICE_SHARE_SECRET,
-  ADMIN_EMAILS: E2E_PERSONAS.platformAdmin,
+  // Only the pre-seeded platformAdmin persona is a platform admin. ADMIN_EMAILS
+  // is not set (ignored by the app; it would only trigger a deprecation warning).
+  ADMIN_USER_IDS: E2E_PLATFORM_ADMIN_ID,
   WORKSPACE_NOTIFICATION_ENCRYPTION_KEY: E2E_SECRETS.WORKSPACE_NOTIFICATION_ENCRYPTION_KEY,
   WORKSPACE_AUTH_MODE: E2E_WORKSPACE_AUTH_MODE,
   STRIPE_SECRET_KEY: E2E_SECRETS.STRIPE_SECRET_KEY,
