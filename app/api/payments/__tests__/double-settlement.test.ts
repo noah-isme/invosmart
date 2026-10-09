@@ -41,8 +41,12 @@ const state = vi.hoisted(() => {
       }),
     },
     payment: {
-      findFirst: vi.fn(async ({ where }: { where: Row }) =>
-        store.payments.find((p) => matches(p, where)) || null),
+      findFirst: vi.fn(async ({ where, include }: { where: Row; include?: Row }) => {
+        const payment = store.payments.find((p) => matches(p, where));
+        if (!payment) return null;
+        if (!include?.attempt) return payment;
+        return { ...payment, attempt: withInvoice(store.attempts.find((a) => a.id === payment.attemptId)) };
+      }),
       create: vi.fn(async ({ data }: { data: Row }) => {
         // Widen the race window between the checks and the write.
         await new Promise((resolve) => setTimeout(resolve, 5));
@@ -196,6 +200,35 @@ function stripeRequest(eventId: string, type = 'checkout.session.completed', obj
         payment_intent: 'pi_late',
         metadata: { invoiceId: 'invoice-1', attemptId: 'attempt-late' },
         ...object,
+      },
+    },
+  });
+  const header = Stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: process.env.STRIPE_WEBHOOK_SECRET!,
+  });
+  return new Request('http://localhost/api/payments/stripe/webhook', {
+    method: 'POST',
+    body: payload,
+    headers: { 'stripe-signature': header },
+  });
+}
+
+function chargeRefundRequest(eventId: string, paymentIntent: string) {
+  const payload = JSON.stringify({
+    id: eventId,
+    object: 'event',
+    type: 'charge.refunded',
+    // No attemptId/invoiceId metadata: the charge is resolved via its PaymentIntent.
+    data: {
+      object: {
+        id: 'ch_1',
+        object: 'charge',
+        payment_intent: paymentIntent,
+        amount: TOTAL,
+        amount_refunded: TOTAL,
+        currency: 'idr',
+        metadata: {},
       },
     },
   });
@@ -485,5 +518,34 @@ describe('double settlement across providers', () => {
     expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
     expect(state.store.attempts[0].metadata.reviewRequired).toBeUndefined();
     expect(state.store.payments).toHaveLength(1);
+  });
+
+  it('Stripe charge.refunded without metadata refunds the winning Payment and re-opens the invoice', async () => {
+    seed('UNPAID', 'stripe');
+    expect((await stripeWebhook(stripeRequest('evt_first'))).status).toBe(200);
+
+    const refund = await stripeWebhook(chargeRefundRequest('evt_refund', 'pi_late'));
+
+    expect(refund.status).toBe(200);
+    expect(state.store.payments[0].refundedAmount).toBe(TOTAL);
+    expect(state.store.attempts[0].status).toBe('REFUNDED');
+    expect(state.store.invoice.status).toBe('UNPAID');
+  });
+
+  it('Stripe charge.refunded without metadata for a flagged duplicate clears the marker and leaves the invoice PAID', async () => {
+    seed('PAID', 'stripe');
+    expect((await stripeWebhook(stripeRequest('evt_late'))).status).toBe(200);
+    expect(state.store.attempts[0].providerPaymentId).toBe('pi_late');
+
+    const refund = await stripeWebhook(chargeRefundRequest('evt_refund', 'pi_late'));
+
+    expect(refund.status).toBe(200);
+    expect(await refund.json()).toMatchObject({ duplicatePayment: true, refundRequired: false });
+    expect(state.store.attempts[0].status).toBe('REFUNDED');
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toMatchObject({ refundRequired: false });
+    expect(state.store.invoice.status).toBe('PAID');
+    expect(state.store.payments).toHaveLength(1);
+    expect(state.store.payments[0].id).toBe('payment-winner');
+    expect(state.store.payments[0].refundedAmount).toBeUndefined();
   });
 });

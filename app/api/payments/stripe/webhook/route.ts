@@ -164,6 +164,14 @@ export async function POST(request: Request) {
       });
       attempt = payment?.attempt ?? null;
     }
+    // A duplicate settlement has no Payment row. Its attempt still records the
+    // PaymentIntent, which lets a refund of that charge be resolved.
+    if (!attempt?.invoice && isChargeRefund && paymentIntentId) {
+      attempt = await db.paymentAttempt.findFirst({
+        where: { provider: PAYMENT_PROVIDERS.STRIPE, providerPaymentId: paymentIntentId },
+        include: { invoice: true },
+      });
+    }
   }
 
   if (!attempt?.invoice) {

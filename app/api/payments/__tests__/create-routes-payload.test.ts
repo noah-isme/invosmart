@@ -99,5 +99,9 @@ describe('create routes send correct line items', () => {
       [125_000, 1],
     ]);
     expect(lines.reduce((acc, l) => acc + l.price_data.unit_amount * l.quantity, 0)).toBe(1_375_000);
+    // Refund events (charge.refunded) carry the PaymentIntent metadata.
+    expect(params.payment_intent_data).toEqual({
+      metadata: { attemptId: expect.any(String), invoiceId: 'invoice-1' },
+    });
   });
 });

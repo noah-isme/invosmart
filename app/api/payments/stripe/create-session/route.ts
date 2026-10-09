@@ -147,6 +147,11 @@ export async function POST(request: NextRequest) {
           attemptId: attempt.id,
           orderId: providerOrderId,
         },
+        // Stripe copies PaymentIntent metadata onto the charge, so a
+        // charge.refunded event can be traced back to this attempt.
+        payment_intent_data: {
+          metadata: { attemptId: attempt.id, invoiceId },
+        },
       }, { idempotencyKey });
 
       attempt = await db.paymentAttempt.update({
