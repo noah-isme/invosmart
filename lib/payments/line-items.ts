@@ -47,6 +47,10 @@ function normalizeItems(items: unknown): NormalizedItem[] {
 
 export type MidtransItemDetail = { id: string; price: number; quantity: number; name: string };
 
+function totalLineName(invoice: PayableInvoice): string {
+  return invoice.number ? `Invoice ${invoice.number}` : 'Invoice';
+}
+
 /**
  * Build Midtrans Snap `item_details` so that
  * `sum(price * quantity) === invoice.total`.
@@ -54,29 +58,37 @@ export type MidtransItemDetail = { id: string; price: number; quantity: number; 
  * details needs to be exactly same as the gross_amount inside the
  * transaction_details object."
  * https://docs.midtrans.com/reference/item-details-object
- * Prices must be integers (no decimals). A negative price is a valid way to
- * express a rounding correction.
+ * Prices must be integers (no decimals).
+ *
+ * Items with a zero price are dropped. A validated invoice always has
+ * total = sum(items) + tax, so any other result (legacy or hand-edited rows,
+ * no priced items) falls back to one "Invoice <number>" line for the total
+ * instead of inventing a correction line.
  */
 export function buildMidtransItemDetails(invoice: PayableInvoice): MidtransItemDetail[] {
-  const details: MidtransItemDetail[] = normalizeItems(invoice.items).map((item) => ({
-    id: truncateText(item.id, MIDTRANS_ITEM_FIELD_MAX_LENGTH),
-    price: Math.round(item.price),
-    quantity: item.qty,
-    name: truncateText(item.name, MIDTRANS_ITEM_FIELD_MAX_LENGTH),
-  }));
+  const gross = Math.round(invoice.total);
+  const single: MidtransItemDetail[] = [{
+    id: 'invoice',
+    price: gross,
+    quantity: 1,
+    name: truncateText(totalLineName(invoice), MIDTRANS_ITEM_FIELD_MAX_LENGTH),
+  }];
+
+  const details: MidtransItemDetail[] = normalizeItems(invoice.items)
+    .filter((item) => Math.round(item.price) > 0)
+    .map((item) => ({
+      id: truncateText(item.id, MIDTRANS_ITEM_FIELD_MAX_LENGTH),
+      price: Math.round(item.price),
+      quantity: item.qty,
+      name: truncateText(item.name, MIDTRANS_ITEM_FIELD_MAX_LENGTH),
+    }));
+  if (details.length === 0) return single;
 
   const tax = Math.round(invoice.tax || 0);
-  if (tax !== 0) {
-    details.push({ id: 'tax', price: tax, quantity: 1, name: 'Tax' });
-  }
+  if (tax > 0) details.push({ id: 'tax', price: tax, quantity: 1, name: 'Tax' });
 
-  const gross = Math.round(invoice.total);
   const sum = details.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const remainder = gross - sum;
-  if (remainder !== 0) {
-    details.push({ id: 'rounding_adjustment', price: remainder, quantity: 1, name: 'Rounding adjustment' });
-  }
-  return details;
+  return sum === gross ? details : single;
 }
 
 export type StripeLineItem = {
@@ -91,8 +103,8 @@ export type StripeLineItem = {
 /**
  * Build Stripe Checkout `line_items` whose sum equals
  * `toStripeMinorUnit(invoice.total)` (the amount_total the webhook verifies).
- * Stripe cannot take a negative unit_amount, so a negative remainder (or an
- * invoice without usable items) falls back to a single invoice-total line.
+ * Zero-priced items are dropped; if the lines do not add up to the total (or
+ * no priced item remains) a single "Invoice <number>" total line is sent.
  */
 export function buildStripeLineItems(invoice: PayableInvoice): StripeLineItem[] {
   const currency = invoice.currency.toUpperCase();
@@ -101,20 +113,17 @@ export function buildStripeLineItems(invoice: PayableInvoice): StripeLineItem[] 
     price_data: { currency: lower, product_data: { name }, unit_amount: unitAmount },
     quantity,
   });
+  const expected = toStripeMinorUnit(invoice.total, currency);
+  const single = [line(totalLineName(invoice), expected)];
 
-  const lines = normalizeItems(invoice.items).map((item) =>
-    line(item.name, toStripeMinorUnit(item.price, currency), item.qty));
+  const lines = normalizeItems(invoice.items)
+    .map((item) => line(item.name, toStripeMinorUnit(item.price, currency), item.qty))
+    .filter((item) => item.price_data.unit_amount > 0);
+  if (lines.length === 0) return single;
 
   const tax = toStripeMinorUnit(invoice.tax || 0, currency);
   if (tax > 0) lines.push(line('Tax', tax));
 
-  const expected = toStripeMinorUnit(invoice.total, currency);
   const sum = lines.reduce((acc, item) => acc + item.price_data.unit_amount * item.quantity, 0);
-  const remainder = expected - sum;
-  if (lines.length > 0 && remainder === 0) return lines;
-  if (lines.length > 0 && remainder > 0) {
-    lines.push(line('Rounding adjustment', remainder));
-    return lines;
-  }
-  return [line(invoice.number ? `Invoice ${invoice.number}` : 'Invoice', expected)];
+  return sum === expected ? lines : single;
 }

@@ -33,17 +33,39 @@ describe('buildMidtransItemDetails', () => {
     expect(sum(details)).toBe(twoItemInvoice.total);
   });
 
-  it('adds a rounding adjustment (possibly negative) when the total does not match', () => {
-    const higher = buildMidtransItemDetails({ ...twoItemInvoice, total: 1_375_003 });
-    expect(sum(higher)).toBe(1_375_003);
-    expect(higher.at(-1)).toMatchObject({ id: 'rounding_adjustment', price: 3, quantity: 1 });
-
-    const lower = buildMidtransItemDetails({ ...twoItemInvoice, total: 1_374_999 });
-    expect(sum(lower)).toBe(1_374_999);
-    expect(lower.at(-1)).toMatchObject({ id: 'rounding_adjustment', price: -1 });
+  it('falls back to one total line when the items and tax do not add up to the total', () => {
+    for (const total of [1_375_003, 1_374_999]) {
+      const details = buildMidtransItemDetails({ ...twoItemInvoice, total });
+      expect(details).toEqual([{ id: 'invoice', price: total, quantity: 1, name: 'Invoice INV-001' }]);
+      expect(sum(details)).toBe(total);
+    }
   });
 
-  it('emits no tax or adjustment lines for a tax-free invoice that already adds up', () => {
+  it('drops zero-priced items and keeps the sum exact', () => {
+    const details = buildMidtransItemDetails({
+      ...twoItemInvoice,
+      items: [
+        { name: 'Free setup', qty: 1, price: 0 },
+        { name: 'Hosting', qty: 2, price: 100 },
+      ],
+      tax: 20,
+      total: 220,
+    });
+    expect(details.map((d) => d.name)).toEqual(['Hosting', 'Tax']);
+    expect(sum(details)).toBe(220);
+  });
+
+  it('uses the single total line when every item is free', () => {
+    const details = buildMidtransItemDetails({
+      ...twoItemInvoice,
+      items: [{ name: 'Free', qty: 1, price: 0 }],
+      tax: 0,
+      total: 0,
+    });
+    expect(details).toEqual([{ id: 'invoice', price: 0, quantity: 1, name: 'Invoice INV-001' }]);
+  });
+
+  it('emits no tax line for a tax-free invoice that already adds up', () => {
     const details = buildMidtransItemDetails({ ...twoItemInvoice, tax: 0, total: 1_250_000 });
     expect(details).toHaveLength(2);
     expect(sum(details)).toBe(1_250_000);
@@ -79,6 +101,7 @@ describe('buildMidtransItemDetails', () => {
       expect(Number.isInteger(row.price)).toBe(true);
       expect(row.name.length).toBeGreaterThan(0);
     }
+    expect(details).toEqual([{ id: 'item_3', price: 10, quantity: 3, name: 'Item' }]);
     expect(sum(details)).toBe(30);
   });
 });
@@ -124,17 +147,33 @@ describe('buildStripeLineItems', () => {
     expect(stripeSum(rows)).toBe(13_200);
   });
 
-  it('adds a positive rounding adjustment line', () => {
-    const rows = buildStripeLineItems({ ...twoItemInvoice, total: 1_375_002 });
-    expect(rows.at(-1)?.price_data.unit_amount).toBe(200);
-    expect(stripeSum(rows)).toBe(137_500_200);
+  it('falls back to a single total line on any remainder (positive or negative)', () => {
+    for (const total of [1_375_002, 1_374_990]) {
+      const rows = buildStripeLineItems({ ...twoItemInvoice, total });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].price_data.product_data.name).toBe('Invoice INV-001');
+      expect(stripeSum(rows)).toBe(total * 100);
+    }
   });
 
-  it('falls back to a single total line when the remainder is negative', () => {
-    const rows = buildStripeLineItems({ ...twoItemInvoice, total: 1_374_990 });
-    expect(rows).toHaveLength(1);
-    expect(rows[0].price_data.product_data.name).toBe('Invoice INV-001');
-    expect(stripeSum(rows)).toBe(137_499_000);
+  it('drops zero-priced items and uses the total line when every item is free', () => {
+    const rows = buildStripeLineItems({
+      ...twoItemInvoice,
+      items: [{ name: 'Free setup', qty: 1, price: 0 }, { name: 'Hosting', qty: 1, price: 100 }],
+      tax: 10,
+      total: 110,
+    });
+    expect(rows.map((r) => r.price_data.product_data.name)).toEqual(['Hosting', 'Tax']);
+    expect(stripeSum(rows)).toBe(11_000);
+
+    const free = buildStripeLineItems({
+      ...twoItemInvoice,
+      items: [{ name: 'Free', qty: 1, price: 0 }],
+      tax: 0,
+      total: 0,
+    });
+    expect(free).toHaveLength(1);
+    expect(free[0].price_data.unit_amount).toBe(0);
   });
 });
 
