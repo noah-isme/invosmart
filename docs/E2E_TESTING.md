@@ -195,7 +195,7 @@ These tests assert the desired behaviour and are marked as expected to fail unti
 
 | Test | Marker | Product bug |
 |---|---|---|
-| CLI-03b (`specs/clients/clients.spec.ts`) | `test.fail` | `POST /api/clients` does not handle the `@@unique([userId, email])` violation when the same user reuses a client email in a second workspace: 500 instead of 4xx |
+| CLI-03b (`specs/clients/clients.spec.ts`) | `test.fail` | Schema: `Client` `@@unique([userId, email])` makes client emails unique per user across workspaces, while the intended rule is per workspace. Needs a migration; until then the route answers 409 `CLIENT_EMAIL_CONFLICT` instead of the former 500 (CLI-03c, CLI-INT-01) |
 | EXP-05 (`specs/export/export.spec.ts`) | `test.fail` | CSV export does not neutralise formula cells (CSV injection; `lib/export-utils.ts` `escapeCSVCell`, momus-gated) |
 | EXP-06 (`specs/export/export.spec.ts`) | `test.fail` | Export dates are UTC, not the Asia/Jakarta calendar date (`formatDateForExport`, momus-gated) |
 | API-07b (`specs/api-v1/invoices.spec.ts`) | `test.fail` | `lib/api-v1/rate-limit.ts` refuses the limit-th request (off by one against `x-ratelimit-limit`) |

@@ -13,8 +13,11 @@
 //   caller's workspace scope and answers 400 "A client with this email already
 //   exists." (a plain string, not a field error); only then does
 //   prisma.client.create run, where @@unique([organizationId, email]) and
-//   @@unique([userId, email]) (prisma/schema.prisma) apply. There is no P2002
-//   handling, so a constraint violation surfaces as a 500 (CLI-03b).
+//   @@unique([userId, email]) (prisma/schema.prisma) apply. A P2002 from
+//   create answers 409 { code: "CLIENT_EMAIL_CONFLICT", field: "email" }
+//   (CLI-03c). Clients are meant to be unique per WORKSPACE, so the per-user
+//   constraint is itself the bug; dropping it is a schema change, and CLI-03b
+//   documents the desired 201 as test.fail until that migration lands.
 // - Every factory user has a membership, so the workspace scope is
 //   { organizationId } in both WORKSPACE_AUTH_MODE values; nothing here is
 //   mode-dependent.
@@ -132,18 +135,21 @@ test.describe("CLI-03 duplicate client email", () => {
   );
 
   test(
-    "CLI-03b the same user reusing a client email in a second workspace gets a 4xx, not a 500",
+    "CLI-03b the same user may reuse a client email in a second workspace (clients are unique per workspace)",
     {
       annotation: [
         ...covers("/api/clients"),
-        { type: "issue", description: "POST /api/clients does not handle the @@unique([userId, email]) P2002 violation (500)" },
+        {
+          type: "issue",
+          description:
+            "prisma/schema.prisma Client @@unique([userId, email]) (map client_user_email) makes client emails unique per USER across workspaces; the intended rule is per workspace (@@unique([organizationId, email])). Needs a migration that drops client_user_email; until then the create answers 409 CLIENT_EMAIL_CONFLICT (CLI-03c).",
+        },
       ],
     },
     async ({ newApiUser }) => {
-      // Product bug: the pre-check is workspace-scoped, so A's second workspace
-      // passes it and prisma.client.create violates @@unique([userId, email]);
-      // the unhandled P2002 is a 500. Desired: a 4xx on the email field.
-      test.fail(true, "product bug: unhandled @@unique([userId, email]) violation in POST /api/clients returns 500");
+      // Desired behaviour, blocked on the schema change: a second workspace of
+      // the same user accepts the email (201).
+      test.fail(true, "schema: Client @@unique([userId, email]) blocks per-workspace client emails (migration pending)");
       const a = await newApiUser("cli03b-a");
       const email = uniqueEmail("cli03b");
       await a.factory.createClient({ email });
@@ -151,7 +157,26 @@ test.describe("CLI-03 duplicate client email", () => {
       const second = await a.factory.createWorkspace();
       const response = await a.api.post("/api/clients", { organizationId: second.organizationId, data: { name: `E2E CLI-03b ${tag()}`, email } });
       test.info().annotations.push({ type: "observed-status", description: String(response.status()) });
-      expect([400, 409]).toContain(response.status());
+      expect(response.status()).toBe(201);
+      expect((await response.json()).data).toMatchObject({ email, organizationId: second.organizationId });
+    },
+  );
+
+  test(
+    "CLI-03c the same user reusing a client email in a second workspace never gets a 500 (409 CLIENT_EMAIL_CONFLICT until the schema changes)",
+    { annotation: covers("/api/clients") },
+    async ({ newApiUser }) => {
+      const a = await newApiUser("cli03c-a");
+      const email = uniqueEmail("cli03c");
+      await a.factory.createClient({ email });
+
+      const second = await a.factory.createWorkspace();
+      const response = await a.api.post("/api/clients", { organizationId: second.organizationId, data: { name: `E2E CLI-03c ${tag()}`, email } });
+      // 201 once the per-user constraint is dropped (then CLI-03b passes too).
+      expect([201, 409]).toContain(response.status());
+      if (response.status() === 409) {
+        expect(await response.json()).toMatchObject({ code: "CLIENT_EMAIL_CONFLICT", field: "email", error: expect.any(String) });
+      }
     },
   );
 });
