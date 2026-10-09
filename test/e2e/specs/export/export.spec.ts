@@ -13,8 +13,9 @@
 //   (escapeCSVCell); text cells starting with = + - @ TAB CR get a leading
 //   single quote (CSV injection, EXP-05). Dates are the Asia/Jakarta
 //   calendar date of the stored instant (formatDateForExport, EXP-06).
-// - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text, served with the
-//   OOXML content type and an .xlsx file name (EXP-02 product bug).
+// - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text (namespace
+//   urn:schemas-microsoft-com:office:spreadsheet), served as
+//   application/vnd.ms-excel with an .xml file name (EXP-02).
 import { expect, test, type Api } from "../../fixtures";
 import type { InvoiceRecord } from "../../support/api-factories";
 import { jakartaDate } from "../../support/dates";
@@ -112,17 +113,8 @@ test.describe("export", () => {
   );
 
   test(
-    "EXP-02 ?format=xlsx returns SpreadsheetML XML (<?xml ... <Workbook) under an .xlsx name",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "?format=xlsx serves SpreadsheetML 2003 XML (starts with <?xml, root <Workbook>) with the OOXML content type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet and an .xlsx file name; a real .xlsx is a ZIP (PK\\x03\\x04). Excel warns about the format/extension mismatch. The Workbook namespace is also misspelled (urn:schemas-microsoft-microsoft-com:office:spreadsheet). Fix belongs to lib/export-utils.ts (momus-gated).",
-        },
-      ],
-    },
+    "EXP-02 ?format=xlsx returns SpreadsheetML XML labelled as such (.xml, application/vnd.ms-excel, correct namespace)",
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
       const { api, factory } = await newApiUser("exp02");
       const invoice = await factory.createInvoice({ client: `EXP-02 <&> ${tag()}` });
@@ -130,15 +122,18 @@ test.describe("export", () => {
       const response = await api.get(`${EXPORT}?format=xlsx`);
       expect(response.status()).toBe(200);
       const headers = response.headers();
-      expect(headers["content-disposition"]).toMatch(/filename="invoices-export-\d{4}-\d{2}-\d{2}\.xlsx"$/);
-      test.info().annotations.push({ type: "observed-content-type", description: headers["content-type"] });
+      // Excel 2003 XML is not an OOXML zip, so it is not served as .xlsx.
+      expect(headers["content-type"]).toBe("application/vnd.ms-excel; charset=utf-8");
+      expect(headers["content-disposition"]).toMatch(/^attachment; filename="invoices-export-\d{4}-\d{2}-\d{2}\.xml"$/);
 
       const body = await response.body();
-      // Actual bytes: XML text, not a ZIP container.
       expect(body.subarray(0, 2).toString("latin1")).not.toBe("PK");
       const text = body.toString("utf8");
       expect(text.startsWith("<?xml")).toBe(true);
-      expect(text).toContain("<Workbook");
+      expect(text).toContain('<?mso-application progid="Excel.Sheet"?>');
+      expect(text).toContain('<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(text).toContain('xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(text).not.toContain("microsoft-microsoft");
       expect(text).toContain('<Worksheet ss:Name="Invoices">');
       expect(text).toContain(`<Data ss:Type="String">${invoice.number}</Data>`);
       // The client name is XML-escaped.

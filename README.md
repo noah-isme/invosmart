@@ -208,7 +208,7 @@ invosmart/
 | **Invoices** | `/api/invoices` | GET/POST | List or create invoices |
 | | `/api/invoices/[id]` | GET/PUT/DELETE | Invoice CRUD |
 | | `/api/invoices/[id]/send-email` | POST | Send an invoice with a signed payment link |
-| | `/api/invoices/export` | GET | Export invoices as CSV/XLSX |
+| | `/api/invoices/export` | GET | Export invoices as CSV or Excel (`?format=xlsx`: Excel 2003 XML Spreadsheet, `.xml`) |
 | | `/api/invoices/templates` | GET/POST | Invoice template management |
 | | `/api/invoices/templates/[id]` | PUT/DELETE | Template CRUD & instantiate |
 | **Payments** | `/api/payments/midtrans/create` | POST | Create or reuse an idempotent Midtrans checkout |

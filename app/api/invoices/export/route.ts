@@ -112,12 +112,15 @@ const handleExport = async (request: NextRequest) => {
     });
   }
 
-  const xlsxContent = exportToXLSX(exportData);
-  return new NextResponse(xlsxContent, {
+  // ?format=xlsx is the Excel export, but the body is SpreadsheetML 2003 XML,
+  // not an OOXML zip, so it is labelled as what it is: .xml with the Excel
+  // MIME type (an .xlsx name made Excel warn about a format mismatch).
+  const spreadsheetXml = exportToXLSX(exportData);
+  return new NextResponse(spreadsheetXml, {
     status: 200,
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; charset=utf-8",
-      "Content-Disposition": `attachment; filename="invoices-export-${timestamp}.xlsx"`,
+      "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+      "Content-Disposition": `attachment; filename="invoices-export-${timestamp}.xml"`,
     },
   });
 };

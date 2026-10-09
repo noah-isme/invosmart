@@ -132,7 +132,12 @@ export function exportToCSV(invoices: InvoiceExportData[]): string {
 export const generateCSV = exportToCSV;
 
 /**
- * Exports an array of invoice export data into SpreadsheetML XML format (.xlsx compatible).
+ * Exports an array of invoice export data as an Excel 2003 XML Spreadsheet
+ * (SpreadsheetML). This is NOT an OOXML .xlsx (a ZIP package): serve it as
+ * `.xml` with `application/vnd.ms-excel`, which Excel and LibreOffice open as
+ * a workbook. The name is kept for the `?format=xlsx` API value.
+ * Text goes into <Data ss:Type="String"> cells, which are never evaluated as
+ * formulas, so no CSV-style formula prefix is needed here.
  * Required columns: Invoice Number, Client Name, Status, Issued Date, Due Date, Total, Currency.
  */
 export function exportToXLSX(invoices: InvoiceExportData[]): string {
@@ -171,12 +176,12 @@ export function exportToXLSX(invoices: InvoiceExportData[]): string {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-microsoft-com:office:spreadsheet"
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- <DocumentProperties xmlns="urn:schemas-microsoft-microsoft-com:office:office">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
   <Author>InvoSmart</Author>
  </DocumentProperties>
  <Styles>

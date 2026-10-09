@@ -102,8 +102,9 @@ describe("GET /api/invoices/export", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    expect(response.headers.get("content-disposition")).toContain("attachment; filename=");
+    // SpreadsheetML 2003 XML, labelled honestly (not an OOXML .xlsx zip).
+    expect(response.headers.get("content-type")).toContain("application/vnd.ms-excel");
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="invoices-export-\d{4}-\d{2}-\d{2}\.xml"$/);
 
     expect(findManySpy).toHaveBeenCalledWith({
       where: {
@@ -115,6 +116,7 @@ describe("GET /api/invoices/export", () => {
 
     const text = await response.text();
     expect(text).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(text).toContain('<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"');
     expect(text).toContain("INV-2026-002");
     expect(text).toContain("Tech Services");
   });

@@ -207,7 +207,6 @@ These tests assert the desired behaviour and are marked as expected to fail unti
 Recorded while building the suite; none is fixed by it.
 
 - Midtrans environment mismatch: the server picks Snap `isProduction` from `NODE_ENV` (`lib/payments/midtrans.ts`) while the browser picks the `snap.js` host from the client-key prefix (`getSnapScriptUrl()`), so a sandbox key under `next start` loads sandbox `snap.js` but calls the production Snap API.
-- XLSX export is SpreadsheetML XML served under an `.xlsx` name (`exportToXLSX`); EXP-02 asserts the current bytes.
 - Audit entries with a null `tenantId`: sign-in (`AUTH_LOGIN_SUCCESS`, AUD-INT-01), registration (`AUTH_REGISTER`) and payment settlement (`INVOICE_UPDATE` from the webhooks, JRN-01b). They never appear in the workspace-scoped audit API.
 - `/app/admin/audit-logs` pagination links keep `action` and `entity` but drop the `userId` and `tenantId` filters (`app/app/admin/audit-logs/page.tsx`).
 - `/api/ai/theme-suggest` took about 9.5 s per call in the e2e build with the Upstash variables blank. Likely cause, not root-caused: `Redis.fromEnv()` in `lib/cache/theme-suggestions.ts` accepts the blank values and the client retries before the error is swallowed.

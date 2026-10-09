@@ -196,7 +196,11 @@ describe("export-utils", () => {
       const xml = exportToXLSX(sampleData);
 
       expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-      expect(xml).toContain('<Workbook xmlns="urn:schemas-microsoft-microsoft-com:office:spreadsheet"');
+      expect(xml).toContain('<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(xml).toContain('xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(xml).toContain('xmlns:o="urn:schemas-microsoft-com:office:office"');
+      expect(xml).toContain('xmlns:x="urn:schemas-microsoft-com:office:excel"');
+      expect(xml).not.toContain("microsoft-microsoft");
       expect(xml).toContain('<Worksheet ss:Name="Invoices">');
 
       expect(xml).toContain('<Data ss:Type="String">Invoice Number</Data>');
@@ -210,6 +214,16 @@ describe("export-utils", () => {
       expect(xml).toContain('<Data ss:Type="String">INV-202608-001</Data>');
       expect(xml).toContain('<Data ss:Type="String">Acme &amp; Co</Data>');
       expect(xml).toContain('<Data ss:Type="Number">1500000</Data>');
+    });
+
+    it("is well-formed XML and keeps formula-like text as String data", () => {
+      const xml = exportToXLSX([
+        { ...sampleData[0], client: '=HYPERLINK("http://evil.example","x")', issuedAt: new Date("2026-10-09T17:30:00.000Z") },
+      ]);
+      expect(xml).toContain('<Data ss:Type="String">=HYPERLINK(&quot;http://evil.example&quot;,&quot;x&quot;)</Data>');
+      expect(xml).not.toContain("ss:Formula");
+      expect(xml).toContain('<Data ss:Type="String">2026-10-10</Data>');
+      expect(new DOMParser().parseFromString(xml, "application/xml").getElementsByTagName("parsererror")).toHaveLength(0);
     });
 
     it("alias generateXLSX produces identical output", () => {
