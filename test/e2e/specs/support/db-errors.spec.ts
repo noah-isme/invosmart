@@ -7,9 +7,11 @@ import { E2E_DB_LOG_FILE } from "../../playwright.env";
 import {
   apiRequest,
   createClient,
+  createWorkspace,
   ensureActiveWorkspace,
   registerAndLogin,
   registerUser,
+  switchWorkspace,
   uniqueEmail,
 } from "../../support/api-factories";
 import { loginViaCredentialsApi } from "../../support/auth";
@@ -19,6 +21,14 @@ import { loginViaCredentialsApi } from "../../support/auth";
 // connection. Before the ReadyForQuery filter (electric-sql/pglite#958) the
 // Prisma engine dropped the connection after any SQL error and reconnected,
 // which shows up as a second `Client connected` line in the pglite log.
+//
+// Two triggers are used for a unique violation reaching the app's connection:
+// a registration race (tolerant: since the registration fix the losers answer
+// 409 and no INSERT may reach the index) and a deterministic one (same client
+// email in a second workspace of the same user; @@unique([userId, email]);
+// 500 today, known bug CLI-03b). If both answer 4xx (fixed), this spec still
+// checks connection stability, and the real P2002 coverage lives in
+// test/integration/db/pglite-errors.test.ts.
 const connectionsAfterReady = () => {
   const log = readFileSync(resolve(process.cwd(), E2E_DB_LOG_FILE), "utf8").split("\n");
   const readyAt = log.findIndex((line) => / ready$/.test(line));
@@ -39,8 +49,8 @@ test.describe("database errors keep the app's connection", () => {
     });
     expect(again.status()).toBe(409);
 
-    // Racing duplicates pass the pre-check together; the losers' INSERT hits
-    // the unique index (Prisma P2002), which the route maps to 500.
+    // Racing duplicates may pass the pre-check together; a loser's INSERT then
+    // hits the unique index (Prisma P2002). Tolerant: 409 or 500 for losers.
     const raceEmail = uniqueEmail("race");
     const race = await Promise.all(
       Array.from({ length: 4 }, () =>
@@ -51,7 +61,6 @@ test.describe("database errors keep the app's connection", () => {
     test.info().annotations.push({ type: "race-statuses", description: statuses.join(",") });
     expect(statuses.filter((s) => s === 201)).toHaveLength(1);
     expect(statuses.every((s) => s === 201 || s === 409 || s === 500)).toBe(true);
-    expect(statuses, "no racing INSERT reached the unique index (no 500)").toContain(500);
 
     // The very next requests succeed.
     const raced = await loginViaCredentialsApi(request, { email: raceEmail, password });
@@ -59,6 +68,18 @@ test.describe("database errors keep the app's connection", () => {
     await ensureActiveWorkspace(request);
     const client = await createClient(request);
     expect(client.id).toBeTruthy();
+
+    // Deterministic P2002: same user, same client email, second workspace.
+    const sharedEmail = uniqueEmail("p2002");
+    await createClient(request, { email: sharedEmail });
+    const second = await createWorkspace(request);
+    await switchWorkspace(request, second.organizationId);
+    const dup = await apiRequest(request, "POST", "/api/clients", {
+      organizationId: second.organizationId,
+      data: { name: "P2002 trigger", email: sharedEmail },
+    });
+    test.info().annotations.push({ type: "p2002-trigger-status", description: String(dup.status()) });
+    expect([400, 409, 500]).toContain(dup.status());
     await registerAndLogin(request);
     const clients = await apiRequest(request, "GET", "/api/clients");
     expect(clients.status()).toBe(200);
