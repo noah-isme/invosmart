@@ -124,4 +124,23 @@ describe('create routes send correct line items', () => {
 
     expect(response.status).toBe(200);
   });
+
+  it('Stripe: rejects an unsupported invoice currency with 422 before creating an attempt or session', async () => {
+    mocks.db.invoice.findFirst.mockResolvedValue({ ...invoice, currency: 'xyz' });
+
+    const response = await stripeCreate(post('/api/payments/stripe/create-session'));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Unsupported invoice currency: XYZ' });
+    expect(mocks.db.paymentAttempt.create).not.toHaveBeenCalled();
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it('Stripe: accepts a supported currency in any case', async () => {
+    mocks.db.invoice.findFirst.mockResolvedValue({ ...invoice, currency: 'usd', items: [{ name: 'A', qty: 1, price: 1 }], tax: 0, total: 1 });
+
+    const response = await stripeCreate(post('/api/payments/stripe/create-session'));
+
+    expect(response.status).toBe(200);
+  });
 });

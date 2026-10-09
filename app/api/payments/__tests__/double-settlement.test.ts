@@ -47,6 +47,8 @@ const state = vi.hoisted(() => {
         if (!include?.attempt) return payment;
         return { ...payment, attempt: withInvoice(store.attempts.find((a) => a.id === payment.attemptId)) };
       }),
+      findMany: vi.fn(async ({ where }: { where: Row }) =>
+        store.payments.filter((p) => matches(p, where)).map((p) => ({ refundedAmount: 0, ...p }))),
       create: vi.fn(async ({ data }: { data: Row }) => {
         // Widen the race window between the checks and the write.
         await new Promise((resolve) => setTimeout(resolve, 5));
@@ -157,7 +159,7 @@ function seed(
   }];
   state.store.events = [];
   state.store.payments = invoiceStatus === 'PAID' && winnerPayment
-    ? [{ id: 'payment-winner', invoiceId: 'invoice-1', attemptId: 'attempt-winner', gatewayPaymentId: 'winner-tx', paidAmount: TOTAL }]
+    ? [{ id: 'payment-winner', invoiceId: 'invoice-1', attemptId: 'attempt-winner', gatewayPaymentId: 'winner-tx', paidAmount: TOTAL, refundedAmount: 0 }]
     : [];
 }
 
@@ -306,7 +308,7 @@ describe('double settlement across providers', () => {
     expect(state.store.attempts[0].metadata.duplicateSettlement).toMatchObject({ refundRequired: false });
     expect(state.store.invoice.status).toBe('PAID');
     expect(state.store.payments).toHaveLength(1);
-    expect(state.store.payments[0].refundedAmount).toBeUndefined();
+    expect(state.store.payments[0].refundedAmount).toBe(0);
   });
 
   it('Midtrans: the first settlement of an unpaid invoice claims it and creates the Payment', async () => {
@@ -546,7 +548,7 @@ describe('double settlement across providers', () => {
     expect(state.store.invoice.status).toBe('PAID');
     expect(state.store.payments).toHaveLength(1);
     expect(state.store.payments[0].id).toBe('payment-winner');
-    expect(state.store.payments[0].refundedAmount).toBeUndefined();
+    expect(state.store.payments[0].refundedAmount).toBe(0);
   });
 
   it('Stripe: rejects an IDR amount_total that is the whole-rupiah value instead of Stripe minor units', async () => {
@@ -560,5 +562,32 @@ describe('double settlement across providers', () => {
     expect(await response.json()).toEqual({ error: 'Payment amount does not match invoice' });
     expect(state.store.payments).toHaveLength(0);
     expect(state.store.invoice.status).toBe('UNPAID');
+  });
+
+  it('fully refunded winner, then invoice marked PAID by hand, then a new gateway payment: review path, no refund', async () => {
+    seed('PAID', 'midtrans');
+    state.store.payments[0].refundedAmount = TOTAL; // the winner was refunded in full
+
+    const response = await midtransNotification(midtransRequest());
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ received: true, status: 'SETTLED', reviewRequired: true });
+    expect(body.duplicatePayment).toBeUndefined();
+    expect(state.store.payments).toHaveLength(2);
+    expect(state.store.payments[1]).toMatchObject({ gatewayProvider: 'midtrans', gatewayPaymentId: 'mid-tx-late' });
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(state.store.attempts[0].metadata.reviewRequired).toBeDefined();
+    expect(duplicateAudits()).toHaveLength(0);
+  });
+
+  it('a partially refunded winner still settles the invoice, so a later payment is a duplicate', async () => {
+    seed('PAID', 'midtrans');
+    state.store.payments[0].refundedAmount = TOTAL / 2;
+
+    const response = await midtransNotification(midtransRequest());
+
+    expect(await response.json()).toMatchObject({ duplicatePayment: true, refundRequired: true });
+    expect(state.store.payments).toHaveLength(1);
   });
 });

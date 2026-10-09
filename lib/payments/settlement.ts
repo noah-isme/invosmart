@@ -33,9 +33,12 @@ type InvoiceClaimClient = {
 
 export type PaymentLike = { id: string; attemptId: string | null; gatewayPaymentId: string | null };
 
+export type InvoicePaymentLike = PaymentLike & { paidAmount: number; refundedAmount: number };
+
 type PaymentLookupClient = {
   payment: {
-    findFirst(args: { where: { attemptId: string } | { invoiceId: string } }): Promise<PaymentLike | null>;
+    findFirst(args: { where: { attemptId: string } }): Promise<PaymentLike | null>;
+    findMany(args: { where: { invoiceId: string } }): Promise<InvoicePaymentLike[]>;
   };
 };
 
@@ -110,7 +113,11 @@ export async function settleInvoiceOnce<P extends PaymentLike>(
   const backstop = await ownPayment();
   if (backstop) return backstop;
 
-  const existing = await tx.payment.findFirst({ where: { invoiceId: input.invoiceId } });
+  // A fully refunded Payment no longer settles the invoice: if the invoice was
+  // marked PAID again by hand afterwards, a new gateway payment is the only
+  // real money and takes the manual-review path below.
+  const payments = await tx.payment.findMany({ where: { invoiceId: input.invoiceId } });
+  const existing = payments.find((payment) => payment.refundedAmount < payment.paidAmount);
   if (existing) return { kind: 'duplicate', settledPaymentId: existing.id };
 
   return { kind: 'recorded', payment: await input.createPayment(), manualReview: true };

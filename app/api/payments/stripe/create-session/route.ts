@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
 import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
 import { buildStripeLineItems } from '@/lib/payments/line-items';
+import { SUPPORTED_CURRENCIES } from '@/lib/currency';
 import {
   ACTIVE_PAYMENT_ATTEMPT_STATUSES,
   PAYMENT_ATTEMPT_STATUS,
@@ -67,6 +68,12 @@ export async function POST(request: NextRequest) {
 
     if (invoice.status === 'PAID') {
       return NextResponse.json({ error: 'Invoice is already paid' }, { status: 409 });
+    }
+
+    // Invoice currency is free text; only charge currencies the app supports.
+    const invoiceCurrency = invoice.currency.toUpperCase();
+    if (!SUPPORTED_CURRENCIES.some((entry) => entry.code === invoiceCurrency)) {
+      return NextResponse.json({ error: `Unsupported invoice currency: ${invoiceCurrency}` }, { status: 422 });
     }
 
     const requestedIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
