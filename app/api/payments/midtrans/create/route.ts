@@ -4,6 +4,7 @@ import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
 import { midtransSnap } from '@/lib/payments/midtrans';
+import { buildMidtransItemDetails } from '@/lib/payments/line-items';
 import {
   ACTIVE_PAYMENT_ATTEMPT_STATUSES,
   PAYMENT_ATTEMPT_STATUS,
@@ -64,6 +65,12 @@ export async function POST(request: NextRequest) {
 
     if (invoice.status === 'PAID') {
       return NextResponse.json({ error: 'Invoice is already paid' }, { status: 409 });
+    }
+
+    // Midtrans amounts are whole rupiah; gross_amount carries no currency, so
+    // any other currency would be charged as IDR.
+    if (invoice.currency.toUpperCase() !== 'IDR') {
+      return NextResponse.json({ error: 'Midtrans only supports IDR invoices' }, { status: 422 });
     }
 
     const requestedIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
@@ -133,16 +140,9 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    // Prepare items for Midtrans
-    type InvoiceItem = { id?: string; rate?: number; quantity?: number; description?: string };
-    const items = ((invoice.items as InvoiceItem[]) || []).map((item, index) => ({
-      // Item IDs must be deterministic so a retry cannot change the provider
-      // payload while retaining the same order_id.
-      id: item.id || `item_${index + 1}`,
-      price: Math.round(item.rate || 0),
-      quantity: item.quantity || 1,
-      name: item.description?.substring(0, 50) || 'Item',
-    }));
+    // item_details must sum to gross_amount exactly (items + tax + any
+    // rounding adjustment); see lib/payments/line-items.ts.
+    const items = buildMidtransItemDetails(invoice);
 
     const transactionDetails = {
       transaction_details: {

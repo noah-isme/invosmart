@@ -51,6 +51,7 @@ const state = vi.hoisted(() => {
     $transaction: vi.fn(async (callback: (tx: Record<string, unknown>) => Promise<unknown>) => callback(tx)),
   };
   const tx: Record<string, any> = {
+    $queryRaw: vi.fn(async () => []),
     paymentAttempt: {
       findUnique: vi.fn(async () => attempt),
       update: db.paymentAttempt.update,
@@ -79,6 +80,12 @@ const state = vi.hoisted(() => {
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         Object.assign(attempt.invoice, data);
         return attempt.invoice;
+      }),
+      // Conditional claim used by the settlement guard (status != PAID).
+      updateMany: vi.fn(async ({ where, data }: { where: { status: { not: string } }; data: Record<string, unknown> }) => {
+        if (attempt.invoice.status === where.status.not) return { count: 0 };
+        Object.assign(attempt.invoice, data);
+        return { count: 1 };
       }),
     },
   };
