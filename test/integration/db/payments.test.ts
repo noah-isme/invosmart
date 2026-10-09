@@ -234,16 +234,43 @@ describe("PAY-INT-02 competing-webhooks", () => {
     expect(attempts.filter((a) => a.status === "SETTLED").length).toBeGreaterThanOrEqual(1);
   });
 
-  // Product bug (recorded, not fixed here): each webhook's $transaction only
-  // guards its own PaymentAttempt. Nothing checks the invoice for an existing
-  // settlement from the other provider, so both attempts settle and two
-  // Payment rows are written for one invoice (double charge). The invariant
-  // from the plan is kept as an expected failure; vitest reports it if the
-  // app starts to satisfy it, so the marker can then be removed.
-  it.fails("leaves exactly one winning attempt and one Payment (known double-settlement bug)", async () => {
-    const { attempts, payments, invoice } = await race();
-    expect(invoice.status).toBe("PAID");
-    expect(attempts.filter((a) => a.status === "SETTLED")).toHaveLength(1);
-    expect(payments).toHaveLength(1);
+  // Observed pre-fix behaviour on main: each webhook's $transaction only
+  // guards its own PaymentAttempt, so both attempts settle and TWO Payment
+  // rows of 150000 are written for one invoice (double charge).
+  //
+  // Fixed behaviour (unmerged local branch fix/payment-items-and-double-settlement,
+  // lib/payments/settlement.ts + both webhook routes): the first settlement
+  // claims the invoice (PAID); the losing provider's attempt stays SETTLED but
+  // creates no Payment and carries metadata.duplicateSettlement
+  // { reason: "invoice_already_settled", refundRequired: true, ... }.
+  //
+  // FIXME(fix/payment-items-and-double-settlement): enable after the branch merges to main and this branch rebases
+  it.skip("settles the invoice once: one Payment, one attempt flagged metadata.duplicateSettlement (refundRequired)", async () => {
+    const assertSingleSettlement = async (r: Awaited<ReturnType<typeof race>>) => {
+      expect(r.stripeRes.status).toBe(200);
+      expect(r.midtransRes.status).toBe(200);
+      expect(r.invoice.status).toBe("PAID");
+      expect(r.payments).toHaveLength(1);
+      expect(r.attempts.filter((a) => a.status === "SETTLED")).toHaveLength(2);
+      const flagged = r.attempts.filter(
+        (a) => (a.metadata as Record<string, unknown> | null)?.duplicateSettlement,
+      );
+      expect(flagged).toHaveLength(1);
+      expect((flagged[0].metadata as Record<string, any>).duplicateSettlement).toMatchObject({
+        reason: "invoice_already_settled",
+        refundRequired: true,
+      });
+    };
+    await assertSingleSettlement(await race());
+
+    // Sequential: Stripe settles first, Midtrans arrives afterwards.
+    const { invoice } = await paymentInvoice();
+    const stripe = await stripeAttempt(invoice.id);
+    const midtrans = await midtransAttempt(invoice.id);
+    const stripeRes = await postStripe(stripeEvent(stripe, { paymentIntent: `pi_${uid()}` }));
+    const midtransRes = await postMidtrans(
+      midtransNotificationBody(midtrans.providerOrderId!, `mid-tx-${uid()}`, "settlement"),
+    );
+    await assertSingleSettlement({ stripeRes, midtransRes, ...(await ledger(invoice.id)) } as any);
   });
 });

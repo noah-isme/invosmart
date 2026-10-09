@@ -174,7 +174,10 @@ describe("WS-14 compat legacy-row fallback", () => {
   // resolveWorkspaceContext provisions a new personal workspace instead
   // (provisionPersonalWorkspace) and scopes the query by that new
   // organizationId, so null-organization rows stay invisible. Recorded as a
-  // documentation/behaviour mismatch; kept as an expected failure.
+  // doc/product mismatch with docs/WORKSPACE_RBAC.md (compat provisions a
+  // workspace instead of the userId fallback); kept as an expected failure,
+  // consistent with EXP-05/06. The passing pin test below asserts the actual
+  // behaviour.
   it.fails("compat: the user's legacy null-organization rows are listed via the userId fallback", async () => {
     process.env.WORKSPACE_AUTH_MODE = "compat";
     const { user, legacy } = await legacyUserWithoutMembership();
