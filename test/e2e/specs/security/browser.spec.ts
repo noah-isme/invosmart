@@ -9,11 +9,13 @@
 // - InvoiceDetailClient renders "Pay Now" for SENT/UNPAID/OVERDUE and always
 //   loads Midtrans snap.js from getSnapScriptUrl() (sandbox host for SB-Mid keys);
 //   the guards fixture serves it from the stub and records the request.
+// - Detail page renders are paced by support/invoice-detail-budget.ts (INV-RL-01).
 // - /devtools/perf needs canViewPerfTools: in production only ADMIN_EMAILS
 //   (the platformAdmin persona).
 import { expect, test, type Guards } from "../../fixtures";
 import { E2E_CSRF_COOKIE, CSRF_HEADER_NAME } from "../../support/auth";
 import { uniqueEmail } from "../../support/api-factories";
+import { gotoInvoiceDetail } from "../../support/invoice-detail-budget";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 
@@ -56,7 +58,7 @@ test(
     const { page, api } = isolatedUser;
     expect((await api.get(`/api/invoices/${invoice.id}`)).status()).toBe(404);
 
-    const response = await page.goto(`/app/invoices/${invoice.id}`);
+    const response = await gotoInvoiceDetail(page, invoice.id);
     expect(response?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "Detail Invoice" })).toHaveCount(0);
     await expect(page.getByText(invoice.number)).toHaveCount(0);
@@ -95,7 +97,7 @@ test.describe("SEC-08 no CSP violation and no page error per page", () => {
     async ({ isolatedUser, guards }) => {
       const { page, factory } = isolatedUser;
       const invoice = await factory.createInvoice({ status: "SENT" });
-      await page.goto(`/app/invoices/${invoice.id}`, { waitUntil: "load" });
+      await gotoInvoiceDetail(page, invoice.id);
       await expect(page.getByRole("heading", { name: "Detail Invoice" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Pay Now" })).toBeVisible();
 
