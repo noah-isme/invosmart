@@ -463,6 +463,9 @@ export type PaymentAttemptView = {
   amount: number;
   currency: string;
   status: string;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
   invoice: { id: string; number: string; status: string };
   payments: Array<{ id: string; paidAmount: number; refundedAmount: number; paidCurrency: string; paidAt: string; gatewayStatus: string }>;
 };

@@ -203,6 +203,13 @@ const invoicePutBody = (w: World) => {
 // The per-resource verb table. 404 = "not found in your workspace"; there is
 // no workspace-collection route that answers 403 to a plain non-member (the
 // explicit-workspace 403s are in SEC-06 below).
+// Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+// @covers: /api/invoices/[id], /api/invoices/[id]/pdf, /api/invoices/[id]/send-email, /api/clients/[id]
+// @covers: /api/invoices/templates/[id], /api/invoices/templates/[id]/instantiate, /api/receipts/[id]/pdf
+// @covers: /api/receipts/[id]/audit, /api/payments/[attemptId], /api/workspaces/[id]/api-keys/[keyId]
+// @covers: /api/workspaces/[id]/reminder-rules/[ruleId], /api/workspaces/[id]/notifications/[endpointId]
+// @covers: /api/workspaces/[id]/invitations, /api/workspaces/[id]/members, /api/workspaces/[id]/api-keys
+// @covers: /api/workspaces/[id]/reminder-rules, /api/workspaces/[id]/notifications, /api/opt/variants/[experimentId]
 const ROWS: Row[] = [
   // Invoice
   { resource: "invoice", method: "GET", route: "/api/invoices/[id]", url: (w) => `/api/invoices/${w.invoice.id}`, expected: 404 },
@@ -415,6 +422,8 @@ test.describe("SEC-11 cross-workspace verb matrix", () => {
     expect(invitations).toContain(world.invitationEmail);
   });
 
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /api/invoices, /api/clients, /api/invoices/templates, /api/payments, /api/opt/experiments, /api/workspaces
   const LISTS = [
     { route: "/api/invoices", url: "/api/invoices" },
     { route: "/api/clients", url: "/api/clients" },
@@ -447,6 +456,8 @@ test.describe("SEC-11 cross-workspace verb matrix", () => {
     expectNoneOfA(csv, "export csv");
   });
 
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /api/admin/audit-logs, /api/admin/audit-log
   for (const route of ["/api/admin/audit-logs", "/api/admin/audit-log"]) {
     test(`SEC-11 B's audit log list ${route} never includes A's rows`, { annotation: covers(route) }, async () => {
       // A's actions are recorded under A's workspace (control, async writes).
@@ -547,6 +558,8 @@ test.describe("SEC-12 platform-admin gates (ADMIN_USER_IDS, not workspace role)"
 });
 
 test.describe("SEC-06 asking for another workspace explicitly is refused", () => {
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /api/invoices, /api/clients, /api/invoices/templates, /api/invoices/export, /api/admin/audit-logs, /api/opt/experiments
   const resources = [
     { route: "/api/invoices", url: "/api/invoices" },
     { route: "/api/clients", url: "/api/clients" },

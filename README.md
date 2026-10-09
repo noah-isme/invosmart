@@ -250,9 +250,23 @@ For a deep dive into the AI mechanics, refer to the following documentation:
 
 We ensure reliability through comprehensive testing:
 - **Unit Tests**: Powered by Vitest. Run using `npm run test`.
-- **E2E Tests**: Powered by Playwright. Run using `npm run test:e2e`.
-- **`e2e:build`**: runs `next build` with the fixed e2e `NEXT_PUBLIC_*` values and writes `.next/e2e-build.json` (a fingerprint of those values plus `git rev-parse HEAD`) so the Playwright config can detect a stale build. `next/font` fetches Google Fonts at build time, so `e2e:build` (like `npm run build`) needs network access.
+- **E2E Tests**: Powered by Playwright against a real in-memory Postgres (PGlite) and a local provider stub; no `.env`, database or provider account needed. Requires Node 24 and `npx playwright install chromium`.
+- **`e2e:build`**: runs `next build` with the fixed e2e `NEXT_PUBLIC_*` values and writes `.next/e2e-build.json` (a fingerprint of those values plus `git rev-parse HEAD`) so the Playwright config can detect a stale build. `next/font` fetches Google Fonts at build time, so `e2e:build` (like `npm run build`) needs network access. A plain `npm run build` removes the stamp.
 - **Coverage**: We maintain high coverage expectations across core business logic (`lib/`) and UI components (`components/`).
+
+```bash
+npm run e2e:build            # once per code change (~3 min); E2E_APP_PORT=<port> if 3000 is busy, same value for the run
+npm run test:e2e:smoke       # @smoke tier (PR gate)
+npm run test:e2e             # full local tier (everything except @staging)
+npm run test:integration     # Vitest DB integration layer (own PGlite)
+npm run test:e2e:contract    # no-DB browser contract gate
+npm run test:stub            # provider stub self-tests
+npm run test:db-support      # DB guard, schema helper and pglite-server filter tests
+npm run typecheck:e2e        # typecheck test/e2e and playwright.config.ts
+node scripts/e2e-coverage-check.mjs   # every page and API route has a scenario or a waiver
+```
+
+Architecture, environment, tiers, CI budgets, how to add a scenario and the known expected failures: [docs/E2E_TESTING.md](docs/E2E_TESTING.md).
 
 ---
 

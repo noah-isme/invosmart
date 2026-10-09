@@ -1,6 +1,7 @@
 // API-04 expired-key path. The workspace API rejects a past expiresAt on
 // create (app/api/workspaces/[id]/api-keys/route.ts superRefine), so the key
 // is created through the API with a future expiry and backdated in the DB.
+// @covers: /api/workspaces/[id]/api-keys, /api/v1/invoices (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { describe, expect, it, vi } from "vitest";
 
 import { POST as createApiKey } from "@/app/api/workspaces/[id]/api-keys/route";

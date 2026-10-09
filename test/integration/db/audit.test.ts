@@ -1,5 +1,6 @@
 // AUD-INT-01: the next-auth signIn event writes an AUTH_LOGIN_SUCCESS audit
 // entry with a null tenantId, so the workspace-scoped listing never shows it.
+// @covers: /api/admin/audit-logs (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { describe, expect, it, vi } from "vitest";
 
 import { GET as listAuditLogs } from "@/app/api/admin/audit-logs/route";

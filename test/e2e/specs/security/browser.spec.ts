@@ -75,6 +75,8 @@ test.describe("SEC-08 no CSP violation and no page error per page", () => {
     expect(guards.pageErrors.map((error) => error.message), "pageerror events").toEqual([]);
   };
 
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /, /auth/login, /app/dashboard, /app/admin/experiments
   const pages = [
     { path: "/", heading: /Suite invoicing premium/ },
     { path: "/auth/login", heading: "Masuk ke Invosmart" },

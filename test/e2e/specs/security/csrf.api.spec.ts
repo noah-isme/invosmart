@@ -123,6 +123,8 @@ test(
 );
 
 test.describe("SEC-09 signed webhooks are exempt from CSRF and answer their own signature failure", () => {
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /api/payments/stripe/webhook, /api/payments/midtrans/notification, /api/webhooks/resend
   const webhooks = [
     {
       path: "/api/payments/stripe/webhook",
@@ -174,6 +176,9 @@ test.describe("SEC-09 signed webhooks are exempt from CSRF and answer their own 
 });
 
 test.describe("SEC-10 other /api POSTs without CSRF are 403", () => {
+  // Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+  // @covers: /api/payments/midtrans/create, /api/payments/stripe/create-session, /api/invoices
+  // @covers: /api/workspaces/switch, /api/payments/stripe/webhook
   const routes = [
     { path: "/api/payments/midtrans/create", covers: "/api/payments/midtrans/create", data: { invoiceId: "sec10" } },
     { path: "/api/payments/stripe/create-session", covers: "/api/payments/stripe/create-session", data: { invoiceId: "sec10" } },

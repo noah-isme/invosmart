@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "typecheck:e2e": "tsc -p test/e2e/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test --grep-invert @staging",
     "release:check": "node scripts/release-certification.mjs --mode=ci",

@@ -1,0 +1,26 @@
+{
+  "$comment": "Routes without a scenario, read by scripts/e2e-coverage-check.mjs. status: waived (route exists, no scenario), no-route (the plan names a route that does not exist; the check fails if it appears), partial (route is covered, the reason names the untested parts). featureGap: true flags a missing product feature for the owner's decision. See docs/E2E_TESTING.md, Coverage check.",
+  "waivers": [
+    {
+      "route": "/api/auth/[...nextauth]",
+      "status": "partial",
+      "reason": "NextAuth internals: /api/auth/csrf, /callback/credentials, /session and /signin are exercised by the persona setup and AUTH specs (signout through the UI logout). The Google OAuth provider and its callback exist only when GOOGLE_CLIENT_ID/SECRET are set and are staging-only (AUTH-08 @staging); /providers, /error and /_log have no scenario of their own."
+    },
+    {
+      "route": "/app/workspace-invitations",
+      "status": "no-route",
+      "reason": "There is no invitations index page; only /app/workspace-invitations/accept exists (WS-04/WS-05). Invitation links (WorkspaceInvitationPanel.tsx) point at /accept?token=..., so nothing links to the index."
+    },
+    {
+      "route": "/receipts/[id]",
+      "status": "no-route",
+      "reason": "There is no public receipt page; receipts are viewed through /receipts/[id]/verify (RCP-03) and /api/receipts/[id]/pdf. The receipts page links to /verify only."
+    },
+    {
+      "route": "/api/workspaces/[id]",
+      "status": "no-route",
+      "featureGap": true,
+      "reason": "Workspace rename and delete are listed in feature F12 but there is no app/api/workspaces/[id]/route.ts (and no UI for them). WS-02 covers create and switch only. Owner decision: build rename/delete or drop them from the feature list."
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 // WS-INT-01 (invitation digest + expiry), WS-INT-02 (Slack endpoint
 // ciphertext + missing key) and the WS-14 compat legacy-row fallback.
+// @covers: /api/workspace-invitations/[token]/accept, /api/workspaces/[id]/invitations, /api/workspaces/[id]/notifications, /api/invoices (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

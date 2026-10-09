@@ -38,6 +38,9 @@ import { apiRequest } from "../../support/api-factories";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 
+// Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+// @covers: /devtools/ai-agents, /devtools/ai-audit, /devtools/ai-autonomy, /devtools/ai-federation
+// @covers: /devtools/ai-learning, /devtools/ai-tuning, /devtools/perf
 const DEVTOOLS_PAGES = [
   { path: "/devtools/ai-agents", heading: "AI Agent Orchestration" },
   { path: "/devtools/ai-audit", heading: "AI Audit Trail Explorer" },

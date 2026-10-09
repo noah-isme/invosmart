@@ -1,6 +1,7 @@
 // WS-INT-03 (one occurrence per invoice/rule after repeated cron runs) and
 // WS-12 (a 500 from Resend puts the delivery row in RETRY; once due it goes
 // to SENT on the same row). Resend is the provider stub (RESEND_BASE_URL).
+// @covers: /api/cron/reminders, /api/cron/reminder-delivery (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { GET as remindersCron } from "@/app/api/cron/reminders/route";

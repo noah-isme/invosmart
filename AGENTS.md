@@ -106,6 +106,16 @@ npm run test
 npm run build
 ```
 
+Pengujian end-to-end (Playwright dengan PGlite in-memory dan provider stub lokal; butuh Node 24 dan `npx playwright install chromium`):
+```bash
+npm run e2e:build          # build e2e (wajib sebelum Playwright; `npm run build` biasa menghapus stamp-nya)
+npm run test:e2e:smoke     # tier @smoke (gate PR)
+npm run test:e2e           # tier penuh (tanpa @staging)
+npm run test:integration   # lapisan integrasi DB (Vitest)
+node scripts/e2e-coverage-check.mjs   # setiap halaman dan rute API punya skenario atau waiver
+```
+Arsitektur, variabel lingkungan, tier, dan cara menambah skenario: [docs/E2E_TESTING.md](./docs/E2E_TESTING.md).
+
 ### Variabel Lingkungan Terkait Agen
 Tambahkan konfigurasi berikut ke `.env` Anda:
 ```bash

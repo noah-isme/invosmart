@@ -1,6 +1,7 @@
 // PAY-INT-01 (settlement replay) and PAY-INT-02 ("competing-webhooks").
 // Webhooks are forged with the providers' real signature algorithms and the
 // e2e secrets, and posted to the route handlers in-process.
+// @covers: /api/payments/midtrans/notification, /api/payments/stripe/webhook (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { describe, expect, it } from "vitest";
 
 import { POST as midtransNotification } from "@/app/api/payments/midtrans/notification/route";

@@ -123,6 +123,12 @@ const invoiceUpdateBody = (invoice: InvoiceRecord, notes: string) => ({
   currency: invoice.currency,
 });
 
+// Static mirror of the computed covers() argument below for scripts/e2e-coverage-check.mjs; keep in sync.
+// @covers: /api/invoices, /api/invoices/[id], /api/invoices/[id]/send-email, /api/payments/midtrans/create
+// @covers: /api/clients, /api/clients/[id], /api/invoices/templates, /api/receipts/create, /api/invoices/export
+// @covers: /api/workspaces/[id]/invitations, /api/workspaces/[id]/members/[membershipId], /api/workspaces/[id]/api-keys
+// @covers: /api/workspaces/[id]/api-keys/[keyId], /api/workspaces/[id]/notifications, /api/workspaces/[id]/reminder-rules
+// @covers: /api/admin/feature-flags, /api/opt/local/start, /api/workspaces/switch
 const OPERATIONS: Operation[] = [
   {
     name: "create invoice",
