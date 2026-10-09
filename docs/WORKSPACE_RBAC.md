@@ -8,7 +8,7 @@ The initial roles are:
 
 | Role | Capabilities |
 | --- | --- |
-| `OWNER` | All business operations, billing/settings, member administration, ownership transfer, and workspace deletion |
+| `OWNER` | All business operations, billing/settings, member administration, and ownership transfer |
 | `ADMIN` | Workspace settings, invitations, member management below owner, and all business operations |
 | `MEMBER` | Create and manage invoices, clients, templates, delivery, payments, exports, and analytics |
 | `VIEWER` | Read-only invoices, clients, templates, analytics, PDFs, and exports |

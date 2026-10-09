@@ -19,8 +19,7 @@
     {
       "route": "/api/workspaces/[id]",
       "status": "no-route",
-      "featureGap": true,
-      "reason": "Workspace rename and delete are listed in feature F12 but there is no app/api/workspaces/[id]/route.ts (and no UI for them). WS-02 covers create and switch only. Owner decision: build rename/delete or drop them from the feature list."
+      "reason": "Workspace rename and delete are intentionally out of scope (dropped from the feature list by the owner); there is no app/api/workspaces/[id]/route.ts and no UI. WS-02 covers create and switch. The waiver fails if the route file appears, so a future implementation must add scenarios."
     }
   ]
 }

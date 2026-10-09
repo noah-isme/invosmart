@@ -177,7 +177,7 @@ Waiver statuses:
 | `no-route` | The plan names a route that does not exist | Fails if the route file appears, so the waiver cannot hide a new route |
 | `partial` | The route is covered; the reason names the parts no scenario exercises | Fails if the route loses its scenarios |
 
-`featureGap: true` marks a missing product feature that needs an owner's decision; the report prints it. Current waivers: `/api/auth/[...nextauth]` (partial: Google OAuth is staging-only; `/providers`, `/error`, `/_log` untested), `/app/workspace-invitations` (no index page), `/receipts/[id]` (no page; `/verify` exists), `/api/workspaces/[id]` (no rename/delete route: feature gap).
+`featureGap: true` marks a missing product feature that needs an owner's decision; the report prints it. Current waivers: `/api/auth/[...nextauth]` (partial: Google OAuth is staging-only; `/providers`, `/error`, `/_log` untested), `/app/workspace-invitations` (no index page), `/receipts/[id]` (no page; `/verify` exists), `/api/workspaces/[id]` (no route: workspace rename and delete are intentionally out of scope).
 
 ## Adding a scenario
 
@@ -216,7 +216,7 @@ Recorded while building the suite; none is fixed by it.
 - `public/sw.js` precaches `/app/dashboard` on install. Signed out, that URL redirects to `/auth/login`, and the CSP's `upgrade-insecure-requests` turns the redirect into `https://localhost`, so on plain-http hosts `cache.addAll()` rejects and the worker goes redundant (PWA-01 runs signed in for this reason).
 - The dashboard lists only the newest 20 invoices with no pagination control (INV-10).
 - `/app/admin` (the hub) has no platform-admin gate, while three of the pages it links to do (`audit-logs` page, `uptime` and `feature-flags` layouts): a workspace owner sees the cards and is redirected to `/app` from the audit-logs card (ADM-01). Experiments and auto-actions are workspace-level.
-- Workspace rename and delete are in the feature list but have no route or UI (waiver `/api/workspaces/[id]`).
+- Workspace rename and delete are intentionally out of scope: there is no route or UI (waiver `/api/workspaces/[id]`, status `no-route`; it fails if the route appears).
 - `prisma migrate deploy` fails on a fresh database: `20260811171520_add_m0_phase2_models` adds an FK to `"Client"` before `20260813120000_workspace_rbac_foundation` creates it (`P3018`). A separate migration-repair task owns the fix.
 
 ## Known limitations
