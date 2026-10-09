@@ -149,7 +149,14 @@ export function createStub({ port = 0 } = {}) {
 
     const rule = takeRule(pathname);
     if (rule && rule.status !== undefined && rule.status !== null && !rule.fixture) {
-      return send(res, Number(rule.status), { error: { message: `forced ${rule.status} by e2e stub` } });
+      const status = Number(rule.status);
+      const message = `forced ${status} by e2e stub`;
+      // Resend's API puts statusCode/name/message at the top level of the
+      // error body (the SDK returns it as `error`); the others nest `error`.
+      if (pathname.startsWith("/resend/")) {
+        return send(res, status, { statusCode: status, name: "application_error", message });
+      }
+      return send(res, status, { error: { message } });
     }
 
     if (method === "POST" && pathname === "/v1/checkout/sessions") {

@@ -37,7 +37,15 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: true,
-    exclude: ["test/e2e/**/*.spec.ts", "test/e2e/**/*.test.mjs", "**/node_modules/**", "**/dist/**"],
+    exclude: [
+      "test/e2e/**/*.spec.ts",
+      // node:test suites (stub, DB guard, schema helper); not Vitest files.
+      "test/e2e/**/*.test.mjs",
+      // [INT] layer: real Prisma against its own pglite-server, run by vitest.integration.config.mts.
+      "test/integration/db/**",
+      "**/node_modules/**",
+      "**/dist/**",
+    ],
     sequence: {
       concurrent: false,
     },

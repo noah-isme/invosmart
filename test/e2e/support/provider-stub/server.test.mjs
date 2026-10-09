@@ -79,6 +79,18 @@ test("fixtures: force status for the next N calls then recover", async () => {
   assert.equal((await chat("a")).status, 200);
 });
 
+test("fixtures: a forced Resend status uses Resend's error body shape", async () => {
+  await post("/__fixtures", { target: "/resend/emails", status: 500 });
+  const forced = await post("/resend/emails", { to: "a@invosmart.test" });
+  assert.equal(forced.status, 500);
+  assert.deepEqual(await forced.json(), {
+    statusCode: 500,
+    name: "application_error",
+    message: "forced 500 by e2e stub",
+  });
+  assert.equal((await post("/resend/emails", { to: "a@invosmart.test" })).status, 200);
+});
+
 test("fixtures: force a fixture once", async () => {
   await post("/__fixtures", { target: "/openai", fixture: "theme-suggest" });
   assert.equal((await content(await chat("anything"))).label, "Stub Teal");

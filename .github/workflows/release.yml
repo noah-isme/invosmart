@@ -55,6 +55,14 @@ jobs:
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      # [INT] scenarios against an in-memory pglite-server started by the
+      # suite itself (E2E_DB_PORT+10); the job's placeholder DATABASE_URL is
+      # never used (the harness injects and guards its own loopback URL).
+      - name: Integration tests (PGlite)
+        run: npm run test:integration
+        env:
+          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
+          ENABLE_TELEMETRY: "false"
       - name: Build
         run: npm run build
         env:
