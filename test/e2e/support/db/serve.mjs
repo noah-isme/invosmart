@@ -1,4 +1,4 @@
-// In-memory pglite-server + schema + readiness HTTP endpoint.
+// In-memory pglite-server (pglite-server.mjs) + schema + readiness HTTP endpoint.
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import http from "node:http";
@@ -25,9 +25,14 @@ function logLine(stream, line) {
   if (logFile) appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
 }
 
+// pglite-server.mjs: the stock PGLiteSocketServer plus the ReadyForQuery
+// filter for electric-sql/pglite#958 (see the comment block in that file).
 const child = spawn(
-  resolve(repoRoot, "node_modules/.bin/pglite-server"),
-  ["-h", "127.0.0.1", "-p", String(dbPort), "-m", "1", "-d", "memory://"],
+  process.execPath,
+  [
+    resolve(repoRoot, "test/e2e/support/db/pglite-server.mjs"),
+    ...["-h", "127.0.0.1", "-p", String(dbPort), "-m", "1", "-d", "memory://"],
+  ],
   { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], env: { PATH: process.env.PATH, HOME: process.env.HOME } },
 );
 

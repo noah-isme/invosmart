@@ -4,7 +4,7 @@
 //    (shell, CI placeholder) or a repo .env can never be the target.
 // 3. Pre-creates the Prisma client that @/lib/db picks up from globalThis.__db,
 //    with the datasource URL passed explicitly, before any @/lib/db import.
-import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, inject } from "vitest";
 
 import { assertIntegrationDatabaseUrl, assertLoopbackStubUrl, buildIntegrationEnv } from "./env";
@@ -26,35 +26,9 @@ Object.assign(process.env, buildIntegrationEnv(databaseUrl, stubUrl));
 // One client for the whole fork (files run one after another): a stray
 // fire-and-forget write from a previous file reuses this client instead of
 // opening a second connection, which pglite-server -m 1 would refuse.
-//
-// PGlite workaround (harness only, no app code change): after any SQL error
-// in the extended protocol, pglite-server 0.2.11 / PGlite 0.5.8 sends two
-// ReadyForQuery messages (one after the ErrorResponse, one for Sync). The
-// Prisma engine treats the stray one as a protocol violation and closes the
-// connection, and the following queries fail with "Server has closed the
-// connection" until the pool reconnects (observed: 1 to 4 queries). Dropping
-// the pool right after a request error makes the next query reconnect
-// cleanly. App code paths that catch a unique violation and continue (for
-// example the reminder cron's idempotent occurrence insert) depend on it.
-const isRequestError = (error: unknown) =>
-  error instanceof Prisma.PrismaClientKnownRequestError ||
-  error instanceof Prisma.PrismaClientUnknownRequestError;
-
-const createClient = () => {
-  const base = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
-  return base.$extends({
-    query: {
-      async $allOperations({ args, query }) {
-        try {
-          return await query(args);
-        } catch (error) {
-          if (isRequestError(error)) await base.$disconnect().catch(() => undefined);
-          throw error;
-        }
-      },
-    },
-  }) as unknown as PrismaClient;
-};
+// Errors no longer drop the connection: pglite-server.mjs filters PGlite's
+// duplicate ReadyForQuery after an ErrorResponse (electric-sql/pglite#958).
+const createClient = () => new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
 if (!globals.__db) {
   globals.__db = createClient();

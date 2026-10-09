@@ -28,7 +28,7 @@
     "e2e:build": "node scripts/e2e-build.mjs",
     "e2e:db": "node test/e2e/support/db/serve.mjs",
     "test:stub": "node --test test/e2e/support/provider-stub/server.test.mjs",
-    "test:db-support": "node --test test/e2e/support/db/guard.test.mjs test/e2e/support/db/schema.test.mjs",
+    "test:db-support": "node --test test/e2e/support/db/guard.test.mjs test/e2e/support/db/schema.test.mjs test/e2e/support/db/pglite-server.test.mjs",
     "e2e:stub": "node test/e2e/support/provider-stub/server.mjs",
     "e2e:db:probe": "node test/e2e/support/db/probe.mjs",
     "e2e:report": "playwright show-report QA-report/html"

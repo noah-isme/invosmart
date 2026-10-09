@@ -38,8 +38,8 @@ describe("integration harness: database target", () => {
 });
 
 describe("integration harness: pglite error recovery", () => {
-  // See harness/setup.ts: without the pool reset, the queries after a SQL
-  // error fail with "Server has closed the connection".
+  // Without the ReadyForQuery filter in test/e2e/support/db/pglite-server.mjs,
+  // the queries after a SQL error fail with "Server has closed the connection".
   it("keeps working after repeated unique violations", async () => {
     const email = `int+dup-${Date.now()}@invosmart.test`;
     await db.user.create({ data: { email } });
