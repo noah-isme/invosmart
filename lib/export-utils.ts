@@ -8,16 +8,29 @@ export interface InvoiceExportData {
   currency?: string | null;
 }
 
+/** Leading characters that make spreadsheet apps evaluate a cell as a formula. */
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+
 /**
  * Escapes a cell value for CSV formatting per RFC 4180 rules.
  * If the value contains commas, double quotes, or line breaks,
  * it is wrapped in double quotes and any internal double quotes are doubled.
+ *
+ * CSV injection (OWASP): a STRING value starting with `=`, `+`, `-`, `@`, tab
+ * or carriage return is prefixed with a single quote so spreadsheet apps show
+ * it as text instead of evaluating it. Only strings are prefixed: numbers
+ * (the Total column is passed as a number) are written unchanged, so a
+ * negative amount stays a number. A text field that happens to start with
+ * `-` or `+` (e.g. "+62 811...") is prefixed too; that is intended.
  */
 export function escapeCSVCell(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
-  const str = String(value);
+  let str = String(value);
+  if (typeof value === "string" && FORMULA_TRIGGER.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }

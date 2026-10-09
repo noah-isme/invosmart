@@ -10,7 +10,8 @@
 //   workspace's invoices (workspaceScope), newest first, no row limit.
 // - CSV: header "Invoice Number,Client Name,Status,Issued Date,Due Date,Total,Currency",
 //   CRLF line breaks, RFC 4180 quoting only for '"', ',', CR, LF
-//   (escapeCSVCell); no formula neutralising (EXP-05). Dates are
+//   (escapeCSVCell); text cells starting with = + - @ TAB CR get a leading
+//   single quote (CSV injection, EXP-05). Dates are
 //   toISOString().split("T")[0], i.e. the UTC date (EXP-06).
 // - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text, served with the
 //   OOXML content type and an .xlsx file name (EXP-02 product bug).
@@ -194,18 +195,8 @@ test.describe("export", () => {
 
   test(
     "EXP-05 a formula-like client name is neutralised in the CSV (CSV injection)",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "CSV formula injection: escapeCSVCell only applies RFC 4180 quoting, so a client named =HYPERLINK(\"http://evil.example\",\"x\") is exported as \"=HYPERLINK(\"\"http://evil.example\"\",\"\"x\"\")\", which spreadsheet apps evaluate as a formula. Desired: cells starting with = + - @ TAB CR are prefixed (e.g. with ') so they are text.",
-        },
-      ],
-    },
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
-      test.fail(true, "product bug: CSV export does not neutralise formula cells (lib/export-utils.ts escapeCSVCell, momus-gated)");
       const { api, factory } = await newApiUser("exp05");
       const formula = '=HYPERLINK("http://evil.example","x")';
       const client = await factory.createClient({ name: formula });
@@ -221,10 +212,11 @@ test.describe("export", () => {
         { type: "observed-client-cell", description: record!["Client Name"] },
       );
 
-      // Desired: the parsed cell is not a formula (no leading = + - @ TAB CR)
-      // and still carries the original text.
+      // The parsed cell is not a formula (no leading = + - @ TAB CR): it is the
+      // original text behind a single-quote prefix (escapeCSVCell).
       expect(record!["Client Name"], "client cell must not start a formula").not.toMatch(/^[=+\-@\t\r]/);
-      expect(record!["Client Name"]).toContain("HYPERLINK");
+      expect(record!["Client Name"]).toBe(`'${formula}`);
+      expect(rawLine).toBe(`${invoice.number},"'=HYPERLINK(""http://evil.example"",""x"")",${record!.Status},${record!["Issued Date"]},${record!["Due Date"]},${invoice.total},IDR`);
     },
   );
 

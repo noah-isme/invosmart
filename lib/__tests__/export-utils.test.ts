@@ -38,6 +38,29 @@ describe("export-utils", () => {
       expect(escapeCSVCell(undefined)).toBe("");
       expect(escapeCSVCell(1500000)).toBe("1500000");
     });
+
+    it("prefixes formula-like strings with a single quote (CSV injection)", () => {
+      expect(escapeCSVCell("=1+1")).toBe("'=1+1");
+      expect(escapeCSVCell("+62 811 0000 0001")).toBe("'+62 811 0000 0001");
+      expect(escapeCSVCell("-Diskon")).toBe("'-Diskon");
+      expect(escapeCSVCell("@SUM(A1:A9)")).toBe("'@SUM(A1:A9)");
+      expect(escapeCSVCell("\tTab Co")).toBe("'\tTab Co");
+      // CR is also a line break, so the prefixed value is quoted as well.
+      expect(escapeCSVCell("\r=cmd")).toBe("\"'\r=cmd\"");
+      // Prefix first, then RFC 4180 quoting.
+      expect(escapeCSVCell('=HYPERLINK("http://evil.example","x")')).toBe(
+        '"\'=HYPERLINK(""http://evil.example"",""x"")"',
+      );
+    });
+
+    it("leaves numbers (including negative amounts) and inner formula characters alone", () => {
+      expect(escapeCSVCell(-250000)).toBe("-250000");
+      expect(escapeCSVCell(0)).toBe("0");
+      expect(escapeCSVCell("PT Maju = Jaya")).toBe("PT Maju = Jaya");
+      expect(escapeCSVCell("a@b.co")).toBe("a@b.co");
+      expect(escapeCSVCell("")).toBe("");
+      expect(escapeCSVCell("Ibu Siti Rahayu, Tbk.")).toBe('"Ibu Siti Rahayu, Tbk."');
+    });
   });
 
   describe("formatDateForExport", () => {
@@ -106,6 +129,23 @@ describe("export-utils", () => {
 
       expect(lines[2]).toBe(
         'INV-202608-002,"Global ""Tech"" Co",UNPAID,2026-08-02,,2500,USD',
+      );
+    });
+
+    it("neutralises formula-like text cells but keeps a negative Total numeric", () => {
+      const csv = exportToCSV([
+        {
+          number: "INV-202608-003",
+          client: '=HYPERLINK("http://evil.example","x")',
+          status: "PAID",
+          issuedAt: "2026-08-03",
+          dueAt: null,
+          total: -250000,
+          currency: "IDR",
+        },
+      ]);
+      expect(csv.split("\r\n")[1]).toBe(
+        'INV-202608-003,"\'=HYPERLINK(""http://evil.example"",""x"")",PAID,2026-08-03,,-250000,IDR',
       );
     });
 
