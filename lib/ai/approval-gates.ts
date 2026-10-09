@@ -32,6 +32,17 @@ const getQuotaLimit = () => {
   return Number.isNaN(parsed) ? 2 : parsed;
 };
 
+/**
+ * Auto-applied actions that consume the daily AI_SA_MAX_AUTOPUBLISH_PER_DAY
+ * quota. The scheduler records its auto-applies as SCHEDULE_UPDATE (see
+ * applyScheduleRecommendation in lib/ai/scheduler.ts); counting AUTOPUBLISH
+ * alone meant the quota was never consumed.
+ */
+export const QUOTA_ACTION_TYPES: readonly AutoActionType[] = [
+  AutoActionType.AUTOPUBLISH,
+  AutoActionType.SCHEDULE_UPDATE,
+];
+
 export const getAutoPublishUsage = async (organizationId?: string) => {
   if (!organizationId) {
     return { used: 0, remaining: 0, limit: 0 };
@@ -45,7 +56,7 @@ export const getAutoPublishUsage = async (organizationId?: string) => {
   const used = await db.aiAutoAction.count({
     where: {
       organizationId,
-      actionType: AutoActionType.AUTOPUBLISH,
+      actionType: { in: [...QUOTA_ACTION_TYPES] },
       createdAt: { gte: start, lt: end },
       status: AutoActionStatus.applied,
     },

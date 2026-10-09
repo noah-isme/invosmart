@@ -1,7 +1,12 @@
 import { AutoActionType, ExperimentAxis, ExperimentStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
-import { evaluateAutoPublish, logAutoAction } from "@/lib/ai/approval-gates";
+import {
+  evaluateAutoPublish,
+  getAutoPublishUsage,
+  logAutoAction,
+  type AutoPublishEvaluation,
+} from "@/lib/ai/approval-gates";
 import { getLatestGlobalSignals, trainGlobalSignals } from "@/lib/ai/content-global-optimizer";
 import { summariseExperiment } from "@/lib/ai/content-local-optimizer";
 
@@ -17,6 +22,9 @@ const DAY_MAP: Record<string, number> = {
 };
 
 const DAY_NAMES = Object.keys(DAY_MAP);
+
+export const NO_SERVER_RECOMMENDATION = "Tidak ada rekomendasi jadwal server untuk konten ini";
+export const SLOT_MISMATCH = "Jadwal tidak cocok dengan rekomendasi server";
 
 type ScheduleWindow = { day?: string; hour?: number; window?: string; timezone?: string };
 type ScheduleInsight = { day: string; hour: number; score?: number; support?: number };
@@ -176,6 +184,24 @@ const deriveFromGlobalSignals = async (organizationId?: string) => {
   };
 };
 
+type ScheduleCandidate = { day: string; hour: number; confidence: number; reason: string };
+
+/**
+ * The server-side schedule candidate for a content item: the best local
+ * SCHEDULE variant (its LinUCB confidence, updated by recordVariantPerformance),
+ * else the workspace's global schedule signals. This is the authoritative
+ * source of `confidence` for the approval gate.
+ */
+const resolveScheduleCandidate = async (
+  organizationId: string | undefined,
+  contentId: number,
+): Promise<{ candidate: ScheduleCandidate; source: "local" | "global" } | null> => {
+  const local = await findBestLocalSchedule(organizationId, contentId);
+  if (local) return { candidate: local, source: "local" };
+  const global = await deriveFromGlobalSignals(organizationId);
+  return global ? { candidate: global, source: "global" } : null;
+};
+
 export const recommendSchedule = async ({
   organizationId,
   contentId,
@@ -183,9 +209,10 @@ export const recommendSchedule = async ({
   organizationId?: string;
   contentId: number;
 }): Promise<ScheduleRecommendation | null> => {
-  const local = await findBestLocalSchedule(organizationId, contentId);
-  const candidate = local ?? (await deriveFromGlobalSignals(organizationId));
-  if (!candidate) return null;
+  const resolved = await resolveScheduleCandidate(organizationId, contentId);
+  if (!resolved) return null;
+  const { candidate, source } = resolved;
+  const local = source === "local" ? candidate : null;
 
   const next = nextOccurrence(candidate.day, candidate.hour);
   const evaluation = await evaluateAutoPublish({
@@ -204,7 +231,7 @@ export const recommendSchedule = async ({
     quotaRemaining: evaluation.quotaRemaining,
     limit: evaluation.limit,
     autoEligible: evaluation.decision === "auto",
-    source: local ? "local" : "global",
+    source,
   };
 };
 
@@ -221,11 +248,38 @@ export const applyScheduleRecommendation = async ({
   variantId?: number;
   recommendation: ScheduleRecommendation;
 }) => {
+  // Never trust the client's confidence: recompute the recommendation for
+  // this content on the server and gate on its confidence. The client may
+  // only auto-apply the slot the server recommends.
+  const resolved = await resolveScheduleCandidate(organizationId, contentId);
+  const notApplied = async (reason: string) => {
+    const usage = await getAutoPublishUsage(organizationId);
+    return {
+      applied: false,
+      evaluation: {
+        decision: "needs_approval",
+        reason,
+        quotaRemaining: usage.remaining,
+        limit: usage.limit,
+      } satisfies AutoPublishEvaluation,
+      message: reason,
+    } as const;
+  };
+
+  if (!resolved) {
+    return notApplied(NO_SERVER_RECOMMENDATION);
+  }
+
+  const { candidate } = resolved;
+  if (candidate.day !== recommendation.day || candidate.hour !== recommendation.hour) {
+    return notApplied(SLOT_MISMATCH);
+  }
+
   const evaluation = await evaluateAutoPublish({
     organizationId,
     axis: ExperimentAxis.SCHEDULE,
-    confidence: recommendation.confidence,
-    sampleSize: Math.max(Math.round(recommendation.confidence * 120), 60),
+    confidence: candidate.confidence,
+    sampleSize: Math.max(Math.round(candidate.confidence * 120), 60),
   });
 
   if (evaluation.decision !== "auto") {
@@ -242,7 +296,7 @@ export const applyScheduleRecommendation = async ({
     contentId,
     experimentId,
     variantId,
-    confidence: recommendation.confidence,
+    confidence: candidate.confidence,
     reason: `Auto schedule ${recommendation.day} ${recommendation.hour}:00 — ${recommendation.reason}`,
   });
 
