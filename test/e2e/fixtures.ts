@@ -105,6 +105,8 @@ function bindFactories(request: APIRequestContext) {
     getPaymentAttempt: bind(factories.getPaymentAttempt),
     payInvoiceViaMidtrans: bind(factories.payInvoiceViaMidtrans),
     payInvoiceViaStripe: bind(factories.payInvoiceViaStripe),
+    createReceipt: bind(factories.createReceipt),
+    createExperiment: bind(factories.createExperiment),
   };
 }
 export type Factory = ReturnType<typeof bindFactories> & {
@@ -266,6 +268,8 @@ export type BrowserSession = {
 
 export type PersonaSession = BrowserSession & { persona: E2ePersona; email: string };
 export type IsolatedUser = BrowserSession & { user: LoggedInUser };
+/** A fresh logged-in user with a workspace, request-only (no browser). */
+export type ApiUser = { user: LoggedInUser; api: Api; factory: ReturnType<typeof bindFactories> };
 
 type ContextDefaults = Pick<
   BrowserContextOptions,
@@ -283,6 +287,8 @@ type Fixtures = {
   payments: Payments;
   persona: (persona: E2ePersona) => Promise<PersonaSession>;
   isolatedUser: IsolatedUser;
+  /** Create fresh request-only users (each its own cookie jar and workspace); usable in the `api` project. */
+  newApiUser: (tag?: string) => Promise<ApiUser>;
   guards: Guards;
   /** Option-shaped defaults used for contexts the fixtures create. */
   _contextDefaults: ContextDefaults;
@@ -420,6 +426,16 @@ export const test = base.extend<Fixtures>({
     });
     const context = await _newBrowserContext(await request.storageState());
     await use({ user, context, page: await context.newPage(), api: makeApi(request, guards.checkApiResponse), factory: bindFactories(request) });
+  },
+
+  newApiUser: async ({ guards, _newRequestContext }, use, testInfo) => {
+    await use(async (tag = "api-user") => {
+      const request = await _newRequestContext({ cookies: [], origins: [] });
+      const user = await factories.registerAndLogin(request, {
+        email: factories.uniqueEmail(`${tag}-${testInfo.workerIndex}`),
+      });
+      return { user, api: makeApi(request, guards.checkApiResponse), factory: bindFactories(request) };
+    });
   },
 });
 

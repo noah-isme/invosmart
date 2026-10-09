@@ -648,3 +648,55 @@ export async function payInvoiceViaStripe(
   );
   return paidInvoice(await getPaymentAttempt(request, created.attemptId), "payInvoiceViaStripe");
 }
+
+// ---------------------------------------------------------------------------
+// Receipts and experiments
+// ---------------------------------------------------------------------------
+
+export type ReceiptRecord = { receiptId: string; receiptNo: string; verifyToken: string };
+
+/**
+ * POST /api/receipts/create (201) for a Payment row id (PaidInvoice.paymentId).
+ * Needs ENABLE_RECEIPTS=true (set by playwright.env.ts).
+ */
+export async function createReceipt(
+  request: APIRequestContext,
+  paymentId: string,
+  input: { positionPreset?: "bottom-left" | "bottom-right" | "center" } = {},
+): Promise<ReceiptRecord> {
+  return expectJson<ReceiptRecord>(
+    await apiRequest(request, "POST", "/api/receipts/create", {
+      data: { paymentId, positionPreset: input.positionPreset ?? "bottom-right" },
+    }),
+    201,
+    "POST /api/receipts/create",
+  );
+}
+
+export type ExperimentAxis = "HOOK" | "CAPTION" | "CTA" | "SCHEDULE";
+export type ExperimentRecord = {
+  experiment: Json & { id: number; organizationId: string | null; contentId: number; axis: ExperimentAxis };
+  variants: Array<Json & { id: number; variantKey: string }>;
+};
+
+/**
+ * POST /api/opt/local/start (200) in the caller's active workspace. `contentId`
+ * is a free integer (no FK); it defaults to a random one.
+ */
+export async function createExperiment(
+  request: APIRequestContext,
+  input: { contentId?: number; axis?: ExperimentAxis; baseline?: Json } = {},
+): Promise<ExperimentRecord> {
+  const body = await expectJson<{ experiment: ExperimentRecord }>(
+    await apiRequest(request, "POST", "/api/opt/local/start", {
+      data: {
+        contentId: input.contentId ?? Math.floor(Math.random() * 1_000_000_000),
+        axis: input.axis ?? "HOOK",
+        baseline: input.baseline ?? { hook: `E2E baseline ${randomTag()}` },
+      },
+    }),
+    200,
+    "POST /api/opt/local/start",
+  );
+  return body.experiment;
+}
