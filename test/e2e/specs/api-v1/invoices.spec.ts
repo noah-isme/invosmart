@@ -272,10 +272,8 @@ test.describe("public API v1 invoices", () => {
 
       expect(limited, `a 429 within ${cap} requests`).toBeDefined();
       test.info().annotations.push({ type: "observed", description: `first 429 at request #${sent} with x-ratelimit-limit ${limit}` });
-      // The window admits only limit - 1 requests (API-07b records that as a
-      // product bug); accept either boundary here so API-07 tests the 429 contract.
-      expect(sent, "the 429 arrives once the limit is used up").toBeGreaterThanOrEqual(limit);
-      expect(sent).toBeLessThanOrEqual(limit + 1);
+      // The window admits exactly `limit` requests (API-07b); the next is refused.
+      expect(sent, "the 429 arrives once the limit is used up").toBe(limit + 1);
       const headers = limited!.headers();
       expect(Number(headers["retry-after"])).toBeGreaterThanOrEqual(1);
       expect(Number(headers["retry-after"])).toBeLessThanOrEqual(60);
@@ -290,16 +288,12 @@ test.describe("public API v1 invoices", () => {
   );
 
   test(
-    "API-07b a key may send x-ratelimit-limit requests in one window before the first 429",
-    { annotation: [{ type: EXPECTS_429, description: "the boundary request is refused (product bug)" }, ...covers(INVOICES)] },
+    "API-07b a key may send x-ratelimit-limit requests in one window; the next one is the first 429",
+    { annotation: [{ type: EXPECTS_429, description: "the request after the limit is refused" }, ...covers(INVOICES)] },
     async ({ newApiUser, guards, _newRequestContext }) => {
-      // PRODUCT BUG (off by one), lib/api-v1/rate-limit.ts: consumeLocal() counts
-      // the request first and isRateLimited() refuses when remaining <= 0, so the
-      // request that brings the count to `limit` is already a 429. With
-      // x-ratelimit-limit 120 only 119 requests succeed, and request #119 reports
-      // x-ratelimit-remaining 1 although the next one is refused. Observed in
-      // API-07: "first 429 at request #120 with x-ratelimit-limit 120".
-      test.fail(true, "lib/api-v1/rate-limit.ts refuses the limit-th request (off by one)");
+      // lib/api-v1/rate-limit.ts counts the request first, so the limit-th
+      // request leaves remaining 0 and is still admitted (isRateLimited:
+      // remaining < 0).
       const owner = await newApiUser("api07b");
       const { token } = await owner.factory.createApiKey(orgOf(owner), { scopes: ["invoices:read"] });
       const v1 = v1Client(await _newRequestContext({ cookies: [], origins: [] }), token, guards);
@@ -310,7 +304,14 @@ test.describe("public API v1 invoices", () => {
       for (let sent = 2; sent <= limit; sent += 1) {
         const response = await v1.fetch("GET", `${INVOICES}?limit=1`);
         expect(response.status(), `request #${sent} of ${limit}`).toBe(200);
+        expect(response.headers()["x-ratelimit-remaining"], `remaining after request #${sent}`).toBe(String(limit - sent));
       }
+
+      const over = await v1.fetch("GET", `${INVOICES}?limit=1`);
+      expect(over.status(), `request #${limit + 1}`).toBe(429);
+      expect(over.headers()["x-ratelimit-limit"]).toBe(String(limit));
+      expect(over.headers()["x-ratelimit-remaining"]).toBe("0");
+      expect(await errorCode(over)).toBe("RATE_LIMITED");
     },
   );
 });
