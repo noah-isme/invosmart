@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 
 import { Skeleton, SkeletonText } from "@/components/ui/Skeleton";
-import { canViewPerfTools, getPerfToolsSampleRate } from "@/lib/devtools/access";
+import { isPlatformAdmin, getPerfToolsSampleRate } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 import PerfDashboardClient from "./PerfDashboardClient";
@@ -38,7 +38,7 @@ function PerfDashboardSkeleton() {
 export default async function PerfToolsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

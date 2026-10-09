@@ -5,13 +5,13 @@ import AiTuningClient from "@/app/devtools/ai-tuning/AiTuningClient";
 import { getLatestExplanationsMap } from "@/lib/ai/explain";
 import { getLatestRecommendations, getOptimizationHistory } from "@/lib/ai/optimizer";
 import { getTrustScore } from "@/lib/ai/trustScore";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 export default async function AiTuningPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 
@@ -20,8 +20,6 @@ export default async function AiTuningPage() {
     getOptimizationHistory({ limit: 50 }),
     getTrustScore(),
   ]);
-
-  const actor = session?.user?.email ?? session?.user?.name ?? "admin";
 
   const recommendationIds = recommendations.map((entry) => entry.id);
   const explanationsMap = await getLatestExplanationsMap(recommendationIds);
@@ -54,7 +52,6 @@ export default async function AiTuningPage() {
       <AiTuningClient
         initialRecommendations={recommendations.map(serialize)}
         history={history.map(serialize)}
-        actor={actor}
         explanations={serializedExplanations}
         trustScore={trust.score}
       />

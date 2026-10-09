@@ -7,7 +7,7 @@ import {
   getUptimeHistory,
   runUptimeChecks,
 } from "@/lib/monitoring/uptime";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

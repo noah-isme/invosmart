@@ -1,32 +1,56 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { getFederationAgent } from "@/lib/ai/federationAgent";
 import { federationBus } from "@/lib/federation/bus";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
-const isAuthorised = async (request: Request) => {
-  const secret = process.env.FEDERATION_TOKEN_SECRET;
-  if (!secret) return true;
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest();
 
-  const header = request.headers.get("authorization") ?? "";
-  if (!header.toLowerCase().startsWith("bearer")) return false;
+// Hash both sides so the buffers always have equal length (timingSafeEqual
+// throws otherwise) and the comparison does not leak the secret's length.
+const bearerMatchesSecret = (header: string, secret: string) => {
+  if (!/^bearer\s/i.test(header)) return false;
   const token = header.slice("bearer".length).trim();
-  if (token === secret) return true;
-
-  const session = await getServerSession(authOptions);
-  if (session && canViewPerfTools(session)) {
-    return true;
-  }
-
-  return false;
+  if (!token) return false;
+  return timingSafeEqual(sha256(token), sha256(secret));
 };
 
-export async function GET(request: Request) {
-  if (!(await isAuthorised(request))) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+let warnedMissingSecret = false;
+
+// Peers authenticate with the shared FEDERATION_TOKEN_SECRET as a bearer token;
+// DevTools users authenticate with a platform-admin session. When no secret is
+// configured the bearer path is disabled (fail closed), never open.
+const authorise = async (request: Request): Promise<"ok" | "unauthenticated" | "forbidden"> => {
+  const secret = process.env.FEDERATION_TOKEN_SECRET?.trim();
+
+  if (!secret) {
+    if (!warnedMissingSecret && process.env.NODE_ENV === "production") {
+      warnedMissingSecret = true;
+      console.warn(
+        "[security] FEDERATION_TOKEN_SECRET is not set: /api/federation/status only accepts platform-admin sessions and peer bearer auth is disabled.",
+      );
+    }
+  } else if (bearerMatchesSecret(request.headers.get("authorization") ?? "", secret)) {
+    return "ok";
   }
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return "unauthenticated";
+  return isPlatformAdmin(session) ? "ok" : "forbidden";
+};
+
+const deny = (outcome: "unauthenticated" | "forbidden") =>
+  outcome === "forbidden"
+    ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    : NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+
+export async function GET(request: Request) {
+  const outcome = await authorise(request);
+  if (outcome !== "ok") return deny(outcome);
 
   if (federationBus.isEnabled) {
     await federationBus.checkConnections();
@@ -52,9 +76,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await isAuthorised(request))) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
+  const outcome = await authorise(request);
+  if (outcome !== "ok") return deny(outcome);
 
   const agent = getFederationAgent();
   await agent.broadcastLocalSnapshot();

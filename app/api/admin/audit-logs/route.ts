@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
   const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50;
   const skip = skipParam ? Math.max(parseInt(skipParam, 10) || 0, 0) : 0;
 
+  // Without an organization the query is limited to the caller's own rows, so
+  // a different userId filter is a cross-user read attempt.
+  if (!workspace.organizationId && userId && userId !== session.user.id) {
+    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  }
+
   const where: Record<string, unknown> = workspace.organizationId
     ? { tenantId: workspace.organizationId }
     : { userId: session.user.id };

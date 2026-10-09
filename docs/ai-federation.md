@@ -139,8 +139,12 @@ connected tenant:
 
 ## Validation & Operations Notes
 
-- The `/api/federation/status` endpoint enforces bearer token validation and falls back to authenticated DevTools
-  sessions. Manual re-sync POSTs trigger a fresh snapshot, enabling controlled synchronisation during incident response.
+- The `/api/federation/status` endpoint accepts either a peer bearer token equal to `FEDERATION_TOKEN_SECRET`
+  (constant-time comparison) or a platform-admin session (`ADMIN_USER_IDS`). If `FEDERATION_TOKEN_SECRET` is unset or
+  blank the bearer path is disabled and only platform-admin sessions are accepted; it never allows anonymous access.
+  Side effect: a peer that runs without a shared secret (RSA-key-only federation) sends an empty bearer (`Bearer `), which
+  is now rejected, so `checkConnections()` reports that peer as "down". Configure `FEDERATION_TOKEN_SECRET` on both
+  sides for peer status checks to succeed. Manual re-sync POSTs trigger a fresh snapshot, enabling controlled synchronisation during incident response.
 - `ENABLE_AI_FEDERATION=true` activates the bus singleton and registers `FederationAgent` with the Orchestrator registry.
 - All dashboards and tests run with deterministic in-memory bus behaviour during CI (`NODE_ENV=test`).
 - Lint (`npm run lint`), unit tests (`npm run test`), and build (`npm run build`) must pass with

@@ -6,7 +6,7 @@ import AiFederationClient, {
 } from "@/app/devtools/ai-federation/AiFederationClient";
 import { getFederationAgent } from "@/lib/ai/federationAgent";
 import { federationBus } from "@/lib/federation/bus";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 export const metadata = {
@@ -16,7 +16,7 @@ export const metadata = {
 export default async function AiFederationPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

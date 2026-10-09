@@ -3,12 +3,12 @@ import { getServerSession } from "next-auth";
 
 import { withSpan } from "@/lib/tracing";
 import { authOptions } from "@/server/auth";
-import { canViewPerfTools, getPerfToolsSampleRate } from "@/lib/devtools/access";
+import { isPlatformAdmin, getPerfToolsSampleRate } from "@/lib/devtools/access";
 
 const ensureAuthorised = async () => {
   const session = await getServerSession(authOptions);
 
-  return { session, authorised: canViewPerfTools(session) } as const;
+  return { session, authorised: isPlatformAdmin(session) } as const;
 };
 
 const generateTimeseries = (routes: string[], end: Date, minutes: number) => {

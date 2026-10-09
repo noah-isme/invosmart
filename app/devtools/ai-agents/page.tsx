@@ -8,7 +8,7 @@ import {
   listRegisteredAgents,
   resolveConflict,
 } from "@/lib/ai/orchestrator";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 const buildConflictSummary = (events: Awaited<ReturnType<typeof getOrchestratorSnapshot>>["events"]) => {
@@ -30,7 +30,7 @@ const buildConflictSummary = (events: Awaited<ReturnType<typeof getOrchestratorS
 export default async function AiAgentsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

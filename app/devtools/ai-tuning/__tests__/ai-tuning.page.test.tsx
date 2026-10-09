@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/devtools/access", () => ({
-  canViewPerfTools: () => true,
+  isPlatformAdmin: () => true,
 }));
 
 vi.mock("@/lib/ai/optimizer", () => {

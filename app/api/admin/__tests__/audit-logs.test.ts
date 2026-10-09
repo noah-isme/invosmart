@@ -80,7 +80,7 @@ describe("GET /api/admin/audit-logs", () => {
     vi.mocked(db.auditLog.findMany).mockResolvedValue([]);
     vi.mocked(db.auditLog.count).mockResolvedValue(0);
 
-    const url = "http://localhost:3000/api/admin/audit-logs?action=INVOICE_CREATE&entity=Invoice&userId=usr_1&tenantId=tenant_a&fromDate=2026-01-01T00:00:00Z&toDate=2026-08-11T00:00:00Z&limit=10&skip=20";
+    const url = "http://localhost:3000/api/admin/audit-logs?action=INVOICE_CREATE&entity=Invoice&userId=admin_1&tenantId=tenant_a&fromDate=2026-01-01T00:00:00Z&toDate=2026-08-11T00:00:00Z&limit=10&skip=20";
     const request = new NextRequest(url);
     const response = await GET(request);
     const body = await response.json();
@@ -93,7 +93,7 @@ describe("GET /api/admin/audit-logs", () => {
       where: expect.objectContaining({
         action: "INVOICE_CREATE",
         entity: "Invoice",
-        userId: "usr_1",
+        userId: "admin_1",
         tenantId: "tenant_a",
         createdAt: {
           gte: expect.any(Date),
@@ -113,6 +113,18 @@ describe("GET /api/admin/audit-logs", () => {
         },
       },
     });
+  });
+
+  it("rejects a userId filter for another user in a legacy (no organization) context", async () => {
+    getServerSessionMock.mockResolvedValue({
+      user: { id: "admin_1", email: "admin@invosmart.id" },
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/admin/audit-logs?userId=usr_victim");
+    const response = await GET(request);
+
+    expect(response.status).toBe(403);
+    expect(db.auditLog.findMany).not.toHaveBeenCalled();
   });
 
   it("returns 500 when database query throws an error", async () => {
