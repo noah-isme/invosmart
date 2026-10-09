@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
 import { db } from '@/lib/db';
 import { logAuditEvent, AuditAction, AuditEntity } from '@/lib/audit/auditLogger';
-import { fromGatewayMinorUnit } from '@/lib/payments/money';
+import { fromStripeMinorUnit } from '@/lib/payments/money';
 import {
   PAYMENT_ATTEMPT_STATUS,
   PAYMENT_PROVIDERS,
@@ -60,7 +60,7 @@ function getStripeAmountAndCurrency(
   // attempt itself is immutable, while paid/refunded events remain strict.
   const actualAmount = rawAmount === null || rawAmount === undefined
     ? undefined
-    : fromGatewayMinorUnit(Number(rawAmount), expectedCurrency);
+    : fromStripeMinorUnit(Number(rawAmount), expectedCurrency);
   const actualCurrency = rawCurrency || (status === PAYMENT_ATTEMPT_STATUS.SETTLED || status === PAYMENT_ATTEMPT_STATUS.REFUNDED ? undefined : expectedCurrency);
   return { actualAmount, actualCurrency };
 }
@@ -302,7 +302,7 @@ export async function POST(request: Request) {
 
       const refundAmountForMarker = payload.amount_refunded === undefined
         ? undefined
-        : fromGatewayMinorUnit(Number(payload.amount_refunded), txAttempt.currency);
+        : fromStripeMinorUnit(Number(payload.amount_refunded), txAttempt.currency);
       if (
         marker && isRefund && refundAmountForMarker !== undefined &&
         isFullyRefunded(txAttempt.amount, refundAmountForMarker)
@@ -337,7 +337,7 @@ export async function POST(request: Request) {
         if (!payment) throw new PaymentLifecycleError(409, 'Refund received before settlement');
         const amountRefunded = payload.amount_refunded === undefined
           ? undefined
-          : fromGatewayMinorUnit(Number(payload.amount_refunded), txAttempt.currency);
+          : fromStripeMinorUnit(Number(payload.amount_refunded), txAttempt.currency);
         const refundedAmount = calculateRefundedAmount({
           paidAmount: payment.paidAmount,
           currentRefundedAmount: payment.refundedAmount,

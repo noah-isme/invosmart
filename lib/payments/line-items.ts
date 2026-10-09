@@ -1,10 +1,11 @@
-import { toGatewayMinorUnit } from '@/lib/payments/money';
+import { toStripeMinorUnit } from '@/lib/payments/money';
 
 /**
  * Invoice line items are persisted as `{ name, qty, price }` (see
  * InvoiceItemSchema in lib/schemas.ts). Invoice amounts (price, tax, total)
- * are stored in the app's whole-number unit: IDR/JPY are zero-decimal, other
- * currencies are stored in major units and converted with toGatewayMinorUnit.
+ * are stored in the currency's major unit (whole rupiah for IDR). Midtrans
+ * takes them as is; Stripe amounts are converted with toStripeMinorUnit, which
+ * follows Stripe's own currency table (IDR is two-decimal on Stripe).
  */
 type StoredInvoiceItem = { id?: unknown; name?: unknown; qty?: unknown; price?: unknown };
 
@@ -89,7 +90,7 @@ export type StripeLineItem = {
 
 /**
  * Build Stripe Checkout `line_items` whose sum equals
- * `toGatewayMinorUnit(invoice.total)` (the amount_total the webhook verifies).
+ * `toStripeMinorUnit(invoice.total)` (the amount_total the webhook verifies).
  * Stripe cannot take a negative unit_amount, so a negative remainder (or an
  * invoice without usable items) falls back to a single invoice-total line.
  */
@@ -102,12 +103,12 @@ export function buildStripeLineItems(invoice: PayableInvoice): StripeLineItem[] 
   });
 
   const lines = normalizeItems(invoice.items).map((item) =>
-    line(item.name, toGatewayMinorUnit(item.price, currency), item.qty));
+    line(item.name, toStripeMinorUnit(item.price, currency), item.qty));
 
-  const tax = toGatewayMinorUnit(invoice.tax || 0, currency);
+  const tax = toStripeMinorUnit(invoice.tax || 0, currency);
   if (tax > 0) lines.push(line('Tax', tax));
 
-  const expected = toGatewayMinorUnit(invoice.total, currency);
+  const expected = toStripeMinorUnit(invoice.total, currency);
   const sum = lines.reduce((acc, item) => acc + item.price_data.unit_amount * item.quantity, 0);
   const remainder = expected - sum;
   if (lines.length > 0 && remainder === 0) return lines;

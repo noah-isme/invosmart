@@ -93,15 +93,35 @@ describe('create routes send correct line items', () => {
 
     const params = mocks.createSession.mock.calls[0][0];
     const lines = params.line_items as Array<{ price_data: { unit_amount: number }; quantity: number }>;
+    // IDR is two-decimal on Stripe: Rp500,000 is 50000000.
     expect(lines.map((l) => [l.price_data.unit_amount, l.quantity])).toEqual([
-      [500_000, 2],
-      [250_000, 1],
-      [125_000, 1],
+      [50_000_000, 2],
+      [25_000_000, 1],
+      [12_500_000, 1],
     ]);
-    expect(lines.reduce((acc, l) => acc + l.price_data.unit_amount * l.quantity, 0)).toBe(1_375_000);
+    expect(lines.reduce((acc, l) => acc + l.price_data.unit_amount * l.quantity, 0)).toBe(137_500_000);
     // Refund events (charge.refunded) carry the PaymentIntent metadata.
     expect(params.payment_intent_data).toEqual({
       metadata: { attemptId: expect.any(String), invoiceId: 'invoice-1' },
     });
+  });
+
+  it('Midtrans: rejects a non-IDR invoice with 422 before creating an attempt or transaction', async () => {
+    mocks.db.invoice.findFirst.mockResolvedValue({ ...invoice, currency: 'USD' });
+
+    const response = await midtransCreate(post('/api/payments/midtrans/create'));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Midtrans only supports IDR invoices' });
+    expect(mocks.db.paymentAttempt.create).not.toHaveBeenCalled();
+    expect(mocks.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('Midtrans: accepts a lowercase idr currency', async () => {
+    mocks.db.invoice.findFirst.mockResolvedValue({ ...invoice, currency: 'idr' });
+
+    const response = await midtransCreate(post('/api/payments/midtrans/create'));
+
+    expect(response.status).toBe(200);
   });
 });

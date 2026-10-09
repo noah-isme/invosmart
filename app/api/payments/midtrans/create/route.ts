@@ -67,6 +67,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice is already paid' }, { status: 409 });
     }
 
+    // Midtrans amounts are whole rupiah; gross_amount carries no currency, so
+    // any other currency would be charged as IDR.
+    if (invoice.currency.toUpperCase() !== 'IDR') {
+      return NextResponse.json({ error: 'Midtrans only supports IDR invoices' }, { status: 422 });
+    }
+
     const requestedIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
     const now = new Date();
     const activeAttempt = await db.paymentAttempt.findFirst({

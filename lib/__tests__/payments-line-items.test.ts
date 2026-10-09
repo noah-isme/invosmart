@@ -87,16 +87,28 @@ describe('buildStripeLineItems', () => {
   const stripeSum = (rows: ReturnType<typeof buildStripeLineItems>) =>
     rows.reduce((acc, row) => acc + row.price_data.unit_amount * row.quantity, 0);
 
-  it('uses real item prices and adds tax so the sum equals the invoice total (IDR is zero-decimal)', () => {
+  it('sends IDR in Stripe minor units (x100) and the sum equals the invoice total', () => {
     const rows = buildStripeLineItems(twoItemInvoice);
 
     expect(rows.map((row) => [row.price_data.product_data.name, row.price_data.unit_amount, row.quantity])).toEqual([
-      ['Website design', 500_000, 2],
-      ['Hosting', 250_000, 1],
-      ['Tax', 125_000, 1],
+      ['Website design', 50_000_000, 2],
+      ['Hosting', 25_000_000, 1],
+      ['Tax', 12_500_000, 1],
     ]);
     expect(rows.every((row) => row.price_data.currency === 'idr')).toBe(true);
-    expect(stripeSum(rows)).toBe(1_375_000);
+    expect(stripeSum(rows)).toBe(137_500_000);
+  });
+
+  it('keeps zero-decimal currencies (JPY) unmultiplied', () => {
+    const rows = buildStripeLineItems({
+      number: 'INV-JPY',
+      currency: 'JPY',
+      items: [{ name: 'Consulting', qty: 2, price: 5000 }],
+      tax: 1000,
+      total: 11_000,
+    });
+    expect(rows.map((row) => row.price_data.unit_amount)).toEqual([5000, 1000]);
+    expect(stripeSum(rows)).toBe(11_000);
   });
 
   it('converts to cents for two-decimal currencies', () => {
@@ -114,15 +126,15 @@ describe('buildStripeLineItems', () => {
 
   it('adds a positive rounding adjustment line', () => {
     const rows = buildStripeLineItems({ ...twoItemInvoice, total: 1_375_002 });
-    expect(rows.at(-1)?.price_data.unit_amount).toBe(2);
-    expect(stripeSum(rows)).toBe(1_375_002);
+    expect(rows.at(-1)?.price_data.unit_amount).toBe(200);
+    expect(stripeSum(rows)).toBe(137_500_200);
   });
 
   it('falls back to a single total line when the remainder is negative', () => {
     const rows = buildStripeLineItems({ ...twoItemInvoice, total: 1_374_990 });
     expect(rows).toHaveLength(1);
     expect(rows[0].price_data.product_data.name).toBe('Invoice INV-001');
-    expect(stripeSum(rows)).toBe(1_374_990);
+    expect(stripeSum(rows)).toBe(137_499_000);
   });
 });
 

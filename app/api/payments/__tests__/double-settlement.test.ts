@@ -195,7 +195,7 @@ function stripeRequest(eventId: string, type = 'checkout.session.completed', obj
         id: 'cs_late',
         object: 'checkout.session',
         payment_status: 'paid',
-        amount_total: TOTAL,
+        amount_total: TOTAL * 100, // Stripe minor units: IDR is two-decimal
         currency: 'idr',
         payment_intent: 'pi_late',
         metadata: { invoiceId: 'invoice-1', attemptId: 'attempt-late' },
@@ -225,8 +225,8 @@ function chargeRefundRequest(eventId: string, paymentIntent: string) {
         id: 'ch_1',
         object: 'charge',
         payment_intent: paymentIntent,
-        amount: TOTAL,
-        amount_refunded: TOTAL,
+        amount: TOTAL * 100,
+        amount_refunded: TOTAL * 100,
         currency: 'idr',
         metadata: {},
       },
@@ -547,5 +547,18 @@ describe('double settlement across providers', () => {
     expect(state.store.payments).toHaveLength(1);
     expect(state.store.payments[0].id).toBe('payment-winner');
     expect(state.store.payments[0].refundedAmount).toBeUndefined();
+  });
+
+  it('Stripe: rejects an IDR amount_total that is the whole-rupiah value instead of Stripe minor units', async () => {
+    seed('UNPAID', 'stripe');
+
+    const response = await stripeWebhook(stripeRequest('evt_wrong_unit', 'checkout.session.completed', {
+      amount_total: TOTAL, // Rp1,500.00 in Stripe terms, not Rp150,000
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Payment amount does not match invoice' });
+    expect(state.store.payments).toHaveLength(0);
+    expect(state.store.invoice.status).toBe('UNPAID');
   });
 });
