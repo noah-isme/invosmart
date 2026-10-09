@@ -56,14 +56,14 @@ export const warnAboutAdminConfig = () => {
 };
 
 export const isPlatformAdmin = (session: Session | null | undefined) => {
-  // Local development convenience only. `NODE_ENV=test` and every deployed
-  // environment go through the allowlist.
+  const userId = session?.user?.id;
+  if (!userId) return false;
+
+  // Local development convenience only (any signed-in user). `NODE_ENV=test`
+  // and every deployed environment go through the allowlist.
   if (process.env.NODE_ENV === "development") {
     return true;
   }
-
-  const userId = session?.user?.id;
-  if (!userId) return false;
 
   const adminIds = getPlatformAdminUserIds();
   if (adminIds.size === 0) {

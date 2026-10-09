@@ -23,12 +23,20 @@ Platform admin is decided by `isPlatformAdmin(session)` in `lib/devtools/access.
 
 Email is not an identity: credentials registration does not verify email ownership, so `ADMIN_EMAILS` / `NEXT_PUBLIC_ADMIN_EMAILS` are deprecated, ignored, and produce a startup warning when set.
 
-Operator migration:
+Operator migration. Do NOT look your id up by email (`SELECT id FROM "User" WHERE email = ...`): if the admin address was ever unclaimed, that query can return an account an attacker registered. Take the id from your own authenticated session instead. Safe deploy order:
 
-1. Look up your user id: `SELECT id, email FROM "User" WHERE email = 'you@example.com';`
-2. Set `ADMIN_USER_IDS=<id>[,<id>...]` in the deployment environment and redeploy.
-3. Remove `ADMIN_EMAILS` and `NEXT_PUBLIC_ADMIN_EMAILS`.
-4. Check the startup log: no `[security] ADMIN_...` warning should remain.
+1. Sign in as yourself on the current deployment and open `GET /api/auth/session`; copy `user.id`.
+2. Set `ADMIN_USER_IDS=<id>[,<id>...]` in **Production and Preview** (every environment that serves real users).
+3. Merge and deploy this change.
+4. Verify as an admin that `/devtools/perf` loads, and as a non-admin that it redirects to `/app`.
+5. Remove `ADMIN_EMAILS` and `NEXT_PUBLIC_ADMIN_EMAILS`, redeploy, and confirm the startup log has no `[security] ADMIN_...` warning.
+
+Incident review for the exposure window (the time `ADMIN_EMAILS` was set and honoured):
+
+- Compare `"User"` rows whose email matches a former `ADMIN_EMAILS` entry with the real admin's own account. A matching row the real admin did not create (check `createdAt`, and whether the owner can log in with it) means the address was squatted.
+- Review `FeatureFlag` rows (`updatedAt`/`createdAt`) for changes the team did not make.
+- Review devtools activity in the window: `AuditLog` rows for the suspect user ids, `OptimizationLog` status/`actor` changes, `ExplanationLog` rows created by the suspect user (including its email-shaped `actor` values), and `UptimeCheck` rows triggered manually.
+- Rotate anything an admin route could have exposed (for example `FEDERATION_TOKEN_SECRET`) if a squatted account is found.
 
 ## Authorization contract
 

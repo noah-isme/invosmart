@@ -23,7 +23,6 @@ type SerializableExplanation = Omit<ExplanationPayload, "createdAt"> & {
 type AiTuningClientProps = {
   initialRecommendations: SerializableOptimizationLogEntry[];
   history: SerializableOptimizationLogEntry[];
-  actor: string;
   explanations: Partial<Record<string, SerializableExplanation>>;
   trustScore: number;
 };
@@ -56,7 +55,7 @@ const trustScoreIndicator = (score: number) => {
   return "bg-rose-500/10 text-rose-200 border border-rose-500/30";
 };
 
-export default function AiTuningClient({ initialRecommendations, history, actor, explanations, trustScore }: AiTuningClientProps) {
+export default function AiTuningClient({ initialRecommendations, history, explanations, trustScore }: AiTuningClientProps) {
   const [recommendations, setRecommendations] = useState(initialRecommendations);
   const [isPending, startTransition] = useTransition();
   const { notify } = useToast();
@@ -66,7 +65,7 @@ export default function AiTuningClient({ initialRecommendations, history, actor,
   const handleApply = (id: string) => {
     startTransition(async () => {
       try {
-        const updated = await applyRecommendationAction(id, actor);
+        const updated = await applyRecommendationAction(id);
         setRecommendations((current) => current.filter((item) => item.id !== id));
         notify({
           title: "Optimasi diterapkan",
@@ -86,7 +85,7 @@ export default function AiTuningClient({ initialRecommendations, history, actor,
   const handleReject = (id: string) => {
     startTransition(async () => {
       try {
-        const updated = await rejectRecommendationAction(id, actor);
+        const updated = await rejectRecommendationAction(id);
         setRecommendations((current) => current.filter((item) => item.id !== id));
         notify({
           title: "Rekomendasi ditolak",

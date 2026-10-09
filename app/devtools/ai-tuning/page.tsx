@@ -21,8 +21,6 @@ export default async function AiTuningPage() {
     getTrustScore(),
   ]);
 
-  const actor = session?.user?.email ?? session?.user?.name ?? "admin";
-
   const recommendationIds = recommendations.map((entry) => entry.id);
   const explanationsMap = await getLatestExplanationsMap(recommendationIds);
 
@@ -54,7 +52,6 @@ export default async function AiTuningPage() {
       <AiTuningClient
         initialRecommendations={recommendations.map(serialize)}
         history={history.map(serialize)}
-        actor={actor}
         explanations={serializedExplanations}
         trustScore={trust.score}
       />

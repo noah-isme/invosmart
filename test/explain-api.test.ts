@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
 
 const mockExplanation = {
   id: "exp_1",
@@ -31,7 +31,12 @@ vi.mock("@/lib/ai/explain", () => ({
 }));
 
 describe("/api/ai/explain", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(async () => {
+    vi.stubEnv("ADMIN_USER_IDS", "user_1");
     const { getServerSession } = await import("next-auth");
     (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "user_1", email: "ops@example.com" },

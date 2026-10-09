@@ -45,8 +45,8 @@ describe("platform-admin gate on server actions and admin pages", () => {
     for (const session of [attacker, null]) {
       getServerSessionMock.mockResolvedValue(session);
       await expect(triggerLearningCycleAction()).rejects.toThrow("Forbidden");
-      await expect(applyRecommendationAction("1", "x")).rejects.toThrow("Forbidden");
-      await expect(rejectRecommendationAction("1", "x")).rejects.toThrow("Forbidden");
+      await expect(applyRecommendationAction("1")).rejects.toThrow("Forbidden");
+      await expect(rejectRecommendationAction("1")).rejects.toThrow("Forbidden");
     }
     expect(learning.runLearningCycle).not.toHaveBeenCalled();
     expect(optimizer.updateOptimizationStatus).not.toHaveBeenCalled();
@@ -55,7 +55,18 @@ describe("platform-admin gate on server actions and admin pages", () => {
   it("server actions run for a listed admin id", async () => {
     getServerSessionMock.mockResolvedValue(admin);
     await expect(triggerLearningCycleAction()).resolves.toEqual({ ok: true });
-    await expect(rejectRecommendationAction("1", "x")).resolves.toBeDefined();
+    await expect(rejectRecommendationAction("1")).resolves.toBeDefined();
+  });
+
+  it("tuning actions record the session user id as actor, not a client value", async () => {
+    getServerSessionMock.mockResolvedValue(admin);
+    await applyRecommendationAction("rec_9");
+    await rejectRecommendationAction("rec_9");
+
+    for (const call of optimizer.updateOptimizationStatus.mock.calls) {
+      expect(call[2]).toMatchObject({ actor: "cuid_admin" });
+    }
+    expect(optimizer.updateOptimizationStatus).toHaveBeenCalledTimes(2);
   });
 
   it("requirePlatformAdminPage redirects anonymous to login and non-admins to /app", async () => {

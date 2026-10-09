@@ -94,7 +94,9 @@ describe("platform admin access (isPlatformAdmin)", () => {
   it("only bypasses the allowlist in local development, never in test or production", async () => {
     vi.stubEnv("NODE_ENV", "development");
     let mod = await load();
-    expect(mod.isPlatformAdmin(null)).toBe(true);
+    expect(mod.isPlatformAdmin(sessionFor("cuid_any"))).toBe(true);
+    expect(mod.isPlatformAdmin(null)).toBe(false);
+    expect(mod.isPlatformAdmin(sessionFor(undefined))).toBe(false);
 
     vi.stubEnv("NODE_ENV", "test");
     mod = await load();

@@ -9,7 +9,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { authOptions } from "@/server/auth";
 import { withTiming } from "@/middleware/withTiming";
-import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 
 const RequestSchema = z.object({
   recommendation_id: z.string().min(1),
@@ -35,9 +35,10 @@ const explainRecommendation = async (request: NextRequest) => {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspace = await resolveWorkspaceContextForRequest(request, session);
-  if (!workspace || !canReadWorkspace(workspace)) {
-    return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+  // The recommendation log, the paid model call and the explanation log are all
+  // global (not workspace-scoped), so this is platform-admin only.
+  if (!isPlatformAdmin(session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   let payload: unknown;
@@ -53,10 +54,10 @@ const explainRecommendation = async (request: NextRequest) => {
   }
 
   try {
-    const explanation = await generateExplanationForRecommendation(parsed.data.recommendation_id, session.user.email ?? "admin");
+    const explanation = await generateExplanationForRecommendation(parsed.data.recommendation_id, session.user.id);
     void captureServerEvent("ai_explanation_generated", {
       recommendationId: explanation.recommendationId,
-      actor: session.user.email ?? session.user.id,
+      actor: session.user.id,
     });
 
     return NextResponse.json({ data: explanation }, { status: 200 });

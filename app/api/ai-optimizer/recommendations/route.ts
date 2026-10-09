@@ -7,6 +7,9 @@ export async function GET() {
     return NextResponse.json({ recommendations: [] });
   }
 
-  const recommendations = await getLatestRecommendations({ limit: 20 });
+  // Anonymous callers only need route + confidence for prefetching; the full
+  // OptimizationLog entries (suggestions, actors, notes) are admin-only data.
+  const entries = await getLatestRecommendations({ limit: 20 });
+  const recommendations = entries.map(({ route, confidence }) => ({ route, confidence }));
   return NextResponse.json({ recommendations });
 }

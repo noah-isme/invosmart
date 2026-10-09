@@ -9,7 +9,8 @@ vi.mock("@/lib/tracing", () => ({
   withSpan: (_name: string, handler: unknown) => handler,
 }));
 
-const { featureFlags, uptime, loop, orchestrator, workspaces } = vi.hoisted(() => ({
+const { featureFlags, uptime, loop, orchestrator, workspaces, explainer } = vi.hoisted(() => ({
+  explainer: { generate: vi.fn().mockResolvedValue({ recommendationId: "rec_1" }) },
   featureFlags: {
     getAllFlags: vi.fn().mockResolvedValue([]),
     toggleFlag: vi.fn().mockResolvedValue({ id: "ff-1", enabled: false }),
@@ -38,6 +39,14 @@ const { featureFlags, uptime, loop, orchestrator, workspaces } = vi.hoisted(() =
   },
 }));
 
+vi.mock("@/middleware/withTiming", () => ({ withTiming: (handler: unknown) => handler }));
+vi.mock("@/lib/security", () => ({ enforceHttps: () => null }));
+vi.mock("@/lib/rate-limit", () => ({ rateLimit: () => null }));
+vi.mock("@/lib/server-telemetry", () => ({ captureServerEvent: vi.fn() }));
+vi.mock("@/lib/ai/policy", () => ({ isGovernanceEnabled: () => true }));
+vi.mock("@/lib/ai/explain", () => ({
+  generateExplanationForRecommendation: explainer.generate,
+}));
 vi.mock("@/lib/feature-flags", () => featureFlags);
 vi.mock("@/lib/monitoring/uptime", () => uptime);
 vi.mock("@/lib/ai/loop", () => loop);
@@ -60,6 +69,7 @@ import * as uptimeRoute from "@/app/api/admin/uptime/route";
 import * as autonomyRoute from "@/app/api/devtools/autonomy/route";
 import * as orchestratorRoute from "@/app/api/ai/orchestrator/route";
 import * as perfRoute from "@/app/api/dev/perf/summary/route";
+import * as explainRoute from "@/app/api/ai/explain/route";
 import * as federationRoute from "@/app/api/federation/status/route";
 
 const getServerSessionMock = vi.mocked(getServerSession);
@@ -150,6 +160,14 @@ describe("platform-admin gate on admin/devtools API routes", () => {
       expect(res.status).toBe(403);
     });
 
+    it("POST /api/ai/explain (global log, paid model call)", async () => {
+      const res = (await explainRoute.POST(
+        json("/api/ai/explain", "POST", { recommendation_id: "rec_1" }),
+      )) as Response;
+      expect(res.status).toBe(403);
+      expect(explainer.generate).not.toHaveBeenCalled();
+    });
+
     it("GET /api/federation/status (wrong bearer, non-admin session)", async () => {
       const res = await federationRoute.GET(req("/api/federation/status", { headers: { authorization: "Bearer nope" } }));
       expect(res.status).toBe(403);
@@ -184,6 +202,14 @@ describe("platform-admin gate on admin/devtools API routes", () => {
       );
       expect(res.status).toBe(200);
       expect(featureFlags.toggleFlag).toHaveBeenCalledWith("ff-1", false);
+    });
+
+    it("explain records the session user id (not the email) as actor", async () => {
+      const res = (await explainRoute.POST(
+        json("/api/ai/explain", "POST", { recommendation_id: "rec_1" }),
+      )) as Response;
+      expect(res.status).toBe(200);
+      expect(explainer.generate).toHaveBeenCalledWith("rec_1", "cuid_admin");
     });
 
     it("autonomy, orchestrator, perf summary", async () => {
