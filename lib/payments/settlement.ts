@@ -1,17 +1,26 @@
 /**
  * Cross-provider settlement guard.
  *
- * Each webhook route runs in its own transaction and only locks its own
- * PaymentAttempt, so a Stripe and a Midtrans settlement for the same invoice
- * could both create a Payment. An invoice is settled exactly once by claiming
- * it with a conditional update inside the settlement transaction:
+ * Each webhook route runs in its own transaction, so two providers (or two
+ * attempts) settling the same invoice must be serialised on shared rows:
  *
- *   UPDATE "Invoice" SET status = 'PAID', ... WHERE id = $1 AND status <> 'PAID'
- *
- * Postgres serialises concurrent updates of the same row; the second writer
- * re-evaluates the WHERE clause after the first commits, sees PAID and
- * affects 0 rows.
+ *  1. The PaymentAttempt row is locked (SELECT ... FOR UPDATE) at the start
+ *     of the transaction. Two events for the SAME attempt (for example a
+ *     Midtrans capture and settlement arriving together) queue here, and the
+ *     second one decides its transition from the fresh, committed status.
+ *  2. The first settlement of an attempt claims the invoice with a
+ *     conditional update (`status <> 'PAID'`). Postgres serialises concurrent
+ *     updates of one row; the loser re-evaluates the WHERE clause after the
+ *     winner commits and affects 0 rows.
+ *  3. When the claim fails, the invoice row is locked and the Payment rows are
+ *     inspected: a Payment of this attempt is a replay, a Payment of another
+ *     attempt makes this a duplicate, and no Payment at all means the invoice
+ *     was marked paid manually.
  */
+
+type RawQueryClient = {
+  $queryRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<unknown>;
+};
 
 type InvoiceClaimClient = {
   invoice: {
@@ -21,6 +30,26 @@ type InvoiceClaimClient = {
     }): Promise<{ count: number }>;
   };
 };
+
+export type PaymentLike = { id: string; attemptId: string | null; gatewayPaymentId: string | null };
+
+type PaymentLookupClient = {
+  payment: {
+    findFirst(args: { where: { attemptId: string } | { invoiceId: string } }): Promise<PaymentLike | null>;
+  };
+};
+
+export type SettlementClient = RawQueryClient & InvoiceClaimClient & PaymentLookupClient;
+
+/** Row-lock a PaymentAttempt for the rest of the transaction. */
+export async function lockPaymentAttempt(tx: RawQueryClient, attemptId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "PaymentAttempt" WHERE id = ${attemptId} FOR UPDATE`;
+}
+
+/** Row-lock an Invoice for the rest of the transaction. */
+export async function lockInvoice(tx: RawQueryClient, invoiceId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${invoiceId} FOR UPDATE`;
+}
 
 /** Returns true when this transaction is the one that moved the invoice to PAID. */
 export async function claimInvoiceForSettlement(
@@ -35,6 +64,58 @@ export async function claimInvoiceForSettlement(
   return count === 1;
 }
 
+export type SettlementOutcome<P extends PaymentLike> =
+  /** This attempt already owns the Payment (event replay). */
+  | { kind: 'replay'; payment: P }
+  /** A Payment was recorded. `manualReview` is true when the invoice was already PAID with no Payment row. */
+  | { kind: 'recorded'; payment: P; manualReview: boolean }
+  /** Another payment already settled the invoice: this charge must be refunded. */
+  | { kind: 'duplicate'; settledPaymentId: string }
+  /** The attempt is linked to a different provider payment. */
+  | { kind: 'conflict' };
+
+/**
+ * Decide what a settlement event means for the invoice. `createPayment` writes
+ * the provider-specific Payment row and is only called when one is to be
+ * recorded.
+ */
+export async function settleInvoiceOnce<P extends PaymentLike>(
+  tx: SettlementClient,
+  input: {
+    attemptId: string;
+    invoiceId: string;
+    gatewayPaymentId: string;
+    paidAt: Date;
+    createPayment: () => Promise<P>;
+  },
+): Promise<SettlementOutcome<P>> {
+  const ownPayment = async (): Promise<SettlementOutcome<P> | null> => {
+    const own = await tx.payment.findFirst({ where: { attemptId: input.attemptId } });
+    if (!own) return null;
+    return own.gatewayPaymentId === input.gatewayPaymentId
+      ? { kind: 'replay', payment: own as P }
+      : { kind: 'conflict' };
+  };
+
+  const early = await ownPayment();
+  if (early) return early;
+
+  if (await claimInvoiceForSettlement(tx, input.invoiceId, input.paidAt)) {
+    return { kind: 'recorded', payment: await input.createPayment(), manualReview: false };
+  }
+
+  // The invoice is already PAID. Lock it so that concurrent settlements of a
+  // manually paid invoice cannot both record a Payment, then look again.
+  await lockInvoice(tx, input.invoiceId);
+  const backstop = await ownPayment();
+  if (backstop) return backstop;
+
+  const existing = await tx.payment.findFirst({ where: { invoiceId: input.invoiceId } });
+  if (existing) return { kind: 'duplicate', settledPaymentId: existing.id };
+
+  return { kind: 'recorded', payment: await input.createPayment(), manualReview: true };
+}
+
 /**
  * PaymentAttemptStatus has no "duplicate" value and adding one needs a
  * migration. A duplicate provider settlement keeps the provider's truth
@@ -42,6 +123,7 @@ export async function claimInvoiceForSettlement(
  * this marker in the attempt metadata so it can be found and refunded.
  */
 export const DUPLICATE_SETTLEMENT_KEY = 'duplicateSettlement';
+export const REVIEW_REQUIRED_KEY = 'reviewRequired';
 
 export type DuplicateSettlementMarker = {
   reason: 'invoice_already_settled';
@@ -51,6 +133,13 @@ export type DuplicateSettlementMarker = {
   providerPaymentId: string | null;
   detectedAt: string;
   refundedAt?: string;
+};
+
+export type ReviewRequiredMarker = {
+  reason: 'gateway_payment_on_manually_paid_invoice';
+  paymentId: string;
+  providerEventId: string;
+  detectedAt: string;
 };
 
 type MetadataRecord = Record<string, unknown>;
@@ -64,17 +153,25 @@ export function getDuplicateSettlementMarker(metadata: unknown): DuplicateSettle
   return marker ? (marker as unknown as DuplicateSettlementMarker) : null;
 }
 
-export function isDuplicateSettlementAttempt(metadata: unknown): boolean {
-  return getDuplicateSettlementMarker(metadata) !== null;
+export function getReviewRequiredMarker(metadata: unknown): ReviewRequiredMarker | null {
+  const marker = asRecord(asRecord(metadata)?.[REVIEW_REQUIRED_KEY]);
+  return marker ? (marker as unknown as ReviewRequiredMarker) : null;
 }
 
 /**
- * Attempt metadata is overwritten with the latest provider payload. Carry the
- * duplicate marker across those overwrites so it is never lost.
+ * Attempt metadata is overwritten with the latest provider payload. Markers
+ * are only ever written by this module: any marker key present in a provider
+ * payload is dropped first, so an incoming payload cannot forge one, and the
+ * real markers are carried across overwrites.
  */
-export function withDuplicateSettlementMarker(
+export function buildAttemptMetadata(
   payload: MetadataRecord,
-  marker: DuplicateSettlementMarker | null,
+  markers: { duplicate: DuplicateSettlementMarker | null; review: ReviewRequiredMarker | null },
 ): MetadataRecord {
-  return marker ? { ...payload, [DUPLICATE_SETTLEMENT_KEY]: marker } : payload;
+  const clean: MetadataRecord = { ...payload };
+  delete clean[DUPLICATE_SETTLEMENT_KEY];
+  delete clean[REVIEW_REQUIRED_KEY];
+  if (markers.duplicate) clean[DUPLICATE_SETTLEMENT_KEY] = markers.duplicate;
+  if (markers.review) clean[REVIEW_REQUIRED_KEY] = markers.review;
+  return clean;
 }

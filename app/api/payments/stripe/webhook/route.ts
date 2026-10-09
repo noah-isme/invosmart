@@ -16,9 +16,11 @@ import {
   type PaymentAttemptStatus,
 } from '@/lib/payments/lifecycle';
 import {
-  claimInvoiceForSettlement,
+  buildAttemptMetadata,
   getDuplicateSettlementMarker,
-  withDuplicateSettlementMarker,
+  getReviewRequiredMarker,
+  lockPaymentAttempt,
+  settleInvoiceOnce,
 } from '@/lib/payments/settlement';
 
 type StripePayload = Record<string, unknown>;
@@ -195,6 +197,8 @@ export async function POST(request: Request) {
 
   try {
     const result = await db.$transaction(async (tx) => {
+      // Serialise events of the same attempt, then read its fresh status.
+      await lockPaymentAttempt(tx, attempt!.id);
       const txAttempt = await tx.paymentAttempt.findUnique({
         where: { id: attempt!.id },
         include: { invoice: true },
@@ -231,48 +235,60 @@ export async function POST(request: Request) {
       const isSettlement = nextStatus === PAYMENT_ATTEMPT_STATUS.SETTLED && decision !== 'ignore';
       const settledAt = new Date();
       const previousMarker = getDuplicateSettlementMarker(txAttempt.metadata);
+      const previousReview = getReviewRequiredMarker(txAttempt.metadata);
       let marker = previousMarker;
-      let settlementPayment: Awaited<ReturnType<typeof tx.payment.findFirst>> = null;
-      let invoiceClaimedNow = false;
+      let review = previousReview;
+      let replayPayment: { id: string } | null = null;
 
       if (isSettlement && !previousMarker) {
-        settlementPayment = await tx.payment.findFirst({ where: { attemptId: txAttempt.id } });
-        if (settlementPayment && settlementPayment.gatewayPaymentId !== paymentIntentId) {
+        const gatewayPaymentId = paymentIntentId || event.id;
+        const outcome = await settleInvoiceOnce(tx, {
+          attemptId: txAttempt.id,
+          invoiceId: txAttempt.invoiceId,
+          gatewayPaymentId,
+          paidAt: settledAt,
+          createPayment: () => tx.payment.create({
+            data: {
+              invoiceId: txAttempt.invoiceId,
+              attemptId: txAttempt.id,
+              paidAmount: txAttempt.amount,
+              refundedAmount: 0,
+              paidCurrency: txAttempt.currency,
+              paidAt: settledAt,
+              method: 'stripe',
+              gatewayProvider: PAYMENT_PROVIDERS.STRIPE,
+              gatewayPaymentId,
+              gatewayStatus: typeof payload.payment_status === 'string' ? payload.payment_status : event.type,
+              gatewayMetadata: JSON.parse(JSON.stringify(payload)),
+            },
+          }),
+        });
+        if (outcome.kind === 'conflict') {
           throw new PaymentLifecycleError(409, 'Payment attempt is linked to another provider payment');
         }
-        if (!settlementPayment) {
-          // First settlement for this attempt: claim the invoice. A count of 0
-          // means the invoice was already settled (by Midtrans, by another
-          // Stripe attempt, or manually), so this payment is a duplicate.
-          const claimed = await claimInvoiceForSettlement(tx, txAttempt.invoiceId, settledAt);
-          if (!claimed) {
-            const settled = await tx.payment.findFirst({ where: { invoiceId: txAttempt.invoiceId } });
-            marker = {
-              reason: 'invoice_already_settled',
-              refundRequired: true,
-              settledPaymentId: settled?.id ?? null,
+        if (outcome.kind === 'replay') {
+          replayPayment = outcome.payment;
+        } else if (outcome.kind === 'recorded') {
+          paymentId = outcome.payment.id;
+          if (outcome.manualReview) {
+            // Invoice was already PAID without any Payment row (marked paid
+            // by hand). Record the gateway payment, but flag it for review.
+            review = {
+              reason: 'gateway_payment_on_manually_paid_invoice',
+              paymentId: outcome.payment.id,
               providerEventId: event.id,
-              providerPaymentId: paymentIntentId,
               detectedAt: settledAt.toISOString(),
             };
-          } else {
-            invoiceClaimedNow = true;
-            settlementPayment = await tx.payment.create({
-              data: {
-                invoiceId: txAttempt.invoiceId,
-                attemptId: txAttempt.id,
-                paidAmount: txAttempt.amount,
-                refundedAmount: 0,
-                paidCurrency: txAttempt.currency,
-                paidAt: settledAt,
-                method: 'stripe',
-                gatewayProvider: PAYMENT_PROVIDERS.STRIPE,
-                gatewayPaymentId: paymentIntentId || event.id,
-                gatewayStatus: typeof payload.payment_status === 'string' ? payload.payment_status : event.type,
-                gatewayMetadata: JSON.parse(JSON.stringify(payload)),
-              },
-            });
           }
+        } else {
+          marker = {
+            reason: 'invoice_already_settled',
+            refundRequired: true,
+            settledPaymentId: outcome.settledPaymentId,
+            providerEventId: event.id,
+            providerPaymentId: paymentIntentId,
+            detectedAt: settledAt.toISOString(),
+          };
         }
       }
 
@@ -287,26 +303,23 @@ export async function POST(request: Request) {
         marker = { ...marker, refundRequired: false, refundedAt: new Date().toISOString() };
       }
 
-      if (decision === 'apply' || marker !== previousMarker) {
+      if (decision === 'apply' || marker !== previousMarker || review !== previousReview) {
         await tx.paymentAttempt.update({
           where: { id: txAttempt.id },
           data: {
             ...(decision === 'apply' ? { status: nextStatus, providerPaymentId: paymentIntentId } : {}),
-            metadata: JSON.parse(JSON.stringify(withDuplicateSettlementMarker(payload, marker))),
+            metadata: JSON.parse(JSON.stringify(buildAttemptMetadata(payload, { duplicate: marker, review }))),
           },
         });
       }
 
-      if (settlementPayment) {
-        paymentId = settlementPayment.id;
-        // Replay of a settlement for an attempt that already owns a Payment
-        // (the invoice was claimed by the original settlement).
-        if (!invoiceClaimedNow) {
-          await tx.invoice.update({
-            where: { id: txAttempt.invoiceId },
-            data: { status: 'PAID', paidAt: settledAt },
-          });
-        }
+      if (replayPayment) {
+        paymentId = replayPayment.id;
+        // Replay of a settlement for an attempt that already owns a Payment.
+        await tx.invoice.update({
+          where: { id: txAttempt.invoiceId },
+          data: { status: 'PAID', paidAt: settledAt },
+        });
       }
 
       // A refund of a duplicate settlement has no Payment row and must not
@@ -350,6 +363,7 @@ export async function POST(request: Request) {
         invoiceId: txAttempt.invoiceId,
         userId: txAttempt.invoice.userId,
         duplicateSettlement: marker ? { marker, firstDetection: !previousMarker } : undefined,
+        manualReview: review && !previousReview ? review : undefined,
       };
     });
 
@@ -390,11 +404,31 @@ export async function POST(request: Request) {
       });
     }
 
+    if (result.manualReview) {
+      console.warn(
+        `[payments] Stripe payment ${paymentIntentId ?? event.id} was recorded for invoice ${result.invoiceId}, which was already marked PAID without a Payment. Review required.`,
+      );
+      void logAuditEvent({
+        userId: result.userId,
+        action: AuditAction.INVOICE_UPDATE,
+        entity: AuditEntity.INVOICE,
+        entityId: result.invoiceId,
+        details: {
+          gateway: PAYMENT_PROVIDERS.STRIPE,
+          event: 'GATEWAY_PAYMENT_ON_MANUALLY_PAID_INVOICE',
+          attemptId: attempt.id,
+          paymentId: result.manualReview.paymentId,
+          providerPaymentId: paymentIntentId,
+        },
+      });
+    }
+
     return NextResponse.json({
       received: true,
       duplicate: result.duplicate,
       ignored: result.ignored,
       status: result.status,
+      ...(result.manualReview ? { reviewRequired: true } : {}),
       ...(result.duplicateSettlement
         ? { duplicatePayment: true, refundRequired: result.duplicateSettlement.marker.refundRequired }
         : {}),

@@ -51,6 +51,7 @@ const state = vi.hoisted(() => {
     $transaction: vi.fn(async (callback: (tx: Record<string, unknown>) => Promise<unknown>) => callback(tx)),
   };
   const tx: Record<string, any> = {
+    $queryRaw: vi.fn(async () => []),
     paymentAttempt: {
       findUnique: vi.fn(async () => attempt),
       update: db.paymentAttempt.update,

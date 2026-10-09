@@ -44,6 +44,8 @@ const state = vi.hoisted(() => {
       findFirst: vi.fn(async ({ where }: { where: Row }) =>
         store.payments.find((p) => matches(p, where)) || null),
       create: vi.fn(async ({ data }: { data: Row }) => {
+        // Widen the race window between the checks and the write.
+        await new Promise((resolve) => setTimeout(resolve, 5));
         const payment = { id: `payment-${store.payments.length + 1}`, createdAt: new Date(), ...data };
         store.payments.push(payment);
         return payment;
@@ -68,7 +70,46 @@ const state = vi.hoisted(() => {
       }),
     },
   };
-  const db = { ...models, $transaction: vi.fn(async (cb: (tx: typeof models) => unknown) => cb(models)) };
+  // Row locks (SELECT ... FOR UPDATE and the implicit lock taken by an
+  // UPDATE) are held until the owning transaction finishes, like Postgres.
+  const locks = new Map<string, Promise<void>>();
+  const acquire = async (key: string) => {
+    const previous = locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((resolve) => { release = resolve; });
+    locks.set(key, previous.then(() => mine));
+    await previous;
+    return release;
+  };
+  const db = {
+    ...models,
+    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => {
+      const held: Array<() => void> = [];
+      const tx = {
+        ...models,
+        $queryRaw: vi.fn(async (strings: TemplateStringsArray, id: string) => {
+          const table = /"(\w+)"/.exec(strings.join('?'))![1];
+          held.push(await acquire(`${table}:${id}`));
+          return [{ id }];
+        }),
+        invoice: {
+          ...models.invoice,
+          updateMany: vi.fn(async (args: { where: Row; data: Row }) => {
+            const release = await acquire(`Invoice:${args.where.id}`);
+            const result = await models.invoice.updateMany(args);
+            if (result.count === 1) held.push(release);
+            else release();
+            return result;
+          }),
+        },
+      };
+      try {
+        return await cb(tx);
+      } finally {
+        held.forEach((release) => release());
+      }
+    }),
+  };
   const audit = vi.fn();
   return { store, db, models, audit };
 });
@@ -85,7 +126,11 @@ import { POST as stripeWebhook } from '@/app/api/payments/stripe/webhook/route';
 
 const TOTAL = 150_000;
 
-function seed(invoiceStatus: 'UNPAID' | 'PAID', provider: 'midtrans' | 'stripe') {
+function seed(
+  invoiceStatus: 'UNPAID' | 'PAID',
+  provider: 'midtrans' | 'stripe',
+  { winnerPayment = true }: { winnerPayment?: boolean } = {},
+) {
   state.store.invoice = {
     id: 'invoice-1',
     userId: 'user-1',
@@ -107,7 +152,7 @@ function seed(invoiceStatus: 'UNPAID' | 'PAID', provider: 'midtrans' | 'stripe')
     metadata: { source: 'checkout' },
   }];
   state.store.events = [];
-  state.store.payments = invoiceStatus === 'PAID'
+  state.store.payments = invoiceStatus === 'PAID' && winnerPayment
     ? [{ id: 'payment-winner', invoiceId: 'invoice-1', attemptId: 'attempt-winner', gatewayPaymentId: 'winner-tx', paidAmount: TOTAL }]
     : [];
 }
@@ -315,5 +360,130 @@ describe('double settlement across providers', () => {
     expect(state.store.payments).toHaveLength(1);
     expect(state.store.payments[0].gatewayProvider).toBe('stripe');
     expect(state.store.attempts.find((a) => a.id === 'attempt-mid')!.metadata.duplicateSettlement).toBeDefined();
+  });
+
+  it('same attempt: Midtrans capture and settlement arriving together record one Payment and flag nothing', async () => {
+    seed('UNPAID', 'midtrans');
+
+    const [capture, settlement] = await Promise.all([
+      midtransNotification(midtransRequest({ transaction_status: 'capture', fraud_status: 'accept' })),
+      midtransNotification(midtransRequest({ transaction_status: 'settlement' })),
+    ]);
+
+    expect(capture.status).toBe(200);
+    expect(settlement.status).toBe(200);
+    expect(state.store.payments).toHaveLength(1);
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(state.store.invoice.status).toBe('PAID');
+    expect(duplicateAudits()).toHaveLength(0);
+
+    // A refund must still reach the real Payment and re-open the invoice.
+    const refund = await midtransNotification(midtransRequest({
+      transaction_status: 'refund',
+      refund_key: 'refund-1',
+    }));
+    expect(refund.status).toBe(200);
+    expect(state.store.payments[0].refundedAmount).toBe(TOTAL);
+    expect(state.store.invoice.status).toBe('UNPAID');
+  });
+
+  it('same attempt: concurrent Stripe completed + async_payment_succeeded events record one Payment', async () => {
+    seed('UNPAID', 'stripe');
+
+    const responses = await Promise.all([
+      stripeWebhook(stripeRequest('evt_a')),
+      stripeWebhook(stripeRequest('evt_b', 'checkout.session.async_payment_succeeded')),
+    ]);
+
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    expect(state.store.payments).toHaveLength(1);
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(duplicateAudits()).toHaveLength(0);
+  });
+
+  it('invoice marked PAID by hand with no Payment: the gateway payment is recorded for review, not refunded', async () => {
+    seed('PAID', 'midtrans', { winnerPayment: false });
+
+    const response = await midtransNotification(midtransRequest());
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ received: true, status: 'SETTLED', reviewRequired: true });
+    expect(body.duplicatePayment).toBeUndefined();
+    expect(state.store.payments).toHaveLength(1);
+    expect(state.store.payments[0]).toMatchObject({ gatewayProvider: 'midtrans', gatewayPaymentId: 'mid-tx-late' });
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(state.store.attempts[0].metadata.reviewRequired).toMatchObject({
+      reason: 'gateway_payment_on_manually_paid_invoice',
+      paymentId: state.store.payments[0].id,
+    });
+    // The manual paidAt is preserved.
+    expect(state.store.invoice.paidAt).toEqual(new Date('2026-10-01T09:00:00Z'));
+    expect(duplicateAudits()).toHaveLength(0);
+    expect(state.audit.mock.calls.filter(([entry]) =>
+      entry.details?.event === 'GATEWAY_PAYMENT_ON_MANUALLY_PAID_INVOICE')).toHaveLength(1);
+  });
+
+  it('manually paid invoice settled by both providers at once: one Payment, the other is a duplicate', async () => {
+    seed('PAID', 'stripe', { winnerPayment: false });
+    state.store.attempts.push({
+      id: 'attempt-mid',
+      invoiceId: 'invoice-1',
+      provider: 'midtrans',
+      providerOrderId: 'invo_attempt-mid',
+      amount: TOTAL,
+      currency: 'IDR',
+      status: 'PENDING',
+      metadata: null,
+    });
+
+    const [stripeRes, midtransRes] = await Promise.all([
+      stripeWebhook(stripeRequest('evt_race')),
+      midtransNotification(midtransRequest({ order_id: 'invo_attempt-mid', transaction_id: 'mid-tx-race' })),
+    ]);
+
+    expect(stripeRes.status).toBe(200);
+    expect(midtransRes.status).toBe(200);
+    expect(state.store.payments).toHaveLength(1);
+    const flagged = state.store.attempts.filter((a) => a.metadata?.duplicateSettlement);
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0].metadata.duplicateSettlement.refundRequired).toBe(true);
+  });
+
+  it('a provider payload carrying marker keys cannot forge a duplicate or review marker', async () => {
+    seed('UNPAID', 'midtrans');
+
+    const response = await midtransNotification(midtransRequest({
+      duplicateSettlement: { reason: 'invoice_already_settled', refundRequired: true, settledPaymentId: 'x' },
+      reviewRequired: { reason: 'gateway_payment_on_manually_paid_invoice', paymentId: 'x' },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(state.store.payments).toHaveLength(1);
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(state.store.attempts[0].metadata.reviewRequired).toBeUndefined();
+
+    // A real refund therefore still reaches the real Payment.
+    await midtransNotification(midtransRequest({
+      transaction_status: 'refund',
+      refund_key: 'refund-1',
+      duplicateSettlement: { refundRequired: true },
+    }));
+    expect(state.store.payments[0].refundedAmount).toBe(TOTAL);
+    expect(state.store.invoice.status).toBe('UNPAID');
+  });
+
+  it('Stripe: a payload carrying marker keys is stripped before it is stored', async () => {
+    seed('UNPAID', 'stripe');
+
+    const response = await stripeWebhook(stripeRequest('evt_inject', 'checkout.session.completed', {
+      duplicateSettlement: { refundRequired: true },
+      reviewRequired: { reason: 'forged' },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(state.store.attempts[0].metadata.duplicateSettlement).toBeUndefined();
+    expect(state.store.attempts[0].metadata.reviewRequired).toBeUndefined();
+    expect(state.store.payments).toHaveLength(1);
   });
 });
