@@ -9,7 +9,8 @@ import {
   parseInvoiceStatus,
 } from "@/lib/schemas";
 import { calculateTotals } from "@/lib/invoice-utils";
-import { getStatusSideEffects, isInvoiceOverdue } from "@/lib/invoices";
+import { getStatusSideEffects } from "@/lib/invoices";
+import { getInvoiceForCurrentUser } from "@/lib/invoices/get-invoice";
 import { enforceHttps } from "@/lib/security";
 import { rateLimit } from "@/lib/rate-limit";
 import { authOptions } from "@/server/auth";
@@ -17,8 +18,8 @@ import { withTiming } from "@/middleware/withTiming";
 import { captureServerEvent } from "@/lib/server-telemetry";
 import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audit/auditLogger";
 import {
-  canReadWorkspace,
   canWriteWorkspace,
+  getRequestedOrganizationId,
   resolveWorkspaceContextForRequest,
   workspaceData,
   workspaceScope,
@@ -58,59 +59,28 @@ const getInvoiceHandler = async (request: NextRequest, context: RouteContext) =>
     return limited;
   }
 
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return unauthorized();
-  }
-
-  const workspace = await resolveWorkspaceContextForRequest(request, session);
-  if (!workspace || !canReadWorkspace(workspace)) {
-    return forbidden();
-  }
-  const scope = workspaceScope(workspace);
-
   const id = await resolveId(context);
 
-  if (!id) {
-    return invalidRequest("Missing invoice id");
-  }
-
-  const invoice = await db.invoice.findFirst({
-    where: { id, ...scope },
+  const result = await getInvoiceForCurrentUser({
+    id,
+    requestedOrganizationId: getRequestedOrganizationId(request),
+    ipAddress: getClientIp(request),
   });
 
-  if (!invoice) {
-    return notFound();
+  if (!result.ok) {
+    switch (result.reason) {
+      case "unauthorized":
+        return unauthorized();
+      case "forbidden":
+        return forbidden();
+      case "invalid_id":
+        return invalidRequest("Missing invoice id");
+      default:
+        return notFound();
+    }
   }
 
-  if (invoice.status !== InvoiceStatusEnum.enum.OVERDUE && isInvoiceOverdue(invoice)) {
-    const updated = await db.invoice.update({
-      where: { id },
-      data: { status: InvoiceStatusEnum.enum.OVERDUE },
-    });
-    void captureServerEvent("invoice_status_auto_overdue", {
-      invoiceId: id,
-    });
-    void logAuditEvent({
-      tenantId: workspace.organizationId,
-      userId: session.user.id,
-      action: AuditAction.INVOICE_AUTO_OVERDUE,
-      entity: AuditEntity.INVOICE,
-      entityId: id,
-      details: {
-        number: invoice.number,
-        previousStatus: invoice.status,
-        nextStatus: InvoiceStatusEnum.enum.OVERDUE,
-        dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
-        trigger: "lazy_get_evaluation",
-      },
-      ipAddress: getClientIp(request),
-    });
-    return NextResponse.json({ data: updated });
-  }
-
-  return NextResponse.json({ data: invoice });
+  return NextResponse.json({ data: result.invoice });
 };
 
 const validateUpdateBody = async (request: NextRequest) => {

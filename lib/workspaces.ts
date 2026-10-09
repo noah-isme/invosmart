@@ -169,7 +169,7 @@ export const resolveWorkspaceContext = async (
   return provisioned ?? legacyContext(userId);
 };
 
-const getRequestedOrganizationId = (request: NextRequest) => {
+export const getRequestedOrganizationId = (request: NextRequest) => {
   const queryValue = request.nextUrl?.searchParams?.get("organizationId");
   if (queryValue) {
     return queryValue;
