@@ -10,6 +10,7 @@ import {
   E2E_DB_READY_URL,
   E2E_STUB_PORT,
   E2E_STUB_URL,
+  E2E_WORKSPACE_AUTH_MODE,
   e2eAppEnv,
   e2eContractAppEnv,
   e2ePlatformAdminSeedEnv,
@@ -21,6 +22,12 @@ const isStaging = stagingBaseUrl !== "";
 const isContractOnly = !isStaging && process.env.E2E_CONTRACT_ONLY === "1";
 const isListOnly = process.argv.includes("--list");
 const isNightly = process.env.E2E_TIER === "nightly";
+
+// Mode-specific scenarios carry @mode:enforce / @mode:compat and run only when
+// E2E_WORKSPACE_AUTH_MODE (default enforce; it also sets the app's
+// WORKSPACE_AUTH_MODE) matches. Applied as the config-level grepInvert, which
+// Playwright ANDs with any CLI --grep/--grep-invert (e.g. test:e2e:smoke).
+const MODE_TAG_EXCLUDED = E2E_WORKSPACE_AUTH_MODE === "compat" ? /@mode:enforce\b/ : /@mode:compat\b/;
 
 const SPEC_FILES = "**/test/e2e/specs/**/*.spec.ts";
 const CONTRACT_SPEC_FILES = "**/test/e2e/specs/contracts/**/*.spec.ts";
@@ -138,6 +145,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   grep: isStaging ? /@staging/ : undefined,
+  grepInvert: MODE_TAG_EXCLUDED,
   reporter: [
     ["list"],
     ["html", { outputFolder: "QA-report/html", open: "never" }],
