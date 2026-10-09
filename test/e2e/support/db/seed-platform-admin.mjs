@@ -14,6 +14,15 @@
 // sign-in (server/auth.ts authorize) needs nothing else. The workspace is
 // created through the app API by personas.setup.ts.
 //
+// Plus one "OptimizationLog" row with the fixed id E2E_AI_RECOMMENDATION_ID
+// for AI-07 (specs/ai/ai.spec.ts): POST /api/ai/explain takes an existing
+// recommendation id, and no app route creates OptimizationLog rows
+// (lib/ai/optimizer.ts saveRecommendations has no HTTP caller). The row is
+// APPLIED with policyStatus ALLOWED and rollback false, so it is not listed by
+// GET /api/ai-optimizer/recommendations (PENDING only), not prefetched, and
+// leaves lib/ai/trustScore.ts's score unchanged (successRate stays 1,
+// rollback and violation rates stay 0).
+//
 // Test-only: refuses any DATABASE_URL that is not this run's loopback pglite
 // (guard.mjs), reads only the explicit env serve.mjs hands it, and fully
 // disconnects before exiting so the app stays the only client after `ready`.
@@ -21,6 +30,9 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 
 import { assertE2eDatabaseUrl } from "./guard.mjs";
+
+// Keep in sync with E2E_AI_RECOMMENDATION_ID in specs/ai/ai.spec.ts.
+const E2E_AI_RECOMMENDATION_ID = "e2e-ai07-recommendation";
 
 const required = (name) => {
   const value = process.env[name];
@@ -45,6 +57,20 @@ async function main() {
       create: { id, email, name, password: hashed },
       update: { email, name, password: hashed },
     });
+    const recommendation = {
+      route: "/app/insight",
+      change: "E2E seeded recommendation: lazy-load the insight charts.",
+      impact: "Reduce LCP on the insight page.",
+      confidence: 0.8,
+      status: "APPLIED",
+      actor: "e2e-seed",
+      policyStatus: "ALLOWED",
+    };
+    await client.optimizationLog.upsert({
+      where: { id: E2E_AI_RECOMMENDATION_ID },
+      create: { id: E2E_AI_RECOMMENDATION_ID, ...recommendation },
+      update: recommendation,
+    });
     // PGlite runs ONE backend for every socket client, so session state
     // outlives this connection: Prisma's named prepared statements (s0, s1,
     // ...) would collide with the app's own and fail its first write.
@@ -52,7 +78,7 @@ async function main() {
   } finally {
     await client.$disconnect();
   }
-  console.log(`seeded platformAdmin user ${id}`);
+  console.log(`seeded platformAdmin user ${id} and recommendation ${E2E_AI_RECOMMENDATION_ID}`);
 }
 
 main().catch((error) => {
