@@ -80,6 +80,12 @@ const state = vi.hoisted(() => {
         Object.assign(attempt.invoice, data);
         return attempt.invoice;
       }),
+      // Conditional claim used by the settlement guard (status != PAID).
+      updateMany: vi.fn(async ({ where, data }: { where: { status: { not: string } }; data: Record<string, unknown> }) => {
+        if (attempt.invoice.status === where.status.not) return { count: 0 };
+        Object.assign(attempt.invoice, data);
+        return { count: 1 };
+      }),
     },
   };
   return { db, tx, attempt, events, payments };

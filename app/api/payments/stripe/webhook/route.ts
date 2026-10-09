@@ -15,6 +15,11 @@ import {
   verifyAmountAndCurrency,
   type PaymentAttemptStatus,
 } from '@/lib/payments/lifecycle';
+import {
+  claimInvoiceForSettlement,
+  getDuplicateSettlementMarker,
+  withDuplicateSettlementMarker,
+} from '@/lib/payments/settlement';
 
 type StripePayload = Record<string, unknown>;
 
@@ -222,48 +227,91 @@ export async function POST(request: Request) {
         },
       });
 
-      if (decision === 'apply') {
+      let paymentId: string | undefined;
+      const isSettlement = nextStatus === PAYMENT_ATTEMPT_STATUS.SETTLED && decision !== 'ignore';
+      const settledAt = new Date();
+      const previousMarker = getDuplicateSettlementMarker(txAttempt.metadata);
+      let marker = previousMarker;
+      let settlementPayment: Awaited<ReturnType<typeof tx.payment.findFirst>> = null;
+      let invoiceClaimedNow = false;
+
+      if (isSettlement && !previousMarker) {
+        settlementPayment = await tx.payment.findFirst({ where: { attemptId: txAttempt.id } });
+        if (settlementPayment && settlementPayment.gatewayPaymentId !== paymentIntentId) {
+          throw new PaymentLifecycleError(409, 'Payment attempt is linked to another provider payment');
+        }
+        if (!settlementPayment) {
+          // First settlement for this attempt: claim the invoice. A count of 0
+          // means the invoice was already settled (by Midtrans, by another
+          // Stripe attempt, or manually), so this payment is a duplicate.
+          const claimed = await claimInvoiceForSettlement(tx, txAttempt.invoiceId, settledAt);
+          if (!claimed) {
+            const settled = await tx.payment.findFirst({ where: { invoiceId: txAttempt.invoiceId } });
+            marker = {
+              reason: 'invoice_already_settled',
+              refundRequired: true,
+              settledPaymentId: settled?.id ?? null,
+              providerEventId: event.id,
+              providerPaymentId: paymentIntentId,
+              detectedAt: settledAt.toISOString(),
+            };
+          } else {
+            invoiceClaimedNow = true;
+            settlementPayment = await tx.payment.create({
+              data: {
+                invoiceId: txAttempt.invoiceId,
+                attemptId: txAttempt.id,
+                paidAmount: txAttempt.amount,
+                refundedAmount: 0,
+                paidCurrency: txAttempt.currency,
+                paidAt: settledAt,
+                method: 'stripe',
+                gatewayProvider: PAYMENT_PROVIDERS.STRIPE,
+                gatewayPaymentId: paymentIntentId || event.id,
+                gatewayStatus: typeof payload.payment_status === 'string' ? payload.payment_status : event.type,
+                gatewayMetadata: JSON.parse(JSON.stringify(payload)),
+              },
+            });
+          }
+        }
+      }
+
+      const refundAmountForMarker = payload.amount_refunded === undefined
+        ? undefined
+        : fromGatewayMinorUnit(Number(payload.amount_refunded), txAttempt.currency);
+      if (
+        marker && isRefund && refundAmountForMarker !== undefined &&
+        isFullyRefunded(txAttempt.amount, refundAmountForMarker)
+      ) {
+        // The duplicate charge has been refunded at the provider.
+        marker = { ...marker, refundRequired: false, refundedAt: new Date().toISOString() };
+      }
+
+      if (decision === 'apply' || marker !== previousMarker) {
         await tx.paymentAttempt.update({
           where: { id: txAttempt.id },
           data: {
-            status: nextStatus,
-            providerPaymentId: paymentIntentId,
-            metadata: JSON.parse(JSON.stringify(payload)),
+            ...(decision === 'apply' ? { status: nextStatus, providerPaymentId: paymentIntentId } : {}),
+            metadata: JSON.parse(JSON.stringify(withDuplicateSettlementMarker(payload, marker))),
           },
         });
       }
 
-      let paymentId: string | undefined;
-      if (nextStatus === PAYMENT_ATTEMPT_STATUS.SETTLED && decision !== 'ignore') {
-        let payment = await tx.payment.findFirst({ where: { attemptId: txAttempt.id } });
-        if (payment && payment.gatewayPaymentId !== paymentIntentId) {
-          throw new PaymentLifecycleError(409, 'Payment attempt is linked to another provider payment');
-        }
-        if (!payment) {
-          payment = await tx.payment.create({
-            data: {
-              invoiceId: txAttempt.invoiceId,
-              attemptId: txAttempt.id,
-              paidAmount: txAttempt.amount,
-              refundedAmount: 0,
-              paidCurrency: txAttempt.currency,
-              paidAt: new Date(),
-              method: 'stripe',
-              gatewayProvider: PAYMENT_PROVIDERS.STRIPE,
-              gatewayPaymentId: paymentIntentId || event.id,
-              gatewayStatus: typeof payload.payment_status === 'string' ? payload.payment_status : event.type,
-              gatewayMetadata: JSON.parse(JSON.stringify(payload)),
-            },
+      if (settlementPayment) {
+        paymentId = settlementPayment.id;
+        // Replay of a settlement for an attempt that already owns a Payment
+        // (the invoice was claimed by the original settlement).
+        if (!invoiceClaimedNow) {
+          await tx.invoice.update({
+            where: { id: txAttempt.invoiceId },
+            data: { status: 'PAID', paidAt: settledAt },
           });
         }
-        paymentId = payment.id;
-        await tx.invoice.update({
-          where: { id: txAttempt.invoiceId },
-          data: { status: 'PAID', paidAt: new Date() },
-        });
       }
 
-      if (isRefund) {
+      // A refund of a duplicate settlement has no Payment row and must not
+      // touch the invoice: the invoice is still paid by the winning payment.
+      if (isRefund && !previousMarker) {
         const payment = await tx.payment.findFirst({ where: { attemptId: txAttempt.id } });
         if (!payment) throw new PaymentLifecycleError(409, 'Refund received before settlement');
         const amountRefunded = payload.amount_refunded === undefined
@@ -301,6 +349,7 @@ export async function POST(request: Request) {
         status: decision === 'apply' ? nextStatus : txAttempt.status,
         invoiceId: txAttempt.invoiceId,
         userId: txAttempt.invoice.userId,
+        duplicateSettlement: marker ? { marker, firstDetection: !previousMarker } : undefined,
       };
     });
 
@@ -319,11 +368,36 @@ export async function POST(request: Request) {
       });
     }
 
+    if (result.duplicateSettlement?.firstDetection) {
+      const { marker } = result.duplicateSettlement;
+      console.error(
+        `[payments] Duplicate settlement: Stripe payment ${paymentIntentId ?? event.id} (attempt ${attempt.id}) arrived for invoice ${result.invoiceId}, which is already settled. No Payment was created; manual refund required.`,
+      );
+      void logAuditEvent({
+        userId: result.userId,
+        action: AuditAction.INVOICE_UPDATE,
+        entity: AuditEntity.INVOICE,
+        entityId: result.invoiceId,
+        details: {
+          gateway: PAYMENT_PROVIDERS.STRIPE,
+          event: 'DUPLICATE_PAYMENT_REFUND_REQUIRED',
+          attemptId: attempt.id,
+          providerPaymentId: paymentIntentId,
+          amount: amountCheck.amount,
+          currency: amountCheck.currency,
+          settledPaymentId: marker.settledPaymentId,
+        },
+      });
+    }
+
     return NextResponse.json({
       received: true,
       duplicate: result.duplicate,
       ignored: result.ignored,
       status: result.status,
+      ...(result.duplicateSettlement
+        ? { duplicatePayment: true, refundRequired: result.duplicateSettlement.marker.refundRequired }
+        : {}),
     }, { status: 200 });
   } catch (error) {
     if (error instanceof PaymentLifecycleError) {
