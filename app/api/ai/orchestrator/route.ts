@@ -6,12 +6,17 @@ import {
   isOrchestrationEnabled,
   resolveConflict,
 } from "@/lib/ai/orchestrator";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { withSpan } from "@/lib/tracing";
 import { authOptions } from "@/server/auth";
 import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 const orchestratorStatus = async (request: NextRequest) => {
+  const session = await getServerSession(authOptions);
+  if (!isPlatformAdmin(session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (!isOrchestrationEnabled()) {
     return NextResponse.json({
       enabled: false,
@@ -19,11 +24,6 @@ const orchestratorStatus = async (request: NextRequest) => {
       events: [],
       conflicts: [],
     });
-  }
-
-  const session = await getServerSession(authOptions);
-  if (!canViewPerfTools(session)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const workspace = await resolveWorkspaceContextForRequest(request, session);

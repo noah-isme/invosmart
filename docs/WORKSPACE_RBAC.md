@@ -15,7 +15,20 @@ The initial roles are:
 
 Signup provisions that workspace. Credentials registration (`/api/auth/register`) and first-time Google sign-in create the `User`, the personal `Organization`, the `OWNER` `Membership` and `User.activeOrganizationId` in a single transaction, in both `compat` and `enforce` modes (`createUserWithPersonalWorkspace` in `lib/workspace-provisioning.ts`); if the workspace cannot be created the user is not created either. Provisioning is idempotent and race-safe: it takes a `FOR NO KEY UPDATE` row lock on the user and a user who already has any membership is never given a second personal workspace. Only new signups are provisioned automatically; an existing user with no membership is still denied (`403`) under `enforce` until they are backfilled (see [Backfilling stranded users](#backfilling-stranded-users)). Under `compat`, such a user is still provisioned lazily on their first workspace-bound request.
 
-The platform administrator allowlist used by DevTools is separate from workspace administration.
+The platform administrator allowlist used by DevTools is separate from workspace administration; see [Platform administrators](#platform-administrators). Workspace `OWNER`/`ADMIN` never grants access to global resources (DevTools, global feature flags, uptime, cross-tenant audit logs).
+
+## Platform administrators
+
+Platform admin is decided by `isPlatformAdmin(session)` in `lib/devtools/access.ts`: `session.user.id` (the NextAuth JWT `sub`, i.e. `"User"."id"`) must appear in `ADMIN_USER_IDS` (comma-separated). Pages and layouts use `requirePlatformAdminPage()` and server actions use `assertPlatformAdminAction()` from `lib/devtools/require-platform-admin.ts`; API routes call `isPlatformAdmin` directly. Only `next dev` (`NODE_ENV=development`) bypasses the allowlist.
+
+Email is not an identity: credentials registration does not verify email ownership, so `ADMIN_EMAILS` / `NEXT_PUBLIC_ADMIN_EMAILS` are deprecated, ignored, and produce a startup warning when set.
+
+Operator migration:
+
+1. Look up your user id: `SELECT id, email FROM "User" WHERE email = 'you@example.com';`
+2. Set `ADMIN_USER_IDS=<id>[,<id>...]` in the deployment environment and redeploy.
+3. Remove `ADMIN_EMAILS` and `NEXT_PUBLIC_ADMIN_EMAILS`.
+4. Check the startup log: no `[security] ADMIN_...` warning should remain.
 
 ## Authorization contract
 

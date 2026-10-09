@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 
 import { guardrails, updateOptimizationStatus } from "@/lib/ai/optimizer";
 import { isGovernanceEnabled } from "@/lib/ai/policy";
+import { assertPlatformAdminAction } from "@/lib/devtools/require-platform-admin";
 
 export async function applyRecommendationAction(id: string, actor: string) {
+  await assertPlatformAdminAction();
   const updated = await updateOptimizationStatus(id, OptimizationStatus.APPLIED, {
     actor,
     notes: "Applied via AI tuning dashboard",
@@ -21,6 +23,7 @@ export async function applyRecommendationAction(id: string, actor: string) {
 }
 
 export async function rejectRecommendationAction(id: string, actor: string) {
+  await assertPlatformAdminAction();
   const updated = await updateOptimizationStatus(id, OptimizationStatus.REJECTED, {
     actor,
     notes: "Rejected via AI tuning dashboard",

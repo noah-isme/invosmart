@@ -40,7 +40,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@/lib/devtools/access", () => ({ canViewPerfTools: () => true }));
+vi.mock("@/lib/devtools/access", () => ({ isPlatformAdmin: () => true }));
 
 describe("AI audit page", () => {
   it("renders audit entries with explanation", async () => {

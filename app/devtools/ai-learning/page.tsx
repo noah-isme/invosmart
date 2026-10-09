@@ -5,13 +5,13 @@ import AiLearningClient from "@/app/devtools/ai-learning/AiLearningClient";
 import { getLatestExplanationForRecommendation } from "@/lib/ai/explain";
 import { getTrustScore } from "@/lib/ai/trustScore";
 import { getLearningDashboardData, runLearningCycle } from "@/lib/ai/learning";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 export default async function AiLearningPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

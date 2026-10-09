@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { AiAuditClient, type AuditEntry } from "@/app/devtools/ai-audit/AiAuditClient";
 import { db } from "@/lib/db";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 const normalizeDataBasis = (value: unknown): string[] => {
@@ -27,7 +27,7 @@ const normalizeDataBasis = (value: unknown): string[] => {
 export default async function AiAuditPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

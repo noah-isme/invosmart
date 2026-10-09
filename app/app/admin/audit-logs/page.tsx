@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { requirePlatformAdminPage } from "@/lib/devtools/require-platform-admin";
 
 type AuditLogPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -12,6 +13,9 @@ const formatDateTime = (value: Date | string) =>
   new Date(value).toLocaleString("id-ID", { hour12: false });
 
 export default async function AuditLogsPage({ searchParams }: AuditLogPageProps) {
+  // Shows audit rows across every tenant, so it is platform-admin only.
+  await requirePlatformAdminPage();
+
   const resolved = await resolveSearchParams(searchParams);
 
   const action = typeof resolved.action === "string" ? resolved.action : undefined;

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import AutonomyDashboardClient, { type DashboardState } from "@/app/devtools/ai-autonomy/AutonomyDashboardClient";
 import { getLoopState } from "@/lib/ai/loop";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 const serializeState = (state: Awaited<ReturnType<typeof getLoopState>>): DashboardState => {
@@ -36,7 +36,7 @@ const serializeState = (state: Awaited<ReturnType<typeof getLoopState>>): Dashbo
 export default async function AiAutonomyPage() {
   const session = await getServerSession(authOptions);
 
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     redirect("/app");
   }
 

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { getFederationAgent } from "@/lib/ai/federationAgent";
 import { federationBus } from "@/lib/federation/bus";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 const isAuthorised = async (request: Request) => {
@@ -16,7 +16,7 @@ const isAuthorised = async (request: Request) => {
   if (token === secret) return true;
 
   const session = await getServerSession(authOptions);
-  if (session && canViewPerfTools(session)) {
+  if (session && isPlatformAdmin(session)) {
     return true;
   }
 

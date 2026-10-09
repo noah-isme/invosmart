@@ -2,7 +2,7 @@ import type { FeatureFlag } from "@prisma/client";
 import type { Session } from "next-auth";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "@/lib/db";
 import {
@@ -228,6 +228,14 @@ describe("Feature Flags System", () => {
   });
 
   describe("Admin API Route: /api/admin/feature-flags", () => {
+    beforeEach(() => {
+      vi.stubEnv("ADMIN_USER_IDS", "admin-1");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
     it("returns 401 GET when unauthorized", async () => {
       const { GET } = await import("@/app/api/admin/feature-flags/route");
       getServerSessionMock.mockResolvedValueOnce(null);

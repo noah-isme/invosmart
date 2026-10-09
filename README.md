@@ -83,6 +83,10 @@ Ensure the following environment variables are correctly configured in your `.en
 - `CRON_SECRET` (required in production for scheduled uptime checks)
 - `NEXT_PUBLIC_APP_VERSION`
 
+### Platform Admin
+- `ADMIN_USER_IDS` (comma-separated `User.id` values that may use DevTools, `/app/admin` global pages, and global admin APIs; empty means nobody outside `next dev`)
+- `ADMIN_EMAILS` / `NEXT_PUBLIC_ADMIN_EMAILS` are **deprecated and ignored** because email addresses are not verified at registration. See [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators).
+
 ### Observability
 - `ENABLE_TELEMETRY`
 - `NEXT_PUBLIC_ENABLE_TELEMETRY`
@@ -216,7 +220,7 @@ invosmart/
 
 InvoSmart uses [NextAuth.js](https://next-auth.js.org/) for robust and secure authentication. 
 - **Flow**: Session-based authentication integrated tightly with Next.js App Router.
-- **Route Protection**: Middleware ensures that `/app/*`, `/devtools/*`, and `/receipts/*` routes are protected.
+- **Route Protection**: Middleware requires a session for `/app/*`; `/devtools/*` and global admin pages/APIs additionally require platform-admin identity (`ADMIN_USER_IDS`) enforced in the page, API route or server action itself.
 - **Providers**: Out-of-the-box support for Google OAuth. Configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to enable social login.
 
 ---

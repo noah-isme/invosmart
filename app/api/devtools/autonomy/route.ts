@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { getLoopState, startAutonomyLoop, stopAutonomyLoop } from "@/lib/ai/loop";
-import { canViewPerfTools } from "@/lib/devtools/access";
+import { isPlatformAdmin } from "@/lib/devtools/access";
 import { authOptions } from "@/server/auth";
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!canViewPerfTools(session)) {
+  if (!isPlatformAdmin(session)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 

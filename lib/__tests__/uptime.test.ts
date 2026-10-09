@@ -263,6 +263,14 @@ describe("Milestone M6: Uptime Monitoring", () => {
   });
 
   describe("Admin Uptime API Routes (/api/admin/uptime)", () => {
+    beforeEach(() => {
+      vi.stubEnv("ADMIN_USER_IDS", "admin_1");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
     describe("GET /api/admin/uptime", () => {
       it("returns 401 Unauthorized when session is missing", async () => {
         getServerSessionMock.mockResolvedValue(null);
