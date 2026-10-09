@@ -4,7 +4,7 @@ import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
 import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
-import { toGatewayMinorUnit } from '@/lib/payments/money';
+import { buildStripeLineItems } from '@/lib/payments/line-items';
 import {
   ACTIVE_PAYMENT_ATTEMPT_STATUSES,
   PAYMENT_ATTEMPT_STATUS,
@@ -130,48 +130,9 @@ export async function POST(request: NextRequest) {
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    type InvoiceItem = { description?: string; rate?: number; quantity?: number };
-    const items = (invoice.items as InvoiceItem[]) || [];
-    const currency = invoice.currency.toUpperCase();
-    const line_items = items.map((item) => ({
-      price_data: {
-        currency: currency.toLowerCase(),
-        product_data: {
-          name: item.description || 'Item',
-        },
-        unit_amount: toGatewayMinorUnit(item.rate || 0, currency),
-      },
-      quantity: item.quantity || 1,
-    }));
-
-    // Invoice totals include tax while the original implementation only sent
-    // item subtotal. Add tax as a deterministic line and fall back to one
-    // total line if rounding or legacy item data still leaves a mismatch.
-    if (invoice.tax > 0) {
-      line_items.push({
-        price_data: {
-          currency: currency.toLowerCase(),
-          product_data: { name: 'Tax' },
-          unit_amount: toGatewayMinorUnit(invoice.tax, currency),
-        },
-        quantity: 1,
-      });
-    }
-    const expectedMinorAmount = toGatewayMinorUnit(invoice.total, currency);
-    const lineItemsTotal = line_items.reduce(
-      (sum, item) => sum + item.price_data.unit_amount * item.quantity,
-      0,
-    );
-    const finalLineItems = lineItemsTotal === expectedMinorAmount
-      ? line_items
-      : [{
-        price_data: {
-          currency: currency.toLowerCase(),
-          product_data: { name: `Invoice ${invoice.number}` },
-          unit_amount: expectedMinorAmount,
-        },
-        quantity: 1,
-      }];
+    // Line items sum to the invoice total exactly (items + tax + rounding
+    // adjustment, or a single total line); see lib/payments/line-items.ts.
+    const finalLineItems = buildStripeLineItems(invoice);
 
     try {
       const checkoutSession = await stripe.checkout.sessions.create({
