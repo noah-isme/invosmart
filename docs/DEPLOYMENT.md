@@ -19,7 +19,7 @@ Related: [runbooks/release-certification.md](runbooks/release-certification.md)
 | Local | `npm run dev` (port 1234), Node 24 (`.nvmrc`) | Your PostgreSQL via `DATABASE_URL`; `npx prisma migrate dev` | `.env` copied from `.env.example` |
 | E2E / CI | `next start` on an `npm run e2e:build` build, started by `playwright.config.ts` | In-memory PGlite (`npm run e2e:db`) | Fixed values from the e2e harness; no `.env`, no provider accounts. See [E2E_TESTING.md](E2E_TESTING.md) |
 | Staging | A Vercel deployment at the URL in the `STAGING_NEXTAUTH_URL` secret | Staging PostgreSQL (`STAGING_DATABASE_URL`) | GitHub environment `staging` (`STAGING_*` secrets) for CI checks; the Vercel project's environment variables for the app itself |
-| Production | Vercel, deployed by the `deploy` job | Managed PostgreSQL; migrated by the `deploy` job | Vercel project environment variables for the app; GitHub environment `production` (`PRODUCTION_DATABASE_URL`, created by the repository owner) for migrations |
+| Production | Vercel, deployed by the `deploy` job | Managed PostgreSQL; migrated by the `deploy` job | Vercel project environment variables for the app; GitHub environment `production` (`PRODUCTION_DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, created by the repository owner; see [Production prerequisites](#production-prerequisites)) for the `deploy` job |
 
 > **Open decision / verify:** the workflows never deploy to staging; `deploy`
 > only runs `vercel deploy --prod`. How the staging deployment is created
@@ -46,6 +46,10 @@ All of this is in `.github/workflows/release.yml`.
 | Pull request to `main` | `build-and-test`, `e2e-smoke` |
 | Push to `main` | `build-and-test`, `e2e-smoke`, then `release`; when `release` publishes a version, `deploy`, then `post-deploy-tests` |
 | Manual dispatch with `run_staging_certification: true` | `build-and-test`, `e2e-smoke`, `staging-certification` |
+| Manual dispatch from `main` with `deploy_ref: vX.Y.Z` | `build-and-test`, `e2e-smoke`, then `deploy` of that tag (see [Deploying an existing tag](#deploying-an-existing-tag)) |
+
+A manual dispatch with neither input set runs only the two gates and deploys
+nothing.
 
 A separate nightly workflow (`.github/workflows/e2e-full.yml`, 19:30 UTC)
 runs the full Playwright tier; it does not deploy.
@@ -70,6 +74,7 @@ the same run.
 3. `prisma validate`
 4. `npm run lint`
 5. `npm run docs:env-check`, `npm run docs:route-check`, `npm run docs:link-check`
+   and `npm run test:doc-checks` (tests for the two docs check scripts)
 6. `npm run typecheck` and `npm run typecheck:e2e`
 7. `npm run test`
 8. `npm run test:integration` (PGlite)
@@ -82,20 +87,38 @@ It uploads `QA-report/` and `test-results/` as evidence.
 `E2E_WORKSPACE_AUTH_MODE=enforce`.
 
 **`release`** runs only on pushes to `main`, after both jobs above pass, and
-is the only job with write permissions (`contents`, `issues`,
-`pull-requests`; the workflow default is `contents: read`). It runs in the
+is the only job with write permissions (`contents: write`; the workflow
+default is `contents: read`). It runs in the
 concurrency group `release`, so two pushes never release at the same time.
 See [Versioning and tags](#versioning-and-tags). Its outputs `published` and
 `version` decide whether the rest of the chain runs.
 
-**`deploy`** runs only when `release` published a version
-(`needs.release.outputs.published == 'true'`). It checks out the release
-commit (the new tag, which carries the bumped `package.json` and
-`CHANGELOG.md`) and runs in the `production` environment. It applies database migrations with
-`prisma migrate deploy` (see [Database migrations](#database-migrations)),
-builds once more as a gate, then runs
-`npx vercel deploy --prod --token=$VERCEL_TOKEN`. Vercel builds the deployment
-itself, using the project's environment variables, not the CI build.
+**`deploy`** runs in the `production` environment when `release` published a
+version (`needs.release.outputs.published == 'true'`), or on a manual
+dispatch with `deploy_ref` (see [Deploying an existing tag](#deploying-an-existing-tag)).
+In order, it:
+
+1. resolves the tag to deploy (the new release tag, or `deploy_ref`) and
+   rejects anything that is not `vX.Y.Z`;
+2. checks out that tag (the release commit, which carries the bumped
+   `package.json` and `CHANGELOG.md`) and fails unless the tag exists and is
+   reachable from `main`;
+3. runs `npm ci` and `prisma generate`;
+4. **Check deployment secrets**: fails, before anything touches production,
+   when any of `PRODUCTION_DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID` or
+   `VERCEL_PROJECT_ID` is empty, naming the missing secrets (never values);
+5. runs `npm run build` as a gate, so a build failure stops the job before
+   any migration;
+6. applies database migrations with `prisma migrate deploy` (see
+   [Database migrations](#database-migrations));
+7. runs `npx --yes vercel@62.0.0 deploy --prod --token=$VERCEL_TOKEN` with
+   `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` in the environment. They select the
+   Vercel project, since `.vercel/` is gitignored and the checkout is not
+   linked. The CLI version is pinned so a new Vercel CLI release cannot
+   change the deploy unannounced; bump it deliberately.
+
+Vercel builds the deployment itself, using the project's environment
+variables, not the CI build.
 
 **`post-deploy-tests`** (environment `staging`) runs after `deploy`, under the
 same `published` condition, and the `@staging` Playwright
@@ -122,10 +145,16 @@ secrets, then the `@staging` tier. `release:certify` checks
   with `npmPublish: false`; nothing goes to the npm registry), commits them as
   `chore(release): X.Y.Z`, tags that commit `vX.Y.Z`, pushes both and creates a
   GitHub Release.
-- The job first checks for a `v*` tag reachable from `HEAD`. Without one it
+- The job first checks for a `v[0-9]*` tag reachable from `HEAD`. Without one it
   logs the warning "no v* base tag reachable from HEAD, skipping release" and
   sets `published=false`, so semantic-release never falls back to publishing
   `v1.0.0`.
+- `.releaserc.json` sets `successComment`, `failComment` and
+  `releasedLabels` to `false` on `@semantic-release/github`: no comments or
+  labels on released issues and PRs, and no failure issues. The tag is
+  pushed before that plugin's `success` step, so a failure there would mark
+  the job failed and skip `deploy` for a release that is already tagged.
+  The GitHub Release itself is still created.
 - `GITHUB_TOKEN` is enough to push the release commit and tag because `main`
   is not branch-protected. If branch protection is enabled later, the
   `release` job fails until `github-actions` gets a bypass or the job uses a
@@ -140,8 +169,74 @@ Production deploys happen **only** through `release.yml`. The Vercel Git
 integration is not connected (no Vercel deployments or commit statuses on
 `main` as of 2026-10-16), and `vercel.json` sets
 `git.deploymentEnabled.main` to `false` as a guard in case it is ever
-connected. A manual escape hatch is `vercel deploy --prod` from a checkout of
-the commit to ship (see [Rollback](#rollback)); apply its migrations first.
+connected. To ship a release whose `deploy` never ran, use
+[Deploying an existing tag](#deploying-an-existing-tag). The last-resort
+escape hatch is `vercel deploy --prod` by hand from a checkout of the tag to
+ship (see [Rollback](#rollback)); apply its migrations first.
+
+### Production prerequisites
+
+Nothing in this repository creates GitHub environments or secrets, and the
+repository has none today. Before the first automated deploy, the
+repository owner sets these up in **Settings → Environments**:
+
+**`production`** (used by `deploy`):
+
+| Setting | Value |
+|---|---|
+| Deployment branches and tags | **Selected branches: `main` only**. The push path runs on `main`, and a `deploy_ref` dispatch must be started from `main` |
+| Required reviewers | None, so deploys stay fully automatic |
+| Secret `PRODUCTION_DATABASE_URL` | The **direct (non-pooled)** PostgreSQL connection string (see [Database migrations](#database-migrations)) |
+| Secret `VERCEL_TOKEN` | A Vercel access token with access to the project's team |
+| Secret `VERCEL_ORG_ID` | The Vercel team (or personal account) ID. `vercel link` writes it to `.vercel/project.json` as `orgId` |
+| Secret `VERCEL_PROJECT_ID` | The Vercel project ID (`projectId` in `.vercel/project.json`, or the project's **Settings → General**) |
+
+Until all four secrets exist, `deploy` stops at **Check deployment secrets**
+with the list of missing names, before any migration or deploy.
+
+**`staging`** (used by `post-deploy-tests` after every deploy, and by
+`staging-certification`):
+
+| Kind | Name | Used by |
+|---|---|---|
+| Secret | `STAGING_NEXTAUTH_URL` (base URL of the staging deployment) | both |
+| Secret | `E2E_STAGING_USER_EMAIL`, `E2E_STAGING_USER_PASSWORD` | both |
+| Secret | `E2E_STAGING_SLACK_WEBHOOK_URL` | both |
+| Secret | `STAGING_CRON_SECRET` | both |
+| Variable | `E2E_STAGING_INBOX` | both |
+| Secret | `STAGING_DATABASE_URL`, `STAGING_NEXTAUTH_SECRET`, `STAGING_STRIPE_SECRET_KEY`, `STAGING_STRIPE_WEBHOOK_SECRET`, `STAGING_STRIPE_PUBLISHABLE_KEY`, `STAGING_MIDTRANS_SERVER_KEY`, `STAGING_MIDTRANS_CLIENT_KEY`, `STAGING_RESEND_API_KEY`, `STAGING_RESEND_FROM_EMAIL`, `STAGING_RESEND_WEBHOOK_SECRET` | `staging-certification` only |
+
+Without the `staging` secrets, `post-deploy-tests` fails after a successful
+production deploy; production is already live at that point.
+
+### Deploying an existing tag
+
+Use this when a version was tagged but not deployed (the `deploy` job was
+skipped, or the run was lost), or to redeploy a released tag:
+
+1. **Actions → Release Build & Deploy → Run workflow**.
+2. **Use workflow from: `main`**. Any other branch fails the tag check, and
+   the `production` environment only admits `main`.
+3. Set `deploy_ref` to an existing tag, for example `v1.3.0`. Leave
+   `run_staging_certification` off unless you also want that job.
+
+The run executes `build-and-test` and `e2e-smoke` on `main`, then `deploy`
+for the tag. `deploy` waits for the gates but does not depend on their
+result: it deploys the tag, which was gated when it was released, and
+rebuilds it before migrating. It rejects a `deploy_ref` that is not of the
+form `vX.Y.Z`, does not exist, or is not reachable from `main`. The
+`deploy` steps are the same as on the push path, including `prisma migrate
+deploy`. `post-deploy-tests` does not run on this path.
+
+**When `deploy` fails** (a missing secret added afterwards, a Vercel or
+database outage), open the failed run and use **Re-run failed jobs**. It
+re-runs `deploy` (and `post-deploy-tests`, which depends on it) with the
+same `release` outputs and does not release again. `prisma migrate deploy`
+only applies pending migrations, so re-running it after a migration already
+succeeded is safe. If the run is too old to re-run, use the dispatch above.
+If `release` itself failed after pushing the tag, re-running it publishes
+nothing (the tag already exists), so `deploy` stays skipped; use the
+dispatch above with that tag.
 
 ## Database migrations
 
@@ -149,26 +244,31 @@ Migrations live in `prisma/migrations/` and are applied with
 `npx prisma migrate deploy`. The `deploy` job in `release.yml` runs it
 automatically, before the build and before `vercel deploy --prod`:
 
-1. **Check production database secret** fails the job with a clear message
-   when `PRODUCTION_DATABASE_URL` is empty.
-2. **Apply database migrations** runs `npx --no-install prisma migrate status`
-   (informational, never fails the step) and then
-   `npx --no-install prisma migrate deploy` with
+1. **Check deployment secrets** fails the job, naming the missing secrets,
+   when `PRODUCTION_DATABASE_URL` or any of the Vercel secrets is empty.
+2. **Build** runs next, so a build failure stops the job before any
+   migration.
+3. **Apply database migrations** first registers the database host from
+   `PRODUCTION_DATABASE_URL` as a log mask (the repository is public and
+   Prisma prints the host in its output and connection errors), then runs
+   `npx --no-install prisma migrate status` (informational, never fails the
+   step) and `npx --no-install prisma migrate deploy` with
    `DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}`. A failed migration
    fails the job, so `vercel deploy` never runs against an unmigrated schema.
 
-The job runs in the `production` GitHub environment (no required reviewers,
-so deploys stay automatic) and in the concurrency group `production-deploy`
+The job runs in the `production` GitHub environment (deployment branches
+limited to `main`, no required reviewers, so deploys stay automatic) and in
+the concurrency group `production-deploy`
 with `cancel-in-progress: false`, so two deploys never run `migrate deploy`
 in parallel. `vercel.json` sets `git.deploymentEnabled.main` to `false`, so a
 Vercel Git integration, if one is ever connected, cannot deploy `main` ahead of
 the migrations this job runs.
 
 > **Before the first automated deploy, the repository owner must create the
-> `production` GitHub environment** (Settings → Environments) **and add the
-> `PRODUCTION_DATABASE_URL` secret to it.** Nothing in this repo creates
-> either. Without the secret the `deploy` job stops at the secret check.
-> The value must be the **direct (non-pooled) connection string**:
+> `production` GitHub environment and its four secrets** (see
+> [Production prerequisites](#production-prerequisites)). Without them the
+> `deploy` job stops at the secret check.
+> `PRODUCTION_DATABASE_URL` must be the **direct (non-pooled) connection string**:
 > `prisma/schema.prisma` declares no `directUrl`, so this URL is used for DDL,
 > and a PgBouncer or transaction-pooled URL breaks the advisory lock that
 > `migrate deploy` takes (see [DATABASE.md](DATABASE.md#32-production-migration-execution-npx-prisma-migrate-deploy)).
@@ -179,8 +279,9 @@ Procedure for a release that contains migrations:
    database, then dispatch `staging-certification`, which must report no
    pending or failed migrations
    ([runbooks/release-certification.md](runbooks/release-certification.md#database-and-deployment)).
-2. Merge to `main` with a `feat:` or `fix:` commit. The `deploy` job applies the migrations to production,
-   then builds and deploys the new code against the migrated schema.
+2. Merge to `main` with a `feat:` or `fix:` commit. The `deploy` job builds,
+   applies the migrations to production, then deploys the new code against
+   the migrated schema.
 
 This order is safe only because migrations are additive (new tables, nullable
 columns, indexes), so the running old version keeps working against the new
@@ -206,7 +307,8 @@ deploy the code.
 
 **Application.** Roll back by promoting the previous production deployment in
 the Vercel dashboard (instant; no rebuild), or by checking out the previous
-`v*` tag and running `npx vercel deploy --prod` by hand. Pushing or re-pushing
+`v*` tag and running `npx --yes vercel@62.0.0 deploy --prod` by hand (with
+`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` set, or after `vercel link`). Pushing or re-pushing
 a tag does not deploy anything. Vercel environment variables are not versioned with
 the deployment, so revert any env change separately.
 
