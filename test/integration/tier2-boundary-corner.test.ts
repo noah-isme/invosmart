@@ -363,6 +363,7 @@ describe("Tier 2: Boundary & Corner Cases E2E Test Suite", () => {
       const bus = new FederationBus({
         tenantId: "local-tenant",
         secret: "super-secret-key-12345",
+        hmacSecret: "super-secret-key-12345-hmac",
         enabled: true,
       });
 

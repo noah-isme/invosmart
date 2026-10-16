@@ -14,13 +14,14 @@ This directory contains the Architecture Decision Records (ADRs) for the InvoSma
 | [006](006-thompson-sampling-ab-testing.md) | [Thompson Sampling for A/B Testing](006-thompson-sampling-ab-testing.md) | Superseded by [013](013-linucb-content-selection.md) |
 | [007](007-sentry-posthog-observability.md) | [Sentry and PostHog Observability](007-sentry-posthog-observability.md) | Accepted |
 | [008](008-glassmorphism-design-system.md) | [Glassmorphism Design System](008-glassmorphism-design-system.md) | Accepted |
-| [009](009-autonomous-loop-adaptive-scaling.md) | [Autonomous Loop Adaptive Scaling](009-autonomous-loop-adaptive-scaling.md) | Accepted |
+| [009](009-autonomous-loop-adaptive-scaling.md) | [Autonomous Loop Adaptive Scaling](009-autonomous-loop-adaptive-scaling.md) | Accepted; superseded in part by [016](016-autonomy-loop-cron-scheduling.md) |
 | [010](010-federation-protocol-cross-tenant.md) | [Federation Protocol for Cross-Tenant Data](010-federation-protocol-cross-tenant.md) | Accepted |
 | [011](011-postgresql-only.md) | [PostgreSQL in Every Environment](011-postgresql-only.md) | Accepted |
 | [012](012-gemini-first-ai-provider.md) | [Gemini-First LLM Provider Selection](012-gemini-first-ai-provider.md) | Accepted |
 | [013](013-linucb-content-selection.md) | [LinUCB Contextual Bandit for Content Variant Scoring](013-linucb-content-selection.md) | Accepted |
 | [014](014-workspace-tenancy-rbac.md) | [Workspace Tenancy and Role-Based Access](014-workspace-tenancy-rbac.md) | Accepted |
 | [015](015-payment-providers-webhook-reconciliation.md) | [Payment Providers and Webhook Reconciliation](015-payment-providers-webhook-reconciliation.md) | Accepted |
+| [016](016-autonomy-loop-cron-scheduling.md) | [Autonomy Loop Scheduled by Cron](016-autonomy-loop-cron-scheduling.md) | Accepted |
 
 ## Conventions
 

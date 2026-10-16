@@ -66,7 +66,7 @@ describe("Empirical Challenge Suite — M3 Edge Cases & Cryptographic Boundary T
   });
 
   it("EMPIRICAL: Event subscription unbind stop receiving events", async () => {
-    const bus = new FederationBus({ tenantId: "tenant-unsub", secret: "sec", enabled: true });
+    const bus = new FederationBus({ tenantId: "tenant-unsub", secret: "sec", hmacSecret: "sec-hmac", enabled: true });
     let count = 0;
     const unsub = bus.subscribe("telemetry_sync", () => {
       count++;

@@ -31,8 +31,10 @@ insight stream back to the core Orchestrator.
 
 ## Federation Data Protocol (FDP)
 
-All events are signed using `FEDERATION_TOKEN_SECRET` and routed through `lib/federation/bus.ts`. FDP currently exposes
-four event families:
+All events are signed and routed through `lib/federation/bus.ts`: RSA-SHA256 when `FEDERATION_PRIVATE_KEY` is set,
+otherwise HMAC-SHA256 with `FEDERATION_HMAC_SECRET`. `FEDERATION_TOKEN_SECRET` is only the peer bearer token and never
+signs events. Peers deliver events to `POST /api/federation/events` (see [Inbound events](#inbound-events)). FDP
+currently exposes four event families:
 
 | Event Type        | Description                                                                 | Key Payload Fields |
 | ----------------- | --------------------------------------------------------------------------- | ------------------ |
@@ -61,6 +63,44 @@ PII, or session metadata are stripped automatically.
 4. **Dashboard** – `/app/devtools/ai-federation` renders the network graph, trust history, and recent event log via
    `AiFederationClient`. Manual re-sync triggers a local snapshot and refreshes the dashboard state.
 
+## Inbound events
+
+`POST /api/federation/events` (`app/api/federation/events/route.ts`) checks the peer bearer, the body size and the FDP
+schema, then calls `getFederationAgent()` so the agent's subscribers exist in this process, and hands the event to
+`FederationBus.ingest()`. Ingest verifies the signature, rejects events outside a 5-minute clock window, decrypts an
+encrypted payload and validates it against the schema of its event type, records the event in `FederationInboundEvent`
+(the unique signature hash rejects replays) and emits it to the subscribers. The row is written only once the payload
+has decrypted and validated, so a failed event leaves no `accepted=true` row. The
+full HTTP contract is in [docs/INTEGRATIONS.md](../INTEGRATIONS.md#federation-peers).
+
+The route verifies, records the event in `FederationInboundEvent`, and hands it to the FederationAgent handlers; effects
+marked process-local are a known limitation.
+
+| Handler (`lib/ai/federationAgent.ts`) | Effect of an accepted event | Durable? |
+|---|---|---|
+| (ingest) | `FederationInboundEvent` row (`accepted=true`; `false` for own-tenant echoes, which are not emitted) | **Persisted** |
+| (ingest) | `FederationBus` recent-events ring buffer (last 25, shown on the status endpoint) | Process-local |
+| `handleTelemetry` (`telemetry_sync`) | Upserts the sender's snapshot in the agent's in-memory map | Process-local |
+| `handleTelemetry` → `evaluateGlobalNetwork` | `FederationMetrics` row for the cycle (`recordFederationMetrics`, upsert on `cycleId, tenantId`) | **Persisted** |
+| `handleTelemetry` → `evaluateGlobalNetwork` | Local trust and model history entries | Process-local |
+| `handleTelemetry` → `evaluateGlobalNetwork` | Publishes `trust_aggregate`, `priority_share` and `model_update` to the configured peers | Sent over HTTP (peers record them) |
+| `handleTelemetry` → `evaluateGlobalNetwork` | `insight_report` MAP event via `dispatchEvent` (Redis stream and an `AgentEventLog` row), only when orchestration is enabled | **Persisted** when orchestration is on |
+| `handlePriorityShare` (`priority_share`) | Replaces the sender's priorities in the in-memory snapshot; never runs `evaluateGlobalNetwork` | Process-local |
+| `handleTrustAggregate` (`trust_aggregate`) | Prepends to the in-memory trust history and recomputes the latest insight | Process-local |
+| `handleModelUpdate` (`model_update`) | Prepends to the in-memory model history | Process-local |
+
+Only a peer's `telemetry_sync` starts a cycle. `trust_aggregate`, `priority_share` and `model_update` are the outputs of a
+peer's cycle, so receiving them never publishes anything; otherwise two peers would answer each other's
+`priority_share` forever. A cycle whose snapshots carry no priorities publishes only `trust_aggregate`
+(`priority_share` needs at least one priority, and an empty `model_update` would apply nothing). A subscriber that
+throws or rejects is logged (`[federation] subscriber failed`) and never surfaces as an unhandled rejection.
+
+No handler writes `AgentPriority`: received priorities only feed the aggregate stored in `FederationMetrics`. On a
+serverless deployment each instance starts with an empty snapshot map, so an aggregate computed after a cold start
+covers only the peers that instance has heard from, and the DevTools snapshots and histories show only what that
+instance received. Subscribers are also called without being awaited, so their database writes and outbound
+publishes can still be running when the route has already answered `202`.
+
 ## Prisma Schema Additions
 
 ```prisma
@@ -84,6 +124,22 @@ model FederationMetrics {
   updatedAt            DateTime @updatedAt
 
   @@unique([cycleId, tenantId])
+}
+
+model FederationInboundEvent {
+  id                 String   @id @default(cuid())
+  eventId            String
+  tenantId           String
+  type               String
+  signatureAlgorithm String
+  signatureHash      String   @unique
+  eventTimestamp     DateTime
+  receivedAt         DateTime @default(now())
+  accepted           Boolean
+
+  @@index([eventId])
+  @@index([tenantId, receivedAt])
+  @@index([receivedAt])
 }
 ```
 
@@ -139,6 +195,10 @@ connected tenant:
 
 ## Validation & Operations Notes
 
+- `POST /api/federation/events` accepts the peer bearer only (no session); it answers `503` when federation is disabled
+  and, in production, when `FEDERATION_TOKEN_SECRET` is unset.
+- HMAC peers must share `FEDERATION_HMAC_SECRET` and upgrade together: events from older peers that still sign HMAC
+  with the bearer token are rejected.
 - The `/api/federation/status` endpoint accepts either a peer bearer token equal to `FEDERATION_TOKEN_SECRET`
   (constant-time comparison) or a platform-admin session (`ADMIN_USER_IDS`). If `FEDERATION_TOKEN_SECRET` is unset or
   blank the bearer path is disabled and only platform-admin sessions are accepted; it never allows anonymous access.

@@ -108,6 +108,12 @@ const dispatchLoopEvent = async (result: LoopRunResult) => {
 export const runLoop = async (overrides?: {
   telemetry?: Partial<LoopTelemetry>;
   scaling?: Partial<ScalingState>;
+  /**
+   * The previous tick's telemetry. The cron scheduler (lib/ai/loop-scheduler.ts)
+   * passes the value stored in AutonomyLoopState, because the in-memory history
+   * is empty on every serverless invocation.
+   */
+  previousTelemetry?: LoopTelemetry;
   emitEvent?: boolean;
 }): Promise<LoopRunResult> => {
   if (!isAutonomyEnabled()) {
@@ -173,7 +179,7 @@ export const runLoop = async (overrides?: {
     (await sampleBacklogSize(EVENT_STREAM_KEY)) ??
     snapshot.events.length;
 
-  const previousTelemetry = runtimeState.history.at(-1);
+  const previousTelemetry = overrides?.previousTelemetry ?? runtimeState.history.at(-1);
 
   const telemetry: LoopTelemetry = {
     timestamp: new Date().toISOString(),
@@ -249,6 +255,20 @@ export const runLoop = async (overrides?: {
   } satisfies LoopRunResult;
 };
 
+/**
+ * True where the in-process timer is the scheduler: local development and
+ * tests. Production builds run the loop only from the /api/cron/autonomy cron,
+ * which takes the AutonomyLoopState lease (ADR 016); a timer there would live
+ * in one arbitrary serverless instance and bypass the lease.
+ */
+export const usesInProcessAutonomyTimer = () => process.env.NODE_ENV !== "production";
+
+/** The cron scheduler's persisted switch. A missing row counts as paused, as the scheduler creates it paused. */
+const isPersistedPaused = async () => {
+  const row = await db.autonomyLoopState.findUnique({ where: { id: "singleton" }, select: { paused: true } });
+  return row?.paused ?? true;
+};
+
 const scheduleNextRun = async () => {
   if (!runtimeState.enabled) return;
   if (runtimeState.timer) {
@@ -257,6 +277,11 @@ const scheduleNextRun = async () => {
 
   runtimeState.timer = setTimeout(async () => {
     try {
+      // A pause persisted from any instance stops this timer too.
+      if (await isPersistedPaused()) {
+        stopAutonomyLoop();
+        return;
+      }
       await runLoop();
     } catch (error) {
       console.error("Autonomy loop failure", error);
@@ -266,9 +291,22 @@ const scheduleNextRun = async () => {
   }, runtimeState.intervalMs);
 };
 
+/**
+ * Starts the in-process setTimeout loop. Local development only: serverless
+ * instances do not live long enough to keep a timer, so production runs the
+ * loop from the /api/cron/autonomy cron (lib/ai/loop-scheduler.ts, ADR 016)
+ * and this refuses to start there. It also refuses while the persisted switch
+ * is paused, and each timer tick rechecks it.
+ */
 export const startAutonomyLoop = async () => {
   if (!isAutonomyEnabled()) {
     return { started: false, reason: "ENABLE_AI_AUTONOMY=false" } as const;
+  }
+  if (!usesInProcessAutonomyTimer()) {
+    return { started: false, reason: "cron-scheduled" } as const;
+  }
+  if (await isPersistedPaused()) {
+    return { started: false, reason: "paused" } as const;
   }
   runtimeState.enabled = true;
   await runLoop();
@@ -287,8 +325,14 @@ export const stopAutonomyLoop = () => {
 export const getLoopState = async () => {
   const recoveryLog = await listRecoveryLog({ limit: 10 });
   const priorities = await db.agentPriority.findMany({ orderBy: { updatedAt: "desc" }, take: 10 });
+  // The cron scheduler's persisted switch (ADR 016). Running means either the
+  // local in-process timer is on or the persisted row is resumed.
+  const persisted = await db.autonomyLoopState.findUnique({ where: { id: "singleton" } });
   return {
-    enabled: runtimeState.enabled && isAutonomyEnabled(),
+    enabled: (runtimeState.enabled || persisted?.paused === false) && isAutonomyEnabled(),
+    paused: persisted?.paused ?? true,
+    nextRunAt: persisted?.nextRunAt?.toISOString() ?? null,
+    lastRunAt: persisted?.lastRunAt?.toISOString() ?? null,
     intervalMs: runtimeState.intervalMs,
     concurrency: runtimeState.concurrency,
     history: [...runtimeState.history],

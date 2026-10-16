@@ -16,6 +16,14 @@
     {
       "path": "/api/cron/reminder-delivery",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/autonomy",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 3 * * *"
     }
   ]
 }

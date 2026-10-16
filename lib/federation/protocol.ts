@@ -90,10 +90,25 @@ const payloadMap: Record<FederationEventType, z.ZodTypeAny> = {
 };
 
 export const signatureAlgorithmSchema = z
-  .enum(["hmac-sha256", "rsa-sha256", "ed25519"])
+  .enum(["hmac-sha256", "rsa-sha256"])
   .default("hmac-sha256");
 
 export type SignatureAlgorithm = z.infer<typeof signatureAlgorithmSchema>;
+
+export type FederationPayload =
+  | TelemetrySyncPayload
+  | PrioritySharePayload
+  | TrustAggregatePayload
+  | ModelUpdatePayload;
+
+/**
+ * Parses a payload with the schema of its event type. The payloads are not
+ * mutually exclusive (a model_update payload also satisfies the telemetry_sync
+ * schema), so trying them in turn would pick the wrong schema and strip fields
+ * (cycleId, appliedAt, notes) from the signed payload.
+ */
+export const parseFederationPayload = (type: FederationEventType, payload: unknown): FederationPayload =>
+  payloadMap[type].parse(payload) as FederationPayload;
 
 export const federationEventSchema = z
   .object({
@@ -104,29 +119,38 @@ export const federationEventSchema = z
     signature: z.string().min(10),
     signatureAlgorithm: signatureAlgorithmSchema.optional(),
     keyId: z.string().optional(),
-    payload: z
-      .union([
-        telemetrySyncPayloadSchema,
-        prioritySharePayloadSchema,
-        trustAggregatePayloadSchema,
-        modelUpdatePayloadSchema,
-      ])
-      .optional(),
+    // Validated against the schema of `type` in the transform below.
+    payload: z.unknown().optional(),
     encryptedPayload: z.string().optional(),
     encryptedKey: z.string().optional(),
     iv: z.string().optional(),
   })
-  .refine(
-    (data) =>
-      data.payload !== undefined ||
-      (data.encryptedPayload !== undefined &&
-        data.encryptedKey !== undefined &&
-        data.iv !== undefined),
-    {
-      message:
-        "Federation event must contain either a plaintext payload or valid encryptedPayload, encryptedKey, and iv",
-    },
-  );
+  .transform((data, ctx) => {
+    if (data.payload === undefined) {
+      if (data.encryptedPayload === undefined || data.encryptedKey === undefined || data.iv === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Federation event must contain either a plaintext payload or valid encryptedPayload, encryptedKey, and iv",
+        });
+        return z.NEVER;
+      }
+      return { ...data, payload: undefined as FederationPayload | undefined };
+    }
+
+    const result = payloadMap[data.type].safeParse(data.payload);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["payload", ...issue.path],
+          message: issue.message,
+        });
+      }
+      return z.NEVER;
+    }
+    return { ...data, payload: result.data as FederationPayload | undefined };
+  });
 
 export type FederationEvent<TType extends FederationEventType = FederationEventType> = {
   id: string;

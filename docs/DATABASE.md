@@ -84,7 +84,7 @@ npx prisma migrate status
 The baseline PostgreSQL migration is located at:
 `prisma/migrations/20260811000000_init_postgresql_schema/migration.sql`
 
-This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 14 tables and 4 enums; `prisma/schema.prisma` currently defines **32 models and 12 enums**.
+This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 16 tables and 4 enums; `prisma/schema.prisma` currently defines **34 models and 12 enums**.
 
 | Migration | Tables added | Enums added |
 |---|---|---|
@@ -97,6 +97,8 @@ This migration creates the original 18 tables and 8 PostgreSQL enum types (the P
 | `20260814100000_invoice_reminder_deliveries` | 1 | 1 |
 | `20260814110000_api_keys` | 1 | 0 |
 | `20260827070000_add_performance_indexes` | 0 (indexes) | 0 |
+| `20261016170000_federation_inbound_events` | 1 | 0 |
+| `20261016180000_cron_lease` | 1 | 0 |
 
 ### 3.5 Payment Lifecycle Migration
 
@@ -127,8 +129,8 @@ timestamps support the versioned customer API without exposing raw secrets.
 | **Workspace (required)** | `organizationId` is non-null with a cascading FK to `Organization`. Access is decided by `Membership`. | `Membership`, `WorkspaceInvitation`, `WorkspaceNotificationEndpoint`, `InvoiceReminderRule`, `InvoiceReminderOccurrence`, `ApiKey` |
 | **Workspace with legacy user fallback** | `organizationId` is **nullable** (`onDelete: SetNull`) and `userId` is required. While `WORKSPACE_AUTH_MODE=compat`, rows with no organization are scoped to their `userId` (the `LEGACY` role in `lib/workspaces.ts`). Under `enforce`, only membership grants access. | `Invoice`, `Client`, `InvoiceTemplate` |
 | **Inherited from parent** | No ownership column of their own. Access follows the parent row, and they are deleted with it (`onDelete: Cascade`). | `Payment`, `PaymentAttempt`, `PaymentEvent` (via `Invoice`); `Receipt`, `ReceiptAuditLog` (via `Payment`); `InvoiceReminderDelivery` (via `InvoiceReminderOccurrence`) |
-| **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId` |
-| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
+| **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId`, `FederationInboundEvent.tenantId` |
+| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `CronLease`, `AutonomyLoopState`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
 
 Money columns (`subtotal`, `tax`, `total`, `amount`, `paidAmount`, `refundedAmount`) are integers in the currency's major unit (IDR has no minor unit). The currency is stored next to them, and the default is `IDR`.
 
@@ -171,7 +173,7 @@ erDiagram
 | `Organization` | A workspace. Every signup gets a personal one (`lib/workspace-provisioning.ts`). Holds workspace branding and currency. | Owns members, invoices, clients, templates, invitations, notification endpoints, reminder rules, API keys. | Root of a tenant | — |
 | `Membership` | The user ↔ workspace link that carries the role. It is the only source of authorization. | `@@unique([organizationId, userId])`. Cascades with both sides. | Workspace | `WorkspaceRole`: `OWNER`, `ADMIN`, `MEMBER`, `VIEWER` |
 | `WorkspaceInvitation` | A one-time invitation that expires after seven days. Only the SHA-256 `tokenHash` is stored. | `invitedById` → `User`. `tokenHash` is unique. | Workspace | `WorkspaceRole` (only `ADMIN`/`MEMBER`/`VIEWER` can be invited). State is implied by `acceptedAt` / `revokedAt` / `expiresAt`. |
-| `WorkspaceNotificationEndpoint` | Per-workspace provider settings (currently Slack). The webhook URL is stored encrypted in `secretCiphertext` with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY`. | `@@unique([organizationId, type])` | Workspace | `enabled` flag |
+| `WorkspaceNotificationEndpoint` | Per-workspace provider settings (currently Slack). The webhook URL is stored encrypted in `secretCiphertext` with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (AES-256-GCM): `v1:<iv>:<tag>:<ct>` (legacy) or `v2:<key fingerprint>:<iv>:<tag>:<ct>`. `npm run secrets:reencrypt` rewrites every row with the active key after a rotation ([SECURITY.md](../SECURITY.md#notification-key-rotation)). | `@@unique([organizationId, type])` | Workspace | `enabled` flag |
 
 ### 4.4 Invoicing & clients
 
@@ -200,7 +202,7 @@ How invoice status changes:
 | Model | Purpose | Key relationships / constraints | Ownership | Status / enum |
 |---|---|---|---|---|
 | `InvoiceReminderRule` | A reminder policy: `offsetDays` relative to the due date (−365…365) and `channels` (`EMAIL`, `SLACK`). | Has occurrences. | Workspace | `enabled` flag |
-| `InvoiceReminderOccurrence` | One scheduled reminder for one invoice and rule. `/api/cron/reminders` creates it, and the unique `occurrenceKey` keeps cron retries idempotent. | `@@unique(occurrenceKey)`. Has one delivery per channel. | Workspace | `status` (string), rolled up from its deliveries: `PENDING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
+| `InvoiceReminderOccurrence` | One scheduled reminder for one invoice and rule. `/api/cron/reminders` creates it, and the unique `occurrenceKey` keeps cron retries idempotent. `/api/cron/retention` deletes `SENT`/`FAILED`/`SKIPPED` occurrences scheduled more than 12 months ago, with their deliveries (cascade); pending ones are kept. | `@@unique(occurrenceKey)`. Has one delivery per channel. | Workspace | `status` (string), rolled up from its deliveries: `PENDING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
 | `InvoiceReminderDelivery` | One delivery attempt row per channel, processed by `/api/cron/reminder-delivery`. | `@@unique([occurrenceId, channel])` | Via occurrence | `InvoiceReminderDeliveryStatus`: `PENDING`, `PROCESSING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
 
 Invoice email delivery (`POST /api/invoices/[id]/send-email`) has no table of its own. Attempts are appended to `Invoice.emailLog` (JSON) and `emailedAt` is set. A send is tried at most 4 times (`MAX_EMAIL_ATTEMPTS`, `lib/invoice-delivery.ts:21-22`).
@@ -224,9 +226,10 @@ Idempotency keys and rate-limit windows for `/api/v1` are kept in Upstash Redis,
 
 | Model | Purpose | Ownership |
 |---|---|---|
-| `AuditLog` | The general audit trail: invoice, auth, workspace, payment, reminder and AI auto-action events. Columns: `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), `ipAddress`. Written by `logAuditEvent()` in `lib/audit/auditLogger.ts`. | Tenant-tagged (`tenantId`). Users are attached with `SetNull` on delete. |
+| `AuditLog` | The general audit trail: invoice, auth, workspace, payment, reminder and AI auto-action events. Columns: `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), `ipAddress`. Written by `logAuditEvent()` in `lib/audit/auditLogger.ts`. Purged by `/api/cron/retention`: rows are deleted after 12 months and `ipAddress` is set to `null` after 90 days ([SECURITY.md](../SECURITY.md#retention-and-deletion)). | Tenant-tagged (`tenantId`). Users are attached with `SetNull` on delete. |
 | `FeatureFlag` | Runtime toggles. `targetTenants` / `targetUsers` are JSON allowlists (`lib/feature-flags.ts`). | Global |
 | `UptimeCheck` | Results from `/api/cron/uptime`: status code, latency, `UP`/`DOWN`. | Global |
+| `CronLease` | One row per named scheduled job (`name` is the key, e.g. `retention`). A cron claims it with a conditional update that sets `claimedUntil` in the future only when it is null or past, so an overlapping invocation skips; it clears `claimedUntil` and sets `lastRunAt` when done. A crashed run blocks the next one only until `claimedUntil` passes. | Global |
 
 ### 4.10 AI agents
 
@@ -240,6 +243,7 @@ All of these are global platform telemetry, with no tenant column.
 | `AgentEventLog` | Persisted MAP events (`traceId`, type, source/target agent, priority, payload). The fallback for the Redis stream. | `eventType` string (see `lib/ai/protocol.ts`) |
 | `AgentPriority` | The current dynamic weight per agent. | — |
 | `RecoveryLog` | Rollback and re-evaluation actions by the recovery agent, with trust before/after. | — |
+| `AutonomyLoopState` | Single row (`id = "singleton"`) driving the autonomy loop from the `/api/cron/autonomy` cron ([ADR 016](./adr/016-autonomy-loop-cron-scheduling.md)): `paused` (defaults to `true`; a platform admin resumes it in DevTools), `nextRunAt`, `lastRunAt`, the scaler state carried between serverless invocations (`lastIntervalMs`, `lastConcurrency`, `lastTelemetry`), `lastSummary`, `lastResult` (scaling and recovery), and a `claimedUntil` lease so overlapping cron invocations skip. | — |
 
 ### 4.11 Content optimization
 
@@ -256,6 +260,7 @@ All of these are global platform telemetry, with no tenant column.
 | Model | Purpose | Ownership |
 |---|---|---|
 | `FederationMetrics` | Aggregate trust statistics and agent priorities per federation cycle. `@@unique([cycleId, tenantId])`. See the federation docs under `docs/ai/`. | Tenant-tagged (`tenantId` string) |
+| `FederationInboundEvent` | One row per event received on `POST /api/federation/events` that passed signature verification and the 5-minute freshness window: `eventId`, sender `tenantId`, `type`, `signatureAlgorithm`, `eventTimestamp`, `receivedAt`, and `accepted` (`false` for echoes of this instance's own events). `signatureHash` (SHA-256 of the signature) is `@unique` and is the replay key, because the signature does not cover the event `id`. No retention purge yet; the table grows by one row per verified event. | Tenant-tagged (`tenantId` string, the sender) |
 
 ### 4.13 Lifecycles
 

@@ -24,6 +24,7 @@ export enum AuditAction {
   INVOICE_EMAIL_BOUNCED = "INVOICE_EMAIL_BOUNCED",
   INVOICE_EMAIL_COMPLAINED = "INVOICE_EMAIL_COMPLAINED",
   INVOICE_EMAIL_SUPPRESSED = "INVOICE_EMAIL_SUPPRESSED",
+  RETENTION_PURGE = "RETENTION_PURGE",
 }
 
 export enum AuditEntity {
@@ -33,6 +34,7 @@ export enum AuditEntity {
   AI_AUTO_ACTION = "AiAutoAction",
   RECOVERY = "Recovery",
   CLIENT = "Client",
+  RETENTION = "Retention",
 }
 
 export interface LogAuditEventInput {

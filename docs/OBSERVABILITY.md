@@ -89,7 +89,7 @@ Related: [DEPLOYMENT.md](./DEPLOYMENT.md#scheduled-jobs) (crons and post-deploy 
 - **Read paths:** `/app/admin/audit-logs` (platform admins only; `/app/admin/audit-log` re-exports it), `GET /api/admin/audit-logs` (scoped to the caller's workspace via `canReadWorkspace`; a `tenantId` outside the caller's workspace is refused) and `GET /api/admin/audit-log` (re-exports the previous one).
 - **PII:** rows hold `userId`, `ipAddress` (from `x-forwarded-for` or `x-real-ip`, `getClientIp`) and free-form `details`. Treat the table as personal data for retention and access purposes ([../SECURITY.md](../SECURITY.md)).
 
-> **Gap:** no retention or pruning policy for `AuditLog`, `UptimeCheck` or other event tables was found in code or docs.
+> **Gap:** `AuditLog` is purged by `/api/cron/retention` (rows after 12 months, IP addresses after 90 days; see [../SECURITY.md](../SECURITY.md#retention-and-deletion)), but `UptimeCheck` and the other event tables have no retention or pruning.
 >
 > **Gap:** `logAuditEvent` is called with `void` (fire and forget) in most places, so a failed audit write is lost without a trace in the response.
 

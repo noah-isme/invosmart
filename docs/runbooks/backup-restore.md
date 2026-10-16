@@ -13,7 +13,7 @@ Confirmed by searching the tree (excluding `node_modules`, `.next`, `graphify-ou
 | Item | Status |
 |---|---|
 | Database | PostgreSQL through Prisma (`prisma/schema.prisma`, `provider = "postgresql"`, `url = env("DATABASE_URL")`). No `directUrl` or shadow database is configured |
-| Backup scripts, cron or workflow | **None.** `vercel.json` has only the three crons (`/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`). `.github/workflows/` has `release.yml` and `e2e-full.yml`, neither dumps a database. `package.json` has no backup script |
+| Backup scripts, cron or workflow | **None.** `vercel.json` has only the four crons (`/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, `/api/cron/retention`), and the retention cron deletes data rather than backing it up. `.github/workflows/` has `release.yml` and `e2e-full.yml`, neither dumps a database. `package.json` has no backup script |
 | Migrations | 9 forward-only SQL migrations in `prisma/migrations/` plus `migration_lock.toml`. No down migrations (Prisma does not generate them) |
 | Migration status check | `npm run release:certify` runs `prisma migrate status` against `STAGING_DATABASE_URL` (`scripts/release-certification.mjs`, `--check-migrations`) |
 | Applying migrations | Production: the `deploy` job in `release.yml` runs `npx prisma migrate deploy` before `vercel deploy`. Staging and restored copies: by hand ([DATABASE.md](../DATABASE.md), [DEPLOYMENT.md](../DEPLOYMENT.md)) |

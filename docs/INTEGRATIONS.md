@@ -277,7 +277,9 @@ There are two separate uses:
 
 1. **Workspace notifications.** Each workspace stores its own incoming-webhook
    URL, encrypted with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (AES-256-GCM,
-   `lib/team/secrets.ts`).
+   `lib/team/secrets.ts`; format `v1`, or `v2` with a key fingerprint, and
+   previous keys accepted from `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING`;
+   rotation in [SECURITY.md](../SECURITY.md#notification-key-rotation)).
    - Only `hooks.slack.com` and `hooks.slack-gov.com` URLs are accepted
      (`lib/team/slack.ts`).
    - Requests time out after 5 s. Up to 3 attempts with a 250 ms backoff, and
@@ -301,15 +303,22 @@ Leave it unset to disable.
 - **Code**:
   - `lib/federation/bus.ts`, `lib/federation/protocol.ts`
   - `lib/ai/federationAgent.ts`
-  - `app/api/federation/status/route.ts`
+  - `app/api/federation/events/route.ts`, `app/api/federation/status/route.ts`,
+    `lib/federation/auth.ts` (peer bearer check)
 - **Env**:
   - `ENABLE_AI_FEDERATION`
   - `FEDERATION_TENANT_ID`, `FEDERATION_ENDPOINTS` (comma-separated peer base URLs)
-  - `FEDERATION_TOKEN_SECRET`
+  - `FEDERATION_TOKEN_SECRET` (peer bearer token only, never a signing key)
+  - `FEDERATION_HMAC_SECRET` (HMAC-SHA256 signing key; must differ from the
+    bearer and be the same on every peer)
   - `FEDERATION_PRIVATE_KEY`, `FEDERATION_PUBLIC_KEY`, `FEDERATION_KEY_ID`
 - **Signing and encryption**:
   - Outbound events are signed with RSA-SHA256 (private key) or HMAC-SHA256
-    (shared secret).
+    (`FEDERATION_HMAC_SECRET`). These are the only two algorithms; the
+    protocol schema rejects anything else (`ed25519` was removed). Publishing
+    fails when neither a private key nor the HMAC key is set.
+  - A tenant whose public key is registered with the receiver must sign with
+    RSA; HMAC events claiming that tenant are rejected.
   - Payloads can be encrypted with AES-256-GCM, with the key wrapped by RSA-OAEP.
   - Metadata passes through `sanitizeMetadata` before leaving. See
     [../SECURITY.md](../SECURITY.md#federation) and
@@ -317,10 +326,33 @@ Leave it unset to disable.
 - **Outbound requests**: events are `POST`ed to `<peer>/api/federation/events`
   with `Authorization: Bearer $FEDERATION_TOKEN_SECRET`. Status is read from
   `<peer>/api/federation/status`. Neither request has a timeout or retry.
-- **Inbound**: this app serves `/api/federation/status` (peer bearer token or
-  platform-admin session) but has **no** `/api/federation/events` route.
-  Ingest happens in-process through `FederationBus.ingest`, so two InvoSmart
-  deployments cannot exchange events over HTTP as the code stands.
+- **Inbound**: `/api/federation/status` accepts the peer bearer or a
+  platform-admin session. `POST /api/federation/events` receives events from
+  peers; it never reads a session or cookie and is CSRF-exempt. Checks, in
+  order, and their answers:
+
+  | Check | Failure answer |
+  |---|---|
+  | Federation enabled (`ENABLE_AI_FEDERATION` not `false`, bus configured) | `503 {error:"Federation disabled"}` |
+  | Rate limit, `federation-events` bucket (10/min per IP per instance; tunable if a busy peer needs more) | `429` with `Retry-After` |
+  | `Authorization: Bearer $FEDERATION_TOKEN_SECRET` (constant time) | `401`; `503` in production when the secret is unset |
+  | Body at most 64 KB (counted while reading, so also without `Content-Length`) | `413` |
+  | JSON and FDP schema; the `payload` is validated with the schema of the event `type` | `400` (the body is not echoed) |
+  | Signature (RSA-SHA256 with the sender's registered key, or HMAC-SHA256 with `FEDERATION_HMAC_SECRET`) | `401 {error:"Invalid federation signature"}` |
+  | Event `timestamp` within 5 minutes of local time | `401 {error:"Stale federation event"}` |
+  | Encrypted payload decrypts and matches the schema of its `type` | `400 {error:"Invalid federation event"}` (nothing recorded) |
+  | Not seen before (unique SHA-256 of the signature in `FederationInboundEvent`) | `200 {accepted:false, duplicate:true}` |
+
+  Otherwise the answer is `202 {accepted:true}`, or `202 {accepted:false}`
+  for an echo of this instance's own event (recorded, not processed). A replay
+  is detected even when the sender changes the event `id`, because the id is
+  not signed. What happens to an accepted event is described in
+  [ai/federation.md](ai/federation.md#inbound-events).
+- **Rollout of `FEDERATION_HMAC_SECRET`**: HMAC events used to be keyed with
+  the bearer token. Peers on an older version still do that and their HMAC
+  events are now rejected (`401`), so every HMAC peer must deploy this version
+  and set the same `FEDERATION_HMAC_SECRET` together. RSA-signing peers are
+  not affected.
 
 ## Sandbox and test setup
 

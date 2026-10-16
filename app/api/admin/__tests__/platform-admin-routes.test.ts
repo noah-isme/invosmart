@@ -9,7 +9,7 @@ vi.mock("@/lib/tracing", () => ({
   withSpan: (_name: string, handler: unknown) => handler,
 }));
 
-const { featureFlags, uptime, loop, orchestrator, workspaces, explainer } = vi.hoisted(() => ({
+const { featureFlags, uptime, loop, loopScheduler, orchestrator, workspaces, explainer } = vi.hoisted(() => ({
   explainer: { generate: vi.fn().mockResolvedValue({ recommendationId: "rec_1" }) },
   featureFlags: {
     getAllFlags: vi.fn().mockResolvedValue([]),
@@ -26,6 +26,10 @@ const { featureFlags, uptime, loop, orchestrator, workspaces, explainer } = vi.h
     getLoopState: vi.fn().mockResolvedValue({}),
     startAutonomyLoop: vi.fn().mockResolvedValue(undefined),
     stopAutonomyLoop: vi.fn(),
+    usesInProcessAutonomyTimer: vi.fn().mockReturnValue(false),
+  },
+  loopScheduler: {
+    setAutonomyPaused: vi.fn().mockResolvedValue({}),
   },
   orchestrator: {
     isOrchestrationEnabled: vi.fn().mockReturnValue(true),
@@ -50,6 +54,7 @@ vi.mock("@/lib/ai/explain", () => ({
 vi.mock("@/lib/feature-flags", () => featureFlags);
 vi.mock("@/lib/monitoring/uptime", () => uptime);
 vi.mock("@/lib/ai/loop", () => loop);
+vi.mock("@/lib/ai/loop-scheduler", () => loopScheduler);
 vi.mock("@/lib/ai/orchestrator", () => orchestrator);
 vi.mock("@/lib/workspaces", () => workspaces);
 vi.mock("@/lib/ai/federationAgent", () => ({
@@ -147,6 +152,7 @@ describe("platform-admin gate on admin/devtools API routes", () => {
       const res = await autonomyRoute.POST(json("/api/devtools/autonomy", "POST", { action: "pause" }));
       expect(res.status).toBe(403);
       expect(loop.stopAutonomyLoop).not.toHaveBeenCalled();
+      expect(loopScheduler.setAutonomyPaused).not.toHaveBeenCalled();
     });
 
     it("GET /api/ai/orchestrator", async () => {
@@ -212,8 +218,27 @@ describe("platform-admin gate on admin/devtools API routes", () => {
       expect(explainer.generate).toHaveBeenCalledWith("rec_1", "cuid_admin");
     });
 
+    it("autonomy resume only persists the switch where the cron schedules the loop", async () => {
+      loop.usesInProcessAutonomyTimer.mockReturnValue(false);
+      const res = await autonomyRoute.POST(json("/api/devtools/autonomy", "POST", { action: "resume" }));
+      expect(res.status).toBe(200);
+      expect(loopScheduler.setAutonomyPaused).toHaveBeenCalledWith(false);
+      expect(loop.startAutonomyLoop).not.toHaveBeenCalled();
+    });
+
+    it("autonomy resume also starts the in-process timer in local development", async () => {
+      loop.usesInProcessAutonomyTimer.mockReturnValue(true);
+      const res = await autonomyRoute.POST(json("/api/devtools/autonomy", "POST", { action: "resume" }));
+      expect(res.status).toBe(200);
+      expect(loopScheduler.setAutonomyPaused).toHaveBeenCalledWith(false);
+      expect(loop.startAutonomyLoop).toHaveBeenCalledTimes(1);
+      loop.usesInProcessAutonomyTimer.mockReturnValue(false);
+    });
+
     it("autonomy, orchestrator, perf summary", async () => {
       expect((await autonomyRoute.POST(json("/api/devtools/autonomy", "POST", { action: "pause" }))).status).toBe(200);
+      expect(loopScheduler.setAutonomyPaused).toHaveBeenCalledWith(true);
+      expect(loop.stopAutonomyLoop).toHaveBeenCalledTimes(1);
       expect((await orchestratorRoute.GET(req("/api/ai/orchestrator"))).status).toBe(200);
       expect((await perfRoute.GET(req("/api/dev/perf/summary"))).status).toBe(200);
     });

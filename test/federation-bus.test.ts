@@ -1,7 +1,27 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import { FederationBus, generateFederationKeyPair } from "@/lib/federation/bus";
-import type { FederationEvent } from "@/lib/federation/protocol";
+import {
+  federationEventSchema,
+  signatureAlgorithmSchema,
+  type FederationEvent,
+} from "@/lib/federation/protocol";
+
+// In-memory stand-in for db.federationInboundEvent with the unique
+// signatureHash constraint (P2002 on a second insert).
+const inbound = vi.hoisted(() => {
+  const rows: Array<Record<string, unknown>> = [];
+  const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+    if (rows.some((row) => row.signatureHash === data.signatureHash)) {
+      throw Object.assign(new Error("Unique constraint failed on signatureHash"), { code: "P2002" });
+    }
+    rows.push(data);
+    return data;
+  });
+  return { rows, create };
+});
+
+vi.mock("@/lib/db", () => ({ db: { federationInboundEvent: { create: inbound.create } } }));
 
 describe("FederationBus", () => {
   const secret = "secret-key";
@@ -9,12 +29,15 @@ describe("FederationBus", () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
+    inbound.rows.length = 0;
+    inbound.create.mockClear();
   });
 
   it("publishes events and notifies subscribers", async () => {
     const bus = new FederationBus({
       tenantId: "tenant-a",
       secret,
+      hmacSecret: `${secret}-hmac`,
       endpoints: ["https://tenant-b.com"],
       enabled: true,
       fetchImpl: fetchMock,
@@ -50,8 +73,8 @@ describe("FederationBus", () => {
   });
 
   it("verifies signatures when ingesting remote events", async () => {
-    const producer = new FederationBus({ tenantId: "tenant-a", secret, enabled: true });
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret, enabled: true });
+    const producer = new FederationBus({ tenantId: "tenant-a", secret, hmacSecret: `${secret}-hmac`, enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret, hmacSecret: `${secret}-hmac`, enabled: true });
 
     const listener = vi.fn();
     consumer.subscribe("telemetry_sync", listener);
@@ -73,7 +96,7 @@ describe("FederationBus", () => {
   });
 
   it("rejects events with invalid signatures", async () => {
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret, enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret, hmacSecret: `${secret}-hmac`, enabled: true });
 
     const invalidEvent: FederationEvent = {
       id: "evt-1",
@@ -288,6 +311,8 @@ describe("FederationBus", () => {
     corruptedEvent.signature = signer.sign(producerKeys.privateKey, "hex");
 
     await expect(consumer.ingest(corruptedEvent)).rejects.toThrow(/Payload decryption failed/);
+    // A failed decryption leaves no accepted replay row behind.
+    expect(inbound.rows).toEqual([]);
   });
 
   it("handles missing private key when ingesting encrypted events", async () => {
@@ -305,6 +330,7 @@ describe("FederationBus", () => {
     const consumer = new FederationBus({
       tenantId: "tenant-b",
       secret: "secret-key",
+      hmacSecret: "secret-key-hmac",
       peerPublicKeys: { "tenant-a": producerKeys.publicKey },
       enabled: true,
     });
@@ -326,8 +352,8 @@ describe("FederationBus", () => {
   });
 
   it("maintains backward-compatible HMAC fallback when asymmetric keys are absent", async () => {
-    const producer = new FederationBus({ tenantId: "tenant-a", secret: "hmac-secret", enabled: true });
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret: "hmac-secret", enabled: true });
+    const producer = new FederationBus({ tenantId: "tenant-a", secret: "hmac-secret", hmacSecret: "hmac-secret-hmac", enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret: "hmac-secret", hmacSecret: "hmac-secret-hmac", enabled: true });
 
     const { event } = await producer.publish({
       type: "telemetry_sync",
@@ -342,5 +368,335 @@ describe("FederationBus", () => {
     expect(event?.signatureAlgorithm).toBe("hmac-sha256");
     const ingested = await consumer.ingest(event as FederationEvent);
     expect(ingested).toBe(true);
+  });
+
+  describe("HMAC key separation (FEDERATION_HMAC_SECRET)", () => {
+    const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
+
+    it("rejects an HMAC event signed with the bearer token instead of the HMAC key", async () => {
+      // The attacker only knows the bearer token that deliver() sends to every peer.
+      const forger = new FederationBus({ tenantId: "tenant-a", hmacSecret: "bearer-token", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        secret: "bearer-token",
+        hmacSecret: "real-hmac-key",
+        enabled: true,
+      });
+      const { event } = await forger.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+
+    it("rejects HMAC events for a tenant that has a registered public key", async () => {
+      const keys = generateFederationKeyPair();
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        hmacSecret: "shared-hmac",
+        peerPublicKeys: { "tenant-a": keys.publicKey },
+        enabled: true,
+      });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+      expect(event?.signatureAlgorithm).toBe("hmac-sha256");
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+
+    it("refuses to sign when neither a private key nor the HMAC key is configured", async () => {
+      const bus = new FederationBus({ tenantId: "tenant-a", secret: "bearer-only", enabled: true });
+
+      await expect(bus.publish({ type: "telemetry_sync", payload })).rejects.toThrow(
+        /FEDERATION_PRIVATE_KEY or FEDERATION_HMAC_SECRET/,
+      );
+    });
+
+    it("rejects HMAC events when the consumer has no HMAC key", async () => {
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({ tenantId: "tenant-b", secret: "bearer", enabled: true });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+  });
+
+  describe("freshness and replay guard", () => {
+    const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
+    const pair = () => ({
+      producer: new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true }),
+      consumer: new FederationBus({ tenantId: "tenant-b", hmacSecret: "shared-hmac", enabled: true }),
+    });
+
+    it("rejects an event older than the 5-minute window", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload,
+        timestamp: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
+      });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Stale federation event/);
+      expect(listener).not.toHaveBeenCalled();
+      expect(inbound.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects an event from more than 5 minutes in the future", async () => {
+      const { producer, consumer } = pair();
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload,
+        timestamp: new Date(Date.now() + 6 * 60 * 1000).toISOString(),
+      });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Stale federation event/);
+    });
+
+    it("records an accepted event and rejects the same event a second time", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).resolves.toBe(true);
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Duplicate federation event/);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(inbound.rows).toHaveLength(1);
+      expect(inbound.rows[0]).toMatchObject({
+        eventId: event?.id,
+        tenantId: "tenant-a",
+        type: "telemetry_sync",
+        signatureAlgorithm: "hmac-sha256",
+        accepted: true,
+      });
+      expect(inbound.rows[0].signatureHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("rejects the same signed event re-sent with a new id (the id is not signed)", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      const replay = { ...(event as FederationEvent), id: "a-brand-new-id" };
+      await expect(consumer.ingest(replay)).rejects.toThrow(/Duplicate federation event/);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats an upper-case hex copy of the signature as the same event", async () => {
+      const { producer, consumer } = pair();
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      const variant = { ...(event as FederationEvent), signature: event!.signature.toUpperCase() };
+      await expect(consumer.ingest(variant)).rejects.toThrow(/Duplicate federation event/);
+    });
+
+    it("records an own-tenant echo with accepted=false and does not emit it", async () => {
+      const bus = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const { event } = await bus.publish({ type: "telemetry_sync", payload });
+      const listener = vi.fn();
+      bus.subscribe("telemetry_sync", listener);
+
+      await expect(bus.ingest(event as FederationEvent)).resolves.toBe(false);
+      expect(listener).not.toHaveBeenCalled();
+      expect(inbound.rows).toEqual([expect.objectContaining({ tenantId: "tenant-a", accepted: false })]);
+    });
+
+    it("rejects a forged HMAC event before any database write", async () => {
+      const forger = new FederationBus({ tenantId: "tenant-a", hmacSecret: "bearer-token", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        secret: "bearer-token",
+        hmacSecret: "shared-hmac",
+        enabled: true,
+      });
+      const { event } = await forger.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+      expect(inbound.create).not.toHaveBeenCalled();
+    });
+
+    it("uses an injected inbound store instead of the database when given one", async () => {
+      const create = vi.fn().mockResolvedValue({});
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        hmacSecret: "shared-hmac",
+        enabled: true,
+        inboundStore: { create },
+      });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(inbound.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("signature algorithms", () => {
+    it("accepts only hmac-sha256 and rsa-sha256; ed25519 is rejected by the schema", async () => {
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload: { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true },
+      });
+
+      expect(federationEventSchema.safeParse({ ...event, signatureAlgorithm: "rsa-sha256" }).success).toBe(true);
+      expect(federationEventSchema.safeParse({ ...event, signatureAlgorithm: "ed25519" }).success).toBe(false);
+    });
+
+    it("signatureAlgorithmSchema rejects ed25519 (the bus never produced it)", () => {
+      expect(signatureAlgorithmSchema.safeParse("ed25519").success).toBe(false);
+      expect(signatureAlgorithmSchema.removeDefault().options).toEqual(["hmac-sha256", "rsa-sha256"]);
+    });
+  });
+});
+
+describe("FederationBus wire round trip", () => {
+  const priorities = [{ agent: "optimizer" as const, weight: 0.5, confidence: 0.5, rationale: "x" }];
+  const payloads = {
+    telemetry_sync: { tenantId: "tenant-a", trustScore: 50, priorities, sanitized: true },
+    priority_share: { tenantId: "tenant-a", cycleId: "c1", priorities, rationale: "r" },
+    trust_aggregate: {
+      tenantId: "tenant-a",
+      cycleId: "c1",
+      participants: 1,
+      averageTrust: 50,
+      highestTrust: null,
+      lowestTrust: null,
+      networkHealth: "healthy" as const,
+      aggregatedPriorities: priorities,
+      summary: "s",
+    },
+    model_update: {
+      tenantId: "tenant-a",
+      cycleId: "c1",
+      priorities,
+      trustScore: 50,
+      appliedAt: "2026-10-17T00:00:00.000Z",
+      notes: "n",
+    },
+  };
+
+  beforeEach(() => {
+    inbound.rows.length = 0;
+    inbound.create.mockClear();
+  });
+
+  for (const [type, payload] of Object.entries(payloads) as Array<[keyof typeof payloads, (typeof payloads)[keyof typeof payloads]]>) {
+    it(`${type}: the payload sent over the wire verifies and arrives unchanged`, async () => {
+      const wire: unknown[] = [];
+      const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+        wire.push(JSON.parse(String(init?.body)));
+        return new Response("{}", { status: 202 });
+      }) as unknown as typeof fetch;
+      const producer = new FederationBus({
+        tenantId: "tenant-a",
+        hmacSecret: "shared-hmac",
+        endpoints: ["https://tenant-b.example"],
+        enabled: true,
+        fetchImpl,
+      });
+      const consumer = new FederationBus({ tenantId: "tenant-b", hmacSecret: "shared-hmac", enabled: true });
+      const listener = vi.fn();
+      consumer.subscribe(type, listener);
+
+      await producer.publish({ type, payload } as Parameters<FederationBus["publish"]>[0]);
+
+      expect(wire).toHaveLength(1);
+      await expect(consumer.ingest(wire[0] as FederationEvent)).resolves.toBe(true);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][0].payload).toEqual(payload);
+    });
+  }
+
+  it("validates the payload with the schema of its event type, not the first that matches", () => {
+    const base = {
+      id: "evt-1",
+      tenantId: "tenant-a",
+      timestamp: new Date().toISOString(),
+      signature: "0123456789abcdef",
+    };
+    // A model_update payload also satisfies the telemetry_sync schema; it must keep its own fields.
+    const parsed = federationEventSchema.parse({ ...base, type: "model_update", payload: payloads.model_update });
+    expect(parsed.payload).toEqual(payloads.model_update);
+    // A telemetry_sync payload sent as priority_share is rejected.
+    expect(
+      federationEventSchema.safeParse({ ...base, type: "priority_share", payload: payloads.telemetry_sync }).success,
+    ).toBe(false);
+  });
+
+  it("validates a decrypted payload against its event type and keeps replay protection", async () => {
+    const producerKeys = generateFederationKeyPair();
+    const consumerKeys = generateFederationKeyPair();
+    const producer = new FederationBus({
+      tenantId: "tenant-a",
+      privateKey: producerKeys.privateKey,
+      publicKey: producerKeys.publicKey,
+      enabled: true,
+    });
+    const consumer = new FederationBus({
+      tenantId: "tenant-b",
+      privateKey: consumerKeys.privateKey,
+      publicKey: consumerKeys.publicKey,
+      peerPublicKeys: { "tenant-a": producerKeys.publicKey },
+      enabled: true,
+    });
+    const listener = vi.fn();
+    consumer.subscribe("model_update", listener);
+
+    const { event } = await producer.publish({
+      type: "model_update",
+      recipientPublicKey: consumerKeys.publicKey,
+      payload: payloads.model_update,
+    });
+
+    await expect(consumer.ingest(event as FederationEvent)).resolves.toBe(true);
+    expect(listener.mock.calls[0][0].payload).toEqual(payloads.model_update);
+    expect(inbound.rows).toEqual([expect.objectContaining({ type: "model_update", accepted: true })]);
+    await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Duplicate federation event/);
+  });
+});
+
+describe("FederationBus subscribers", () => {
+  it("logs a failing subscriber instead of throwing or leaving an unhandled rejection", async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const bus = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      bus.subscribe("telemetry_sync", async () => {
+        throw new Error("async listener failed");
+      });
+      bus.subscribe("telemetry_sync", () => {
+        throw new Error("sync listener failed");
+      });
+      const after = vi.fn();
+      bus.subscribe("telemetry_sync", after);
+
+      await bus.publish({
+        type: "telemetry_sync",
+        payload: { tenantId: "tenant-a", trustScore: 50, priorities: [], sanitized: true },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(after).toHaveBeenCalledTimes(1);
+      expect(rejections).toEqual([]);
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[federation] subscriber failed",
+        expect.objectContaining({ type: "telemetry_sync", message: "async listener failed" }),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[federation] subscriber failed",
+        expect.objectContaining({ message: "sync listener failed" }),
+      );
+    } finally {
+      process.off("unhandledRejection", onRejection);
+      errorSpy.mockRestore();
+    }
   });
 });

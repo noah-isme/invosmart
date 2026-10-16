@@ -1,5 +1,7 @@
-import crypto, { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
+import crypto, { createHash, createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+
+import { db } from "@/lib/db";
 
 import {
   type FederationEndpointStatus,
@@ -8,10 +10,34 @@ import {
   type FederationEventType,
   type SignatureAlgorithm,
   federationEventSchema,
+  parseFederationPayload,
   validateFederationEvent,
 } from "@/lib/federation/protocol";
 
 const DEFAULT_RECENT_LIMIT = 25;
+
+/** Inbound events whose timestamp is further than this from local time are rejected. */
+export const FEDERATION_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export type FederationInboundRecord = {
+  eventId: string;
+  tenantId: string;
+  type: string;
+  signatureAlgorithm: string;
+  signatureHash: string;
+  eventTimestamp: Date;
+  accepted: boolean;
+};
+
+/** The slice of `db.federationInboundEvent` the bus needs (injectable for tests). */
+export type FederationInboundStore = {
+  create(args: { data: FederationInboundRecord }): Promise<unknown>;
+};
+
+const isUniqueConstraintError = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  (error as { code?: unknown }).code === "P2002";
 
 export const generateFederationKeyPair = (): { publicKey: string; privateKey: string } => {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
@@ -24,7 +50,10 @@ export const generateFederationKeyPair = (): { publicKey: string; privateKey: st
 
 export type FederationBusOptions = {
   tenantId?: string;
+  /** Bearer token sent to peers (FEDERATION_TOKEN_SECRET). Never used as a signing key. */
   secret?: string;
+  /** HMAC-SHA256 signing key (FEDERATION_HMAC_SECRET); must differ from the bearer token. */
+  hmacSecret?: string;
   privateKey?: string;
   publicKey?: string;
   keyId?: string;
@@ -33,6 +62,8 @@ export type FederationBusOptions = {
   enabled?: boolean;
   recentLimit?: number;
   fetchImpl?: typeof fetch;
+  /** Replay log; defaults to `db.federationInboundEvent`. */
+  inboundStore?: FederationInboundStore;
 };
 
 type Listener<TType extends FederationEventType> = (event: FederationEvent<TType>) => void | Promise<void>;
@@ -63,6 +94,7 @@ export class FederationBus {
   private readonly emitter = new EventEmitter();
   private readonly tenantId: string;
   private readonly secret: string;
+  private readonly hmacSecret: string;
   private readonly privateKey?: string;
   private readonly publicKey?: string;
   private readonly keyId?: string;
@@ -71,12 +103,14 @@ export class FederationBus {
   private readonly recentLimit: number;
   private readonly fetchImpl?: typeof fetch;
   private readonly enabled: boolean;
+  private readonly inboundStore?: FederationInboundStore;
   private readonly recent: FederationEvent[] = [];
   private readonly statuses = new Map<string, FederationEndpointStatus>();
 
   constructor(options?: FederationBusOptions) {
     this.tenantId = options?.tenantId ?? process.env.FEDERATION_TENANT_ID ?? "local";
     this.secret = options?.secret ?? process.env.FEDERATION_TOKEN_SECRET ?? "";
+    this.hmacSecret = options?.hmacSecret ?? process.env.FEDERATION_HMAC_SECRET ?? "";
     this.privateKey = options?.privateKey ?? process.env.FEDERATION_PRIVATE_KEY;
     this.publicKey = options?.publicKey ?? process.env.FEDERATION_PUBLIC_KEY;
     this.keyId = options?.keyId ?? process.env.FEDERATION_KEY_ID;
@@ -85,6 +119,7 @@ export class FederationBus {
     this.recentLimit = options?.recentLimit ?? DEFAULT_RECENT_LIMIT;
     this.fetchImpl = options?.fetchImpl ?? (typeof fetch === "function" ? fetch : undefined);
     this.enabled = determineEnabled(options);
+    this.inboundStore = options?.inboundStore;
 
     for (const endpoint of this.endpoints) {
       this.statuses.set(endpoint, { endpoint, healthy: false });
@@ -94,7 +129,10 @@ export class FederationBus {
   get isEnabled() {
     return (
       this.enabled &&
-      (Boolean(this.secret) || Boolean(this.privateKey) || Boolean(this.publicKey))
+      (Boolean(this.secret) ||
+        Boolean(this.hmacSecret) ||
+        Boolean(this.privateKey) ||
+        Boolean(this.publicKey))
     );
   }
 
@@ -154,7 +192,15 @@ export class FederationBus {
       const signature = signer.sign(this.privateKey, "hex");
       return { signature, signatureAlgorithm: "rsa-sha256" };
     }
-    const hmac = createHmac("sha256", this.secret);
+    // The HMAC key is deliberately separate from the bearer token that deliver()
+    // sends to every peer: keying HMAC with the bearer would let any bearer
+    // holder forge events for any tenant. No silent fallback.
+    if (!this.hmacSecret) {
+      throw new Error(
+        "Federation signing key missing: set FEDERATION_PRIVATE_KEY or FEDERATION_HMAC_SECRET",
+      );
+    }
+    const hmac = createHmac("sha256", this.hmacSecret);
     hmac.update(signableString);
     return { signature: hmac.digest("hex"), signatureAlgorithm: "hmac-sha256" };
   }
@@ -282,6 +328,11 @@ export class FederationBus {
     }
 
     const event = federationEventSchema.parse(rawEvent) as FederationEvent<TType>;
+    // Peers verify the signature over what is sent, so validation must not
+    // have changed a single field of what was signed.
+    if (this.getSignableString(event, event) !== signableString) {
+      throw new Error("Federation event changed during validation; refusing to send");
+    }
     return event;
   }
 
@@ -352,7 +403,19 @@ export class FederationBus {
   subscribe<TType extends FederationEventType>(type: TType, listener: Listener<TType>) {
     const wrapped = (event: FederationEvent) => {
       if (event.type !== type) return;
-      void listener(event as FederationEvent<TType>);
+      // Listeners run detached from publish()/ingest(); a failing one must not
+      // throw into the emitter or become an unhandled rejection.
+      const report = (error: unknown) => {
+        console.error("[federation] subscriber failed", {
+          type,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      };
+      try {
+        void Promise.resolve(listener(event as FederationEvent<TType>)).catch(report);
+      } catch (error) {
+        report(error);
+      }
     };
     this.emitter.on(type, wrapped);
 
@@ -376,7 +439,12 @@ export class FederationBus {
           payload: event.payload,
         });
 
-    const senderPublicKey = this.peerPublicKeys[event.tenantId] ?? this.publicKey;
+    const registeredPeerKey = this.peerPublicKeys[event.tenantId];
+    // A tenant with a registered public key must sign with RSA; accepting HMAC
+    // for it would let anyone holding the shared HMAC key impersonate it.
+    if (registeredPeerKey && event.signatureAlgorithm === "hmac-sha256") return false;
+
+    const senderPublicKey = registeredPeerKey ?? this.publicKey;
 
     if (
       event.signatureAlgorithm === "rsa-sha256" ||
@@ -393,9 +461,9 @@ export class FederationBus {
       }
     }
 
-    // Fallback to HMAC-SHA256
-    if (!this.secret) return false;
-    const expected = createHmac("sha256", this.secret).update(signableString).digest();
+    // HMAC-SHA256 with the dedicated HMAC key (never the bearer token).
+    if (!this.hmacSecret) return false;
+    const expected = createHmac("sha256", this.hmacSecret).update(signableString).digest();
     const provided = Buffer.from(event.signature, "hex");
 
     if (expected.length !== provided.length) return false;
@@ -403,26 +471,74 @@ export class FederationBus {
     return timingSafeEqual(expected, provided);
   }
 
+  /**
+   * Verifies and delivers an inbound event to local subscribers.
+   *
+   * Order: schema -> signature -> freshness -> echo check -> decrypt and
+   * validate the payload -> replay insert -> record/emit. Every event that
+   * passes the signature and the freshness window and is about to be emitted
+   * is written to FederationInboundEvent with accepted=true (echoes of this
+   * instance's own events with accepted=false). The row is written only after
+   * the payload decrypted and validated, so a failed event never leaves an
+   * accepted row behind; the unique signatureHash makes a second copy of an
+   * accepted (or echoed) signed event fail with "Duplicate federation event",
+   * even when it carries a fresh `id` (the id is not signed).
+   *
+   * Returns true when the event was emitted, false for disabled buses and
+   * own-tenant echoes.
+   */
   async ingest(event: FederationEvent) {
     if (!this.isEnabled) return false;
 
-    const parsed = federationEventSchema.parse(event);
+    const parsed = federationEventSchema.parse(event) as FederationEvent;
     if (!this.verifySignature(parsed)) {
       throw new Error("Invalid federation signature");
     }
 
-    if (parsed.tenantId === this.tenantId) {
-      // Ignore echoes of our own events.
-      return false;
+    const eventTime = Date.parse(parsed.timestamp);
+    if (!Number.isFinite(eventTime) || Math.abs(Date.now() - eventTime) > FEDERATION_MAX_CLOCK_SKEW_MS) {
+      throw new Error("Stale federation event");
     }
 
-    if (parsed.encryptedPayload && parsed.encryptedKey && parsed.iv) {
+    // Echoes of our own events are recorded (accepted=false) but never emitted.
+    const accepted = parsed.tenantId !== this.tenantId;
+
+    if (accepted && parsed.encryptedPayload && parsed.encryptedKey && parsed.iv) {
       const decryptedPayload = this.decryptPayload(
         parsed.encryptedPayload,
         parsed.encryptedKey,
         parsed.iv,
       );
-      parsed.payload = decryptedPayload as typeof parsed.payload;
+      // The ciphertext is signed, but its plaintext is validated like any other payload.
+      parsed.payload = parseFederationPayload(parsed.type, decryptedPayload) as typeof parsed.payload;
+    }
+
+    const store = this.inboundStore ?? db.federationInboundEvent;
+    try {
+      await store.create({
+        data: {
+          eventId: parsed.id,
+          tenantId: parsed.tenantId,
+          type: parsed.type,
+          signatureAlgorithm: parsed.signatureAlgorithm ?? "hmac-sha256",
+          // Hash the decoded bytes, not the string: Buffer.from(hex) ignores case
+          // and trailing junk, so string variants of one signature still verify.
+          signatureHash: createHash("sha256")
+            .update(Buffer.from(parsed.signature, "hex"))
+            .digest("hex"),
+          eventTimestamp: new Date(eventTime),
+          accepted,
+        },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new Error("Duplicate federation event");
+      }
+      throw error;
+    }
+
+    if (!accepted) {
+      return false;
     }
 
     this.recordEvent(parsed);

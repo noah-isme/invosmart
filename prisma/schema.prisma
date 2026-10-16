@@ -387,6 +387,26 @@ model FederationMetrics {
   @@unique([cycleId, tenantId])
 }
 
+/// One row per inbound federation event that passed signature verification
+/// and the freshness window. signatureHash (SHA-256 of the signature) is the
+/// replay key: the signature covers type/tenantId/timestamp/payload but not
+/// `id`, so a replay with a fresh id still collides here.
+model FederationInboundEvent {
+  id                 String   @id @default(cuid())
+  eventId            String
+  tenantId           String
+  type               String
+  signatureAlgorithm String
+  signatureHash      String   @unique
+  eventTimestamp     DateTime
+  receivedAt         DateTime @default(now())
+  accepted           Boolean
+
+  @@index([eventId])
+  @@index([tenantId, receivedAt])
+  @@index([receivedAt])
+}
+
 enum ExperimentAxis {
   HOOK
   CAPTION
@@ -713,6 +733,33 @@ model FeatureFlag {
 
   @@index([key])
   @@index([enabled])
+}
+
+/// A named lease for scheduled jobs, so overlapping cron invocations skip
+/// instead of running twice. Claimed by setting claimedUntil in the future
+/// with a conditional update; released by clearing it.
+model CronLease {
+  name         String    @id
+  claimedUntil DateTime?
+  lastRunAt    DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Singleton row (id "singleton") holding the cron-driven autonomy loop schedule
+/// and the scaler state that used to live in process memory (ADR 016).
+/// Starts paused: a platform admin resumes it from DevTools.
+model AutonomyLoopState {
+  id              String    @id @default("singleton")
+  paused          Boolean   @default(true)
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  lastIntervalMs  Int?
+  lastConcurrency Int?
+  lastTelemetry   Json?
+  lastSummary     String?
+  lastResult      Json?
+  claimedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
 }
 
 model UptimeCheck {

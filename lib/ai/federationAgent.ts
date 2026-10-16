@@ -97,16 +97,16 @@ export class FederationAgent {
 
     this.unsubscribers.push(
       this.deps.bus.subscribe("telemetry_sync", (event) => {
-        if (event.payload) this.handleTelemetry(event.payload, event.timestamp);
+        if (event.payload) return this.handleTelemetry(event.payload, event.timestamp);
       }),
       this.deps.bus.subscribe("priority_share", (event) => {
-        if (event.payload) this.handlePriorityShare(event.payload, event.timestamp);
+        if (event.payload) return this.handlePriorityShare(event.payload, event.timestamp);
       }),
       this.deps.bus.subscribe("trust_aggregate", (event) => {
-        if (event.payload) this.handleTrustAggregate(event.payload, event.timestamp);
+        if (event.payload) return this.handleTrustAggregate(event.payload, event.timestamp);
       }),
       this.deps.bus.subscribe("model_update", (event) => {
-        if (event.payload) this.handleModelUpdate(event.payload, event.timestamp);
+        if (event.payload) return this.handleModelUpdate(event.payload, event.timestamp);
       }),
     );
   }
@@ -147,17 +147,20 @@ export class FederationAgent {
     }
   }
 
-  private async handlePriorityShare(payload: PrioritySharePayload, timestamp: string) {
+  /**
+   * A peer's priority_share is itself an output of that peer's
+   * evaluateGlobalNetwork, so it only updates the snapshot. Re-evaluating here
+   * would publish a new priority_share back to the peer, which would do the
+   * same: an endless ping-pong between any two federated instances. Only a
+   * peer's telemetry_sync (sent by broadcastLocalSnapshot) triggers a cycle.
+   */
+  private handlePriorityShare(payload: PrioritySharePayload, timestamp: string) {
     this.upsertSnapshot({
       tenantId: payload.tenantId,
       trustScore: this.snapshots.get(payload.tenantId)?.trustScore ?? 0,
       priorities: payload.priorities.map(toPrioritySnapshot),
       updatedAt: timestamp,
     });
-
-    if (payload.tenantId !== this.tenantId) {
-      await this.evaluateGlobalNetwork("priority");
-    }
   }
 
   private async handleTrustAggregate(payload: TrustAggregatePayload, timestamp: string) {
@@ -266,33 +269,38 @@ export class FederationAgent {
 
     await this.deps.bus.publish({ type: "trust_aggregate", payload: trustPayload });
 
-    const priorityPayload: PrioritySharePayload = {
-      tenantId: this.tenantId,
-      cycleId,
-      priorities: aggregatedPriorities.map((priority) => ({
-        ...priority,
-        rationale: `Rata-rata global ${(priority.weight * 100).toFixed(1)}%`,
-      })),
-      rationale: insight.summary,
-    };
+    // No priorities to share (every snapshot reported an empty list): a
+    // priority_share needs at least one, and a model_update without any would
+    // apply nothing.
+    if (aggregatedPriorities.length) {
+      const priorityPayload: PrioritySharePayload = {
+        tenantId: this.tenantId,
+        cycleId,
+        priorities: aggregatedPriorities.map((priority) => ({
+          ...priority,
+          rationale: `Rata-rata global ${(priority.weight * 100).toFixed(1)}%`,
+        })),
+        rationale: insight.summary,
+      };
 
-    await this.deps.bus.publish({ type: "priority_share", payload: priorityPayload });
+      await this.deps.bus.publish({ type: "priority_share", payload: priorityPayload });
 
-    const modelPayload: ModelUpdatePayload = {
-      tenantId: this.tenantId,
-      cycleId,
-      priorities: aggregatedPriorities,
-      trustScore: insight.averageTrust,
-      appliedAt: new Date().toISOString(),
-      notes: `Sinkronisasi global (${reason})`,
-    };
+      const modelPayload: ModelUpdatePayload = {
+        tenantId: this.tenantId,
+        cycleId,
+        priorities: aggregatedPriorities,
+        trustScore: insight.averageTrust,
+        appliedAt: new Date().toISOString(),
+        notes: `Sinkronisasi global (${reason})`,
+      };
 
-    this.modelHistory.unshift({ ...modelPayload, receivedAt: new Date().toISOString() });
-    if (this.modelHistory.length > MAX_HISTORY) {
-      this.modelHistory.length = MAX_HISTORY;
+      this.modelHistory.unshift({ ...modelPayload, receivedAt: new Date().toISOString() });
+      if (this.modelHistory.length > MAX_HISTORY) {
+        this.modelHistory.length = MAX_HISTORY;
+      }
+
+      await this.deps.bus.publish({ type: "model_update", payload: modelPayload });
     }
-
-    await this.deps.bus.publish({ type: "model_update", payload: modelPayload });
 
     if (isOrchestrationEnabled()) {
       const correlations = aggregatedPriorities.map((priority) => ({

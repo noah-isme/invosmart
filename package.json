@@ -26,6 +26,7 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node --project tsconfig.prisma.json prisma/seed.ts",
     "db:backfill-workspaces": "ts-node --project tsconfig.prisma.json scripts/backfill-personal-workspaces.ts",
+    "secrets:reencrypt": "ts-node --project tsconfig.prisma.json scripts/reencrypt-workspace-secrets.ts",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:contract": "E2E_CONTRACT_ONLY=1 playwright test",
     "test:e2e:staging": "playwright test --grep @staging",

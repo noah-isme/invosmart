@@ -30,6 +30,12 @@ vi.mock("@/lib/ai/scaler", () => ({
   describeScalingDecision: describeScalingDecisionMock,
 }));
 
+const findUniqueMock = vi.fn();
+
+vi.mock("@/lib/db", () => ({
+  db: { autonomyLoopState: { findUnique: findUniqueMock } },
+}));
+
 vi.mock("@/lib/ai/recoveryAgent", () => ({
   runRecoverySweep: runRecoverySweepMock,
   listRecoveryLog: vi.fn().mockResolvedValue([]),
@@ -120,11 +126,87 @@ describe("autonomous loop", () => {
     expect(runRecoverySweepMock).toHaveBeenCalled();
   });
 
+  it("uses the previousTelemetry override for the priority signal", async () => {
+    const { runLoop } = await import("@/lib/ai/loop");
+    // Fill the in-memory history so the override is the only way to get this delta.
+    await runLoop({ emitEvent: false });
+    updateAgentPrioritiesMock.mockClear();
+
+    await runLoop({
+      emitEvent: false,
+      previousTelemetry: {
+        timestamp: "2026-10-17T08:55:00.000Z",
+        load: 0,
+        backlogSize: 0,
+        trustScore: 70,
+        successRate: 0.5,
+        errorRate: 0,
+        avgLatencyMs: 250,
+        regressionDetected: false,
+        recoveryAction: "noop",
+        rollbackCount: 0,
+      },
+    });
+
+    expect(updateAgentPrioritiesMock).toHaveBeenCalledTimes(1);
+    expect(updateAgentPrioritiesMock.mock.calls[0][0].successDelta).toBeCloseTo(0.25);
+  });
+
   it("returns disabled state when autonomy flag is false", async () => {
     delete process.env.ENABLE_AI_AUTONOMY;
     process.env.ENABLE_AI_AUTONOMY = "false";
     const { runLoop } = await import("@/lib/ai/loop");
     const result = await runLoop({ emitEvent: false });
     expect(result.enabled).toBe(false);
+  });
+
+  describe("in-process timer (local development only, ADR 016)", () => {
+    beforeEach(() => {
+      findUniqueMock.mockReset().mockResolvedValue({ paused: false });
+      runRecoverySweepMock.mockClear();
+    });
+
+    afterEach(async () => {
+      const { stopAutonomyLoop } = await import("@/lib/ai/loop");
+      stopAutonomyLoop();
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    });
+
+    it("refuses to start in a production build, where the cron schedules the loop", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      const { startAutonomyLoop, usesInProcessAutonomyTimer } = await import("@/lib/ai/loop");
+      expect(usesInProcessAutonomyTimer()).toBe(false);
+      await expect(startAutonomyLoop()).resolves.toEqual({ started: false, reason: "cron-scheduled" });
+      expect(runRecoverySweepMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses to start while the persisted switch is paused or missing", async () => {
+      const { startAutonomyLoop } = await import("@/lib/ai/loop");
+      findUniqueMock.mockResolvedValue({ paused: true });
+      await expect(startAutonomyLoop()).resolves.toEqual({ started: false, reason: "paused" });
+      findUniqueMock.mockResolvedValue(null);
+      await expect(startAutonomyLoop()).resolves.toEqual({ started: false, reason: "paused" });
+      expect(runRecoverySweepMock).not.toHaveBeenCalled();
+    });
+
+    it("stops the timer once the persisted switch is paused from anywhere", async () => {
+      vi.useFakeTimers();
+      const { startAutonomyLoop } = await import("@/lib/ai/loop");
+      await expect(startAutonomyLoop()).resolves.toEqual({ started: true });
+      expect(runRecoverySweepMock).toHaveBeenCalledTimes(1);
+
+      // Still resumed: the next tick runs.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(runRecoverySweepMock).toHaveBeenCalledTimes(2);
+
+      // Paused through the persisted flag (e.g. by another instance): the tick
+      // does not run and the timer is not rescheduled.
+      findUniqueMock.mockResolvedValue({ paused: true });
+      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(10 * 120_000);
+      expect(runRecoverySweepMock).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });
