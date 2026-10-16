@@ -53,6 +53,20 @@ describe("export-utils", () => {
       );
     });
 
+    it("prefixes formula-like strings that hide the trigger behind leading whitespace", () => {
+      expect(escapeCSVCell(" =1+1")).toBe("' =1+1");
+      expect(escapeCSVCell("  -Diskon")).toBe("'  -Diskon");
+      expect(escapeCSVCell("\u00a0@SUM(A1:A9)")).toBe("'\u00a0@SUM(A1:A9)");
+      expect(escapeCSVCell("\u00a0 +62 811")).toBe("'\u00a0 +62 811");
+      expect(escapeCSVCell(' =HYPERLINK("http://evil.example","x")')).toBe(
+        '"\' =HYPERLINK(""http://evil.example"",""x"")"',
+      );
+      // Whitespace before a harmless character stays untouched, and numbers stay numbers.
+      expect(escapeCSVCell(" PT Maju")).toBe(" PT Maju");
+      expect(escapeCSVCell("\u00a0Acme = Jaya")).toBe("\u00a0Acme = Jaya");
+      expect(escapeCSVCell(-250000)).toBe("-250000");
+    });
+
     it("leaves numbers (including negative amounts) and inner formula characters alone", () => {
       expect(escapeCSVCell(-250000)).toBe("-250000");
       expect(escapeCSVCell(0)).toBe("0");

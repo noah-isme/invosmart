@@ -8,8 +8,12 @@ export interface InvoiceExportData {
   currency?: string | null;
 }
 
-/** Leading characters that make spreadsheet apps evaluate a cell as a formula. */
-const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+/**
+ * Leading characters that make spreadsheet apps evaluate a cell as a formula,
+ * including after leading whitespace (spaces, NBSP and other Unicode spaces),
+ * which Excel and LibreOffice skip when parsing a cell.
+ */
+const FORMULA_TRIGGER = /^[=+\-@\t\r]|^[\s\u00a0]+[=+\-@]/;
 
 /**
  * Escapes a cell value for CSV formatting per RFC 4180 rules.
@@ -17,8 +21,8 @@ const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
  * it is wrapped in double quotes and any internal double quotes are doubled.
  *
  * CSV injection (OWASP): a STRING value starting with `=`, `+`, `-`, `@`, tab
- * or carriage return is prefixed with a single quote so spreadsheet apps show
- * it as text instead of evaluating it. Only strings are prefixed: numbers
+ * or carriage return (optionally after leading whitespace) is prefixed with a
+ * single quote so spreadsheet apps show it as text instead of evaluating it. Only strings are prefixed: numbers
  * (the Total column is passed as a number) are written unchanged, so a
  * negative amount stays a number. A text field that happens to start with
  * `-` or `+` (e.g. "+62 811...") is prefixed too; that is intended.
