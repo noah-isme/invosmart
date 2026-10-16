@@ -14,6 +14,11 @@ on:
         required: true
         default: false
         type: boolean
+      deploy_ref:
+        description: "Existing release tag (vX.Y.Z, reachable from main) to deploy to production; leave empty to deploy nothing"
+        required: false
+        default: ""
+        type: string
 
 # Read-only by default; only the `release` job gets write access.
 permissions:
@@ -53,6 +58,8 @@ jobs:
         run: npm run docs:route-check
       - name: Check relative links in Markdown docs
         run: npm run docs:link-check
+      - name: Doc check script tests
+        run: npm run test:doc-checks
       - name: Typecheck
         run: npm run typecheck
       - name: Typecheck e2e sources
@@ -166,14 +173,17 @@ jobs:
   # here instead of on a tag trigger. GITHUB_TOKEN can push the release
   # commit because main is unprotected; branch protection would need a
   # bypass for github-actions or a PAT (docs/DEPLOYMENT.md).
+  # .releaserc.json turns off the GitHub plugin's issue/PR comments and
+  # labels: the tag is pushed before that plugin runs, so a failure there
+  # would leave a tagged release that never deploys. Only `contents: write`
+  # is needed. If a release is tagged but `deploy` does not run, deploy the
+  # tag with workflow_dispatch `deploy_ref` (docs/DEPLOYMENT.md).
   release:
     needs: [build-and-test, e2e-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
     concurrency:
       group: release
       cancel-in-progress: false
@@ -198,7 +208,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! git describe --tags --match 'v*' --abbrev=0 >/dev/null 2>&1; then
+          if ! git describe --tags --match 'v[0-9]*' --abbrev=0 >/dev/null 2>&1; then
             echo "published=false" >> "$GITHUB_OUTPUT"
             echo "::warning::no v* base tag reachable from HEAD, skipping release"
             exit 0
@@ -206,7 +216,7 @@ jobs:
           npx --no-install semantic-release
           # @semantic-release/git commits locally and tags that commit, so HEAD
           # carries a v* tag exactly when a release was published.
-          tag="$(git tag --points-at HEAD --list 'v*' | head -n 1)"
+          tag="$(git tag --points-at HEAD --list 'v[0-9]*' | head -n 1)"
           if [ -n "$tag" ]; then
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "version=${tag}" >> "$GITHUB_OUTPUT"
@@ -214,13 +224,27 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # Two ways in:
+  # - push to main: `release` published a version; deploy its tag.
+  # - workflow_dispatch with `deploy_ref`: an operator redeploys an existing
+  #   vX.Y.Z tag (a tagged release whose deploy never ran or failed, or a
+  #   rollback). `release` is skipped on dispatch, hence `!cancelled()`; the
+  #   gates run on the dispatched branch, but this path does not depend on
+  #   them because the tag was gated when it was released and is rebuilt
+  #   below. A dispatch without `deploy_ref` deploys nothing.
   deploy:
     needs: release
-    if: needs.release.outputs.published == 'true'
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'push' && needs.release.result == 'success' && needs.release.outputs.published == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy_ref != '')
+      )
     runs-on: ubuntu-latest
-    # Holds PRODUCTION_DATABASE_URL. The environment and its secret are created
-    # by the repository owner (docs/DEPLOYMENT.md "Database migrations"); no
-    # required reviewers, so deploys stay fully automatic.
+    # Holds PRODUCTION_DATABASE_URL, VERCEL_TOKEN, VERCEL_ORG_ID and
+    # VERCEL_PROJECT_ID. The environment and its secrets are created by the
+    # repository owner (docs/DEPLOYMENT.md "Production prerequisites");
+    # deployment branches restricted to main, no required reviewers, so
+    # deploys stay fully automatic.
     environment: production
     # Two deploys must never run `prisma migrate deploy` in parallel.
     concurrency:
@@ -231,10 +255,49 @@ jobs:
     env:
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
     steps:
+      # Inputs go through env, never inline into the script.
+      - name: Resolve the tag to deploy
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ needs.release.outputs.version }}
+          DEPLOY_REF: ${{ inputs.deploy_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$RUN_REF" != "refs/heads/main" ]; then
+              echo "::error::Run the deploy_ref dispatch from main (Use workflow from: main); this run is on ${RUN_REF}."
+              exit 1
+            fi
+            tag="$DEPLOY_REF"
+          else
+            tag="$RELEASE_TAG"
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'${tag}' is not a release tag of the form vX.Y.Z."
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       # The release commit: it carries the bumped package.json and CHANGELOG.md.
+      # A full-ref checkout fails when the tag does not exist; full history is
+      # fetched for the reachability check below.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release.outputs.version }}
+          ref: refs/tags/${{ steps.target.outputs.tag }}
+          fetch-depth: 0
+      - name: Verify the tag is on main
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          if ! git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" >/dev/null; then
+            echo "::error::Tag ${TAG} does not exist."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "refs/tags/${TAG}" origin/main; then
+            echo "::error::Tag ${TAG} is not reachable from main; only released tags are deployed."
+            exit 1
+          fi
+          echo "Deploying ${TAG} ($(git rev-parse --short "refs/tags/${TAG}^{commit}"))"
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -245,38 +308,62 @@ jobs:
         run: npm ci
       - name: Generate Prisma client
         run: npx --no-install prisma generate
-      # Migrations run before the build and before `vercel deploy`, so a failed
-      # migration stops the job and never ships code ahead of its schema.
-      # PRODUCTION_DATABASE_URL must be the direct (non-pooled) connection
-      # string: schema.prisma has no directUrl, and a PgBouncer/transaction-
-      # pooled URL breaks the advisory lock `migrate deploy` takes.
-      - name: Check production database secret
+      # Every secret is checked before anything touches production, and the
+      # message names only the missing secrets, never values.
+      - name: Check deployment secrets
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -z "$PRODUCTION_DATABASE_URL" ]; then
-            echo "::error::PRODUCTION_DATABASE_URL is empty. Create the 'production' GitHub environment and add the PRODUCTION_DATABASE_URL secret (direct, non-pooled connection string); see docs/DEPLOYMENT.md."
+          missing=()
+          for name in PRODUCTION_DATABASE_URL VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing secrets in the 'production' GitHub environment: ${missing[*]}. Nothing was migrated or deployed; see docs/DEPLOYMENT.md (Production prerequisites)."
             exit 1
           fi
-      - name: Apply database migrations
-        env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: |
-          npx --no-install prisma migrate status || true
-          npx --no-install prisma migrate deploy
+      # The build gate runs before migrations, so a build failure has no
+      # production side effect.
       - name: Build
         run: npm run build
         env:
           NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
           ENABLE_TELEMETRY: "false"
+      # Migrations run before `vercel deploy`, so a failed migration stops the
+      # job and never ships code ahead of its schema.
+      # PRODUCTION_DATABASE_URL must be the direct (non-pooled) connection
+      # string: schema.prisma has no directUrl, and a PgBouncer/transaction-
+      # pooled URL breaks the advisory lock `migrate deploy` takes.
+      # The repo is public: Prisma prints the database host in its output
+      # (and in connection errors), so the host is masked in the log first.
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          node -e '
+            let u;
+            try { u = new URL(process.env.DATABASE_URL); } catch { console.error("PRODUCTION_DATABASE_URL is not a valid URL"); process.exit(1); }
+            if (u.hostname) console.log("::add-mask::" + u.hostname);
+          '
+          npx --no-install prisma migrate status || true
+          npx --no-install prisma migrate deploy
       # `vercel deploy` prints the deployment URL on stdout; post-deploy-tests
-      # runs the @staging tier against it.
+      # runs the @staging tier after it. VERCEL_ORG_ID and VERCEL_PROJECT_ID
+      # select the project because `.vercel/` is not committed. The CLI version
+      # is pinned so a new release cannot change the deploy unannounced.
       - name: Deploy to Vercel
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          url="$(npx vercel deploy --prod --token="$VERCEL_TOKEN")"
+          url="$(npx --yes vercel@62.0.0 deploy --prod --token="$VERCEL_TOKEN")"
           echo "url=${url}" >> "$GITHUB_OUTPUT"
 
   # @staging tier: no database, no webServer, no provider stub
