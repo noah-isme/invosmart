@@ -51,21 +51,45 @@ const defaultSource = (provider: CheckoutProvider) => `${provider}_checkout`;
  * PENDING attempt. Concurrent creates collide on the
  * (provider, idempotencyKey) / (provider, providerOrderId) unique constraints;
  * the loser falls back to the active attempt.
+ *
+ * With `reuseKeyPrefix` (the share checkout), any active, unexpired attempt
+ * whose idempotency key starts with the prefix is reused first, so a request
+ * in a later key window still gets the attempt (and checkout URL) an earlier
+ * window created. Only attempts with that prefix are ever returned: an
+ * owner-flow attempt carries return URLs into the authenticated app.
  */
 export async function findOrCreatePaymentAttempt({
   invoice,
   provider,
   requestedIdempotencyKey,
+  reuseKeyPrefix,
   now = new Date(),
   source = defaultSource(provider),
 }: {
   invoice: CheckoutInvoice;
   provider: CheckoutProvider;
   requestedIdempotencyKey: string | null;
+  reuseKeyPrefix?: string;
   now?: Date;
   source?: string;
 }): Promise<FindOrCreateAttemptResult> {
   const invoiceId = invoice.id;
+  const prefixFilter = reuseKeyPrefix ? { idempotencyKey: { startsWith: reuseKeyPrefix } } : {};
+
+  if (reuseKeyPrefix) {
+    const reusable = await db.paymentAttempt.findFirst({
+      where: {
+        invoiceId,
+        provider,
+        ...prefixFilter,
+        status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES },
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (reusable) return { kind: 'existing', attempt: reusable };
+  }
+
   const activeAttempt = await db.paymentAttempt.findFirst({
     where: {
       invoiceId,
@@ -115,13 +139,29 @@ export async function findOrCreatePaymentAttempt({
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       const existing = await db.paymentAttempt.findFirst({
-        where: { invoiceId, provider, status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES } },
+        where: { invoiceId, provider, ...prefixFilter, status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES } },
         orderBy: { createdAt: 'desc' },
       });
       if (existing) return { kind: 'existing', attempt: existing };
     }
     throw error;
   }
+}
+
+/** Stripe refuses a Checkout Session `expires_at` less than 30 minutes out. */
+const STRIPE_MIN_SESSION_TTL_MS = 30 * 60_000;
+/** Covers request latency and clock skew between this server and Stripe. */
+const STRIPE_SESSION_EXPIRY_MARGIN_MS = 2 * 60_000;
+
+/**
+ * Unix seconds for the Checkout Session `expires_at`: the attempt expiry,
+ * raised to Stripe's 30-minute minimum plus a margin. Without it a session
+ * stays payable for Stripe's 24-hour default, long after the attempt expired
+ * and a retry created a second, also payable, session.
+ */
+export function stripeSessionExpiresAt(attemptExpiresAt: Date | null, now = new Date()): number {
+  const floor = now.getTime() + STRIPE_MIN_SESSION_TTL_MS + STRIPE_SESSION_EXPIRY_MARGIN_MS;
+  return Math.ceil(Math.max(attemptExpiresAt?.getTime() ?? 0, floor) / 1000);
 }
 
 async function markAttemptFailed(attemptId: string, source: string, error: unknown) {
@@ -139,8 +179,10 @@ async function markAttemptFailed(attemptId: string, source: string, error: unkno
 
 /**
  * Create the Stripe Checkout Session for a freshly created attempt and store
- * its id/url. On a provider error the attempt is marked FAILED and the error
- * is rethrown.
+ * its id/url. The session expires with the attempt (`stripeSessionExpiresAt`)
+ * and the attempt expiry is moved to the session's, so an attempt is never
+ * treated as expired while its session can still be paid. On a provider
+ * error the attempt is marked FAILED and the error is rethrown.
  */
 export async function createStripeCheckout({
   invoice,
@@ -160,9 +202,11 @@ export async function createStripeCheckout({
   source?: string;
 }): Promise<PaymentAttempt> {
   const providerOrderId = attempt.providerOrderId ?? createMidtransOrderId(attempt.id);
+  const expiresAt = stripeSessionExpiresAt(attempt.expiresAt);
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'payment',
+      expires_at: expiresAt,
       // Line items sum to the invoice total exactly (items + tax + rounding
       // adjustment, or a single total line); see lib/payments/line-items.ts.
       line_items: buildStripeLineItems(invoice),
@@ -188,6 +232,7 @@ export async function createStripeCheckout({
       data: {
         providerSessionId: checkoutSession.id,
         checkoutUrl: checkoutSession.url,
+        expiresAt: new Date(expiresAt * 1000),
         metadata: JSON.parse(JSON.stringify({ source, checkoutSession })),
       },
     });
@@ -301,13 +346,28 @@ export function pickShareCheckoutProvider({
 const SHARE_ATTEMPT_WINDOW_MS = 30_000;
 
 /**
+ * Prefix shared by every share-checkout idempotency key of one invoice and
+ * provider; findOrCreatePaymentAttempt reuses an active attempt with it
+ * across windows.
+ */
+export function shareCheckoutKeyPrefix(provider: CheckoutProvider, invoiceId: string): string {
+  return `share:${provider}:${invoiceId}:`;
+}
+
+/**
  * Server-side idempotency key for the public share checkout; any client
  * Idempotency-Key header is ignored there. Requests for the same
  * invoice/provider within one 30 s window share a key, so the
  * (provider, idempotencyKey) unique constraint collapses concurrent requests
  * from any instance onto one attempt, and at most one new attempt per invoice
- * and provider is created per window.
+ * and provider is created per window. A later window first reuses the active
+ * share attempt (see `reuseKeyPrefix`), so a new one is only created once the
+ * previous one is no longer active.
  */
 export function shareCheckoutIdempotencyKey(provider: CheckoutProvider, invoiceId: string, nowMs: number): string {
-  return `share:${provider}:${invoiceId}:${Math.floor(nowMs / SHARE_ATTEMPT_WINDOW_MS)}`;
+  return `${shareCheckoutKeyPrefix(provider, invoiceId)}${shareCheckoutWindow(nowMs)}`;
+}
+
+function shareCheckoutWindow(nowMs: number): number {
+  return Math.floor(nowMs / SHARE_ATTEMPT_WINDOW_MS);
 }

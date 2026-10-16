@@ -181,7 +181,10 @@ the routes are open when it is unset.
   server derives the key from provider, invoice and a 30-second window, so
   concurrent requests from any instance collapse onto one `PaymentAttempt`
   and at most one new attempt per invoice and provider is created per
-  window. The response carries only the Stripe URL or the Snap token, never
+  window. A request in a later window reuses the active share attempt
+  instead (never an attempt started from the app), so one payer never holds
+  two payable checkouts; a Stripe session expires with its attempt. The
+  response carries only the Stripe URL or the Snap token, never
   attempt ids or amounts. The `payment=…` query parameter on the share page
   is display-only; only signed provider webhooks mark an invoice `PAID`.
 - Workspace invitations expire after 7 days (`lib/team/invitations.ts`).

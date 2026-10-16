@@ -17,6 +17,7 @@ import {
   findOrCreatePaymentAttempt,
   isMidtransCheckoutConfigured,
   shareCheckoutIdempotencyKey,
+  shareCheckoutKeyPrefix,
 } from '@/lib/payments/checkout';
 
 /**
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
       invoice,
       provider,
       requestedIdempotencyKey: shareCheckoutIdempotencyKey(provider, invoiceId, now.getTime()),
+      reuseKeyPrefix: shareCheckoutKeyPrefix(provider, invoiceId),
       now,
       source: SOURCE,
     });
