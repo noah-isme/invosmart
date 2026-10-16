@@ -210,13 +210,16 @@ export type NewUserData = {
  * and first-time OAuth sign-in so both behave identically in compat and
  * enforce modes. Any failure rolls back the user row as well; a unique-email
  * violation surfaces as a P2002 error (see isUniqueConstraintError).
+ *
+ * The returned user carries the new personal workspace as
+ * `activeOrganizationId` (the row as it is after provisioning).
  */
 export const createUserWithPersonalWorkspace = async <
   U extends { id: string; name?: string | null; email?: string | null },
 >(
   data: NewUserData,
   client: WorkspaceDatabase,
-): Promise<U> =>
+): Promise<U & { activeOrganizationId: string | null }> =>
   inTransaction(client, async (tx) => {
     const created = (await tx.user.create({ data })) as U;
     const context = await provisionPersonalWorkspace(created.id, created, tx);
@@ -224,6 +227,6 @@ export const createUserWithPersonalWorkspace = async <
       // Never leave a user behind without a workspace: roll the user back too.
       throw new Error("Personal workspace could not be provisioned for the new user.");
     }
-    return created;
+    return { ...created, activeOrganizationId: context.organizationId };
   });
 

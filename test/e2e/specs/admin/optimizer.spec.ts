@@ -32,14 +32,16 @@
 // - OPT-04 payload (app/api/opt/schedule/apply/route.ts requestSchema):
 //   { contentId:int, experimentId?:int, variantId?:int, recommendation:
 //   { recommendedAt, day, hour:int, confidence, reason, quotaRemaining, limit,
-//   autoEligible, source: "local"|"global" } }. The gate
-//   (evaluateAutoPublish) recomputes the quota and uses only `confidence`
-//   (SCHEDULE threshold 0.75) and sampleSize = max(round(confidence*120), 60)
-//   (>= 50), so confidence 0.9 reaches auto-publish. The quota
-//   (AI_SA_MAX_AUTOPUBLISH_PER_DAY, 1 in playwright.env.ts) counts only
-//   AUTOPUBLISH actions created today, but applyScheduleRecommendation logs
-//   SCHEDULE_UPDATE and nothing in the app creates AUTOPUBLISH, so the quota
-//   is never consumed: product bug, OPT-04b is test.fail.
+//   autoEligible, source: "local"|"global" } }. applyScheduleRecommendation
+//   ignores the client's `confidence`: it recomputes the recommendation for
+//   the content server-side (best local SCHEDULE variant with impressions,
+//   whose LinUCB confidence is ~0.76 after one metrics update, else the
+//   workspace's global signals at 0.72), refuses a day/hour other than the
+//   server's ("Jadwal tidak cocok dengan rekomendasi server") or a content
+//   with no recommendation ("Tidak ada rekomendasi jadwal server untuk konten
+//   ini"), and gates on the server confidence (SCHEDULE threshold 0.75). The
+//   daily quota (AI_SA_MAX_AUTOPUBLISH_PER_DAY, 1 in playwright.env.ts) counts
+//   today's applied AUTOPUBLISH and SCHEDULE_UPDATE actions (OPT-04b).
 // - There is no GET /api/opt/global route (only POST /api/opt/global/train);
 //   recommend (POST /api/opt/schedule/recommend {contentId}) uses the best
 //   SCHEDULE variant with impressions in the workspace (source "local"), else
@@ -104,7 +106,11 @@ const autoLogs = (api: Api) =>
     (body) => body.actions,
   );
 
-/** A schedule recommendation the gate auto-applies (see header: confidence >= 0.75). */
+/**
+ * A client-side schedule/apply payload for the slot scheduleExperimentWithMetrics
+ * makes the server recommend (Rabu 10:00). Its `confidence` is ignored: the
+ * server recomputes it (see header).
+ */
 const autoRecommendation = (reason: string, overrides: Partial<Recommendation> = {}): Recommendation => ({
   recommendedAt: new Date(Date.now() + 86_400_000).toISOString(),
   day: "Rabu",
@@ -125,6 +131,21 @@ const metrics = (variantId: number, impressions: number, clicks: number, convers
   conversions,
   dwellMs: 60_000,
 });
+
+/**
+ * A SCHEDULE experiment (baseline Rabu 10:00) with one metrics update, so the
+ * server recommends Rabu 10:00 for `contentId` with a confidence above the
+ * 0.75 SCHEDULE threshold (the auto-apply path).
+ */
+async function scheduleExperimentWithMetrics(
+  api: Api,
+  factory: { createExperiment: (input?: { contentId?: number; axis?: "SCHEDULE"; baseline?: Record<string, unknown> }) => Promise<ExperimentRecord> },
+  contentId?: number,
+) {
+  const created = await factory.createExperiment({ contentId, axis: "SCHEDULE", baseline: { schedule: { day: "Rabu", hour: 10 } } });
+  await json(api.post("/api/opt/local/metrics", { data: metrics(created.variants[0].id, 120, 12, 6) }), 200, "metrics");
+  return created;
+}
 
 test.describe("AI optimizer", () => {
   test(
@@ -281,6 +302,8 @@ test.describe("AI optimizer", () => {
       // Choosing a winner logs no auto action (plan mismatch, see annotation).
       expect((await autoLogs(api)).filter((action) => action.experimentId === experiment.id)).toEqual([]);
 
+      // The server must recommend a schedule for this content to auto-apply it.
+      await scheduleExperimentWithMetrics(api, factory, experiment.contentId);
       const reason = `OPT-03 schedule ${tag()}`;
       const applied = await json<{ applied: boolean; action: AutoAction }>(
         api.post("/api/opt/schedule/apply", {
@@ -302,6 +325,10 @@ test.describe("AI optimizer", () => {
         variantId: challenger.id,
         organizationId: isolatedUser.user.workspace.organizationId,
       });
+      // The logged confidence is the server's, not the 0.9 the payload claims.
+      const serverConfidence = applied.action.confidence!;
+      expect(serverConfidence).toBeGreaterThanOrEqual(0.75);
+      expect(serverConfidence).not.toBe(0.9);
       const actionId = applied.action.id;
       expect((await autoLogs(api)).find((action) => action.id === actionId)).toMatchObject({ status: "applied" });
 
@@ -310,7 +337,7 @@ test.describe("AI optimizer", () => {
       const actionRow = page.getByRole("row").filter({ hasText: reason });
       await expect(actionRow).toContainText("Schedule Update");
       await expect(actionRow).toContainText("applied");
-      await expect(actionRow).toContainText("90.0%");
+      await expect(actionRow).toContainText(`${(serverConfidence * 100).toFixed(1)}%`);
 
       // Another workspace cannot see or revert it.
       const other = await newApiUser("opt03-other");
@@ -341,62 +368,72 @@ test.describe("AI optimizer", () => {
   );
 
   test(
-    "OPT-04a a schedule/apply payload with confidence 0.9 reaches auto-publish under AI_SA_MAX_AUTOPUBLISH_PER_DAY=1 and is logged",
+    "OPT-04a schedule/apply gates on the server-side confidence: a client claiming 0.99 without a server recommendation is refused, a client claiming 0.1 for a recommended slot is auto-applied and logged with the server value",
     { annotation: covers("/api/opt/schedule/apply", "/api/opt/schedule/recommend", "/api/opt/auto/logs") },
     async ({ newApiUser }) => {
       const { api, factory } = await newApiUser("opt04a");
-      const { experiment, variants } = await factory.createExperiment({ axis: "SCHEDULE", baseline: { schedule: { day: "Rabu", hour: 10 } } });
-      await json(api.post("/api/opt/local/metrics", { data: metrics(variants[0].id, 120, 12, 6) }), 200, "metrics");
+      const { experiment } = await scheduleExperimentWithMetrics(api, factory);
 
-      // The app's own recommendation reports the configured daily limit.
+      // The app's own recommendation reports the configured daily limit and its confidence.
       const { recommendation } = await json<{ recommendation: Recommendation }>(
         api.post("/api/opt/schedule/recommend", { data: { contentId: experiment.contentId } }),
         200,
         "POST /api/opt/schedule/recommend",
       );
       expect(recommendation).toMatchObject({ limit: 1, source: "local", day: "Rabu", hour: 10 });
+      expect(recommendation.confidence).toBeGreaterThanOrEqual(0.75);
 
+      // A content the server has no local experiment for: the client's 0.99 is
+      // ignored, nothing is applied or logged (whatever the global signals say,
+      // their confidence 0.72 is below the 0.75 threshold).
+      const unknownContent = randomContentId();
+      const claimed = await json<{ applied: boolean; evaluation: { decision: string; reason: string } }>(
+        api.post("/api/opt/schedule/apply", {
+          data: { contentId: unknownContent, recommendation: autoRecommendation(`OPT-04a claimed ${tag()}`, { confidence: 0.99 }) },
+        }),
+        200,
+        "apply with a client-only confidence",
+      );
+      expect(claimed).toMatchObject({ applied: false, evaluation: { decision: "needs_approval" } });
+      expect(claimed.evaluation.reason).not.toBe("Kuota autopublish harian habis");
+
+      // A slot other than the server's is refused.
+      const otherSlot = await json<{ applied: boolean; message: string }>(
+        api.post("/api/opt/schedule/apply", {
+          data: { contentId: experiment.contentId, recommendation: { ...recommendation, day: "Senin", hour: 9, reason: `OPT-04a slot ${tag()}` } },
+        }),
+        200,
+        "apply for another slot",
+      );
+      expect(otherSlot).toMatchObject({ applied: false, message: "Jadwal tidak cocok dengan rekomendasi server" });
+
+      // The recommended slot with a client confidence of 0.1 is still auto-applied:
+      // the gate uses the server's confidence, and so does the log.
       const reason = `OPT-04a ${tag()}`;
       const first = await json<{ applied: boolean; evaluation: { decision: string; limit: number; quotaRemaining: number }; action: AutoAction }>(
         api.post("/api/opt/schedule/apply", {
-          data: { contentId: experiment.contentId, experimentId: experiment.id, recommendation: { ...recommendation, confidence: 0.9, reason } },
+          data: { contentId: experiment.contentId, experimentId: experiment.id, recommendation: { ...recommendation, confidence: 0.1, reason } },
         }),
         200,
         "first apply",
       );
       expect(first).toMatchObject({ applied: true, evaluation: { decision: "auto", limit: 1, quotaRemaining: 0 } });
       expect(first.action).toMatchObject({ actionType: "SCHEDULE_UPDATE", status: "applied", contentId: experiment.contentId });
-      expect((await autoLogs(api)).filter((action) => action.contentId === experiment.contentId).map((action) => action.id)).toEqual([first.action.id]);
+      expect(first.action.confidence).toBeCloseTo(recommendation.confidence, 10);
 
-      // Below the SCHEDULE confidence threshold (0.75) the gate asks for approval and logs nothing.
-      const low = await json<{ applied: boolean; evaluation: { decision: string } }>(
-        api.post("/api/opt/schedule/apply", {
-          data: { contentId: experiment.contentId, recommendation: autoRecommendation(`OPT-04a low ${tag()}`, { confidence: 0.5 }) },
-        }),
-        200,
-        "low-confidence apply",
-      );
-      expect(low).toMatchObject({ applied: false, evaluation: { decision: "needs_approval" } });
-      expect((await autoLogs(api)).filter((action) => action.contentId === experiment.contentId)).toHaveLength(1);
+      const logged = await autoLogs(api);
+      expect(logged.filter((action) => action.contentId === experiment.contentId).map((action) => action.id)).toEqual([first.action.id]);
+      expect(logged.filter((action) => action.contentId === unknownContent)).toEqual([]);
     },
   );
 
   test(
     "OPT-04b with AI_SA_MAX_AUTOPUBLISH_PER_DAY=1 the second auto-publish of the day is blocked and only the first is logged",
-    {
-      annotation: [
-        ...covers("/api/opt/schedule/apply", "/api/opt/auto/logs"),
-        {
-          type: "product-bug",
-          description:
-            "The daily auto-publish quota is never consumed: lib/ai/approval-gates.ts getAutoPublishUsage counts only actionType AUTOPUBLISH, but applyScheduleRecommendation (lib/ai/scheduler.ts) logs SCHEDULE_UPDATE and nothing in the app creates AUTOPUBLISH. With AI_SA_MAX_AUTOPUBLISH_PER_DAY=1 the second POST /api/opt/schedule/apply still answers { applied: true } and a second action is logged. Also: the gate trusts the client-supplied recommendation.confidence.",
-        },
-      ],
-    },
+    { annotation: covers("/api/opt/schedule/apply", "/api/opt/auto/logs") },
     async ({ newApiUser }) => {
-      test.fail(true, "product bug: schedule auto-applies never consume the AI_SA_MAX_AUTOPUBLISH_PER_DAY quota (approval-gates counts AUTOPUBLISH only)");
-      const { api } = await newApiUser("opt04b");
-      const contentId = randomContentId();
+      const { api, factory } = await newApiUser("opt04b");
+      const { experiment } = await scheduleExperimentWithMetrics(api, factory);
+      const contentId = experiment.contentId;
       const apply = (reason: string) =>
         json<{ applied: boolean; evaluation: { decision: string; reason: string; quotaRemaining: number }; message?: string }>(
           api.post("/api/opt/schedule/apply", { data: { contentId, recommendation: autoRecommendation(reason) } }),

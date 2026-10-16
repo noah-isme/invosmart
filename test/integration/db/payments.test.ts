@@ -139,9 +139,17 @@ const paymentAudits = (invoiceId: string, count: number) =>
     return n >= count ? n : null;
   });
 
+// JRN-01b: every webhook audit row belongs to the invoice's workspace, so the
+// workspace-scoped audit API (filtered by tenantId) lists it.
+async function expectAuditsInWorkspace(invoiceId: string, organizationId: string, events: string[]) {
+  const rows = await db.auditLog.findMany({ where: { entityId: invoiceId, action: "INVOICE_UPDATE" } });
+  expect(rows.map((row) => (row.details as { event?: string } | null)?.event).sort()).toEqual([...events].sort());
+  expect(rows.every((row) => row.tenantId === organizationId)).toBe(true);
+}
+
 describe("PAY-INT-01 settlement replay", () => {
   it("Midtrans: three identical settlements record one event per distinct notification and one transition", async () => {
-    const { invoice } = await paymentInvoice();
+    const { invoice, organization } = await paymentInvoice();
     const attempt = await midtransAttempt(invoice.id);
     const transactionId = `mid-tx-${uid()}`;
 
@@ -174,10 +182,11 @@ describe("PAY-INT-01 settlement replay", () => {
     expect(after.invoice.paidAt?.getTime()).toBe(afterFirst.invoice.paidAt?.getTime());
     expect(after.invoice.updatedAt.getTime()).toBe(afterFirst.invoice.updatedAt.getTime());
     await paymentAudits(invoice.id, 1);
+    await expectAuditsInWorkspace(invoice.id, organization.id, ["PAYMENT_RECEIVED"]);
   });
 
   it("Stripe: the same event replayed three times (sequentially and concurrently) is recorded once", async () => {
-    const { invoice } = await paymentInvoice();
+    const { invoice, organization } = await paymentInvoice();
     const attempt = await stripeAttempt(invoice.id);
     const paymentIntent = `pi_${uid()}`;
     const payload = stripeEvent(attempt, { paymentIntent });
@@ -212,6 +221,7 @@ describe("PAY-INT-01 settlement replay", () => {
     expect(final.attempts[0].status).toBe("SETTLED");
     expect(final.payments).toHaveLength(1);
     await paymentAudits(invoice.id, 2);
+    await expectAuditsInWorkspace(invoice.id, organization.id, ["PAYMENT_RECEIVED", "PAYMENT_RECEIVED"]);
   });
 });
 
@@ -253,7 +263,7 @@ describe("PAY-INT-02 competing-webhooks", () => {
     await assertSingleSettlement(await race());
 
     // Sequential: Stripe settles first, Midtrans arrives afterwards.
-    const { invoice } = await paymentInvoice();
+    const { invoice, organization } = await paymentInvoice();
     const stripe = await stripeAttempt(invoice.id);
     const midtrans = await midtransAttempt(invoice.id);
     const stripeRes = await postStripe(stripeEvent(stripe, { paymentIntent: `pi_${uid()}` }));
@@ -261,5 +271,8 @@ describe("PAY-INT-02 competing-webhooks", () => {
       midtransNotificationBody(midtrans.providerOrderId!, `mid-tx-${uid()}`, "settlement"),
     );
     await assertSingleSettlement({ stripeRes, midtransRes, ...(await ledger(invoice.id)) } as any);
+    // The settlement and the duplicate-settlement (refund required) rows are both tenanted.
+    await paymentAudits(invoice.id, 2);
+    await expectAuditsInWorkspace(invoice.id, organization.id, ["PAYMENT_RECEIVED", "DUPLICATE_PAYMENT_REFUND_REQUIRED"]);
   });
 });

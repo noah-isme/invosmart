@@ -195,12 +195,7 @@ These tests assert the desired behaviour and are marked as expected to fail unti
 
 | Test | Marker | Product bug |
 |---|---|---|
-| CLI-03b (`specs/clients/clients.spec.ts`) | `test.fail` | `POST /api/clients` does not handle the `@@unique([userId, email])` violation when the same user reuses a client email in a second workspace: 500 instead of 4xx |
-| EXP-05 (`specs/export/export.spec.ts`) | `test.fail` | CSV export does not neutralise formula cells (CSV injection; `lib/export-utils.ts` `escapeCSVCell`, momus-gated) |
-| EXP-06 (`specs/export/export.spec.ts`) | `test.fail` | Export dates are UTC, not the Asia/Jakarta calendar date (`formatDateForExport`, momus-gated) |
-| API-07b (`specs/api-v1/invoices.spec.ts`) | `test.fail` | `lib/api-v1/rate-limit.ts` refuses the limit-th request (off by one against `x-ratelimit-limit`) |
-| OPT-04b (`specs/admin/optimizer.spec.ts`) | `test.fail` | Schedule auto-applies never consume the `AI_SA_MAX_AUTOPUBLISH_PER_DAY` quota (approval gates count `AUTOPUBLISH` only) |
-| JRN-01b (`specs/journeys/register-to-paid.spec.ts`) | `test.fail` | Payment settlement audit rows (Midtrans notification and Stripe webhook) carry no `tenantId`, so the workspace audit API never shows them |
+| CLI-03b (`specs/clients/clients.spec.ts`) | `test.fail` | Schema: `Client` `@@unique([userId, email])` makes client emails unique per user across workspaces, while the intended rule is per workspace. Needs a migration; until then the route answers 409 `CLIENT_EMAIL_CONFLICT` instead of the former 500 (CLI-03c, CLI-INT-01) |
 | fixtures guard self-test (`specs/support/fixtures.spec.ts`) | `test.fail` | Not a product bug: proves the `guards` fixture fails a test that requests a non-loopback host |
 | WS-14 compat fallback (`test/integration/db/workspaces.test.ts`) | `it.fails` | `docs/WORKSPACE_RBAC.md` "Migration sequence" step 5 promises a compat `userId` fallback for legacy null-organization rows that `lib/workspaces.ts` does not implement; a passing pin test asserts current behaviour |
 
@@ -209,8 +204,6 @@ These tests assert the desired behaviour and are marked as expected to fail unti
 Recorded while building the suite; none is fixed by it.
 
 - Midtrans environment mismatch: the server picks Snap `isProduction` from `NODE_ENV` (`lib/payments/midtrans.ts`) while the browser picks the `snap.js` host from the client-key prefix (`getSnapScriptUrl()`), so a sandbox key under `next start` loads sandbox `snap.js` but calls the production Snap API.
-- XLSX export is SpreadsheetML XML served under an `.xlsx` name (`exportToXLSX`); EXP-02 asserts the current bytes.
-- Audit entries with a null `tenantId`: sign-in (`AUTH_LOGIN_SUCCESS`, AUD-INT-01), registration (`AUTH_REGISTER`) and payment settlement (`INVOICE_UPDATE` from the webhooks, JRN-01b). They never appear in the workspace-scoped audit API.
 - `/app/admin/audit-logs` pagination links keep `action` and `entity` but drop the `userId` and `tenantId` filters (`app/app/admin/audit-logs/page.tsx`).
 - `/api/ai/theme-suggest` took about 9.5 s per call in the e2e build with the Upstash variables blank. Likely cause, not root-caused: `Redis.fromEnv()` in `lib/cache/theme-suggestions.ts` accepts the blank values and the client retries before the error is swallowed.
 - `public/sw.js` precaches `/app/dashboard` on install. Signed out, that URL redirects to `/auth/login`, and the CSP's `upgrade-insecure-requests` turns the redirect into `https://localhost`, so on plain-http hosts `cache.addAll()` rejects and the worker goes redundant (PWA-01 runs signed in for this reason).

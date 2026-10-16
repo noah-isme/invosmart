@@ -59,7 +59,7 @@ The latest execution pass is focused on release readiness around the Phase 2 fou
 
 ### Phase 2 Additions (v1.2.0)
 - ✅ Recurring invoice templates — save, manage, and instantiate invoice templates per-user
-- ✅ CSV / Excel export — download invoice lists as `.csv` or `.xlsx` files
+- ✅ CSV / Excel export — download invoice lists as `.csv` or Excel 2003 XML Spreadsheet (`.xml`) files
 - ✅ i18n framework — English (`en`) + Indonesian (`id`) with per-user locale persistence
 - ✅ Bayesian A/B statistics — posterior probability, expected loss, credible intervals for experiments
 - ✅ Feature flags system — runtime per-tenant/user toggles with admin UI and typed helper

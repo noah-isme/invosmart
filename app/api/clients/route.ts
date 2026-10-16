@@ -9,6 +9,7 @@ import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audi
 import {
   canReadWorkspace,
   canWriteWorkspace,
+  isUniqueConstraintError,
   resolveWorkspaceContextForRequest,
   workspaceData,
   workspaceScope,
@@ -16,6 +17,15 @@ import {
 
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 const forbidden = () => NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+const clientEmailConflict = () =>
+  NextResponse.json(
+    {
+      error: "A client with this email already exists for your account.",
+      code: "CLIENT_EMAIL_CONFLICT",
+      field: "email",
+    },
+    { status: 409 },
+  );
 
 export async function GET(request: NextRequest) {
   const httpsCheck = enforceHttps(request);
@@ -101,17 +111,29 @@ export async function POST(request: NextRequest) {
       where: { ...scope, email: parsed.data.email },
     });
     if (existing) {
-      return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });
+      return clientEmailConflict();
     }
   }
 
-  const client = await db.client.create({
-    data: {
-      userId,
-      ...workspaceData(workspace),
-      ...parsed.data
+  let client;
+  try {
+    client = await db.client.create({
+      data: {
+        userId,
+        ...workspaceData(workspace),
+        ...parsed.data
+      }
+    });
+  } catch (error) {
+    // The pre-check above is workspace-scoped, but the schema also has
+    // @@unique([userId, email]): the same user reusing a client email in a
+    // second workspace (or a create racing the pre-check) lands here.
+    // Report a conflict instead of a 500.
+    if (isUniqueConstraintError(error)) {
+      return clientEmailConflict();
     }
-  });
+    throw error;
+  }
 
   void logAuditEvent({
     tenantId: workspace.organizationId,

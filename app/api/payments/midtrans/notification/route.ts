@@ -178,6 +178,7 @@ export async function POST(request: Request) {
       paymentId?: string;
       invoiceId: string;
       userId: string;
+      organizationId: string | null;
       status: string;
       duplicateSettlement?: { marker: DuplicateSettlementMarker; firstDetection: boolean };
       manualReview?: ReviewRequiredMarker;
@@ -208,6 +209,7 @@ export async function POST(request: Request) {
             ignored: false,
             invoiceId: txAttempt.invoiceId,
             userId: txAttempt.invoice.userId,
+            organizationId: txAttempt.invoice.organizationId,
             status: txAttempt.status,
           };
         }
@@ -352,6 +354,7 @@ export async function POST(request: Request) {
           paymentId,
           invoiceId: txAttempt.invoiceId,
           userId: txAttempt.invoice.userId,
+          organizationId: txAttempt.invoice.organizationId,
           status: decision === 'apply' ? nextStatus : txAttempt.status,
           duplicateSettlement: marker ? { marker, firstDetection: !previousMarker } : undefined,
           manualReview: review && !previousReview ? review : undefined,
@@ -372,6 +375,7 @@ export async function POST(request: Request) {
 
     if (result.paymentId && !result.duplicate) {
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,
@@ -391,6 +395,7 @@ export async function POST(request: Request) {
         `[payments] Duplicate settlement: Midtrans payment ${providerPaymentId} (order ${orderId}) arrived for invoice ${result.invoiceId}, which is already settled. No Payment was created; manual refund required.`,
       );
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,
@@ -412,6 +417,7 @@ export async function POST(request: Request) {
         `[payments] Midtrans payment ${providerPaymentId} was recorded for invoice ${result.invoiceId}, which was already marked PAID without a Payment. Review required.`,
       );
       void logAuditEvent({
+        tenantId: result.organizationId,
         userId: result.userId,
         action: AuditAction.INVOICE_UPDATE,
         entity: AuditEntity.INVOICE,
