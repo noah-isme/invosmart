@@ -165,6 +165,14 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build-and-test, e2e-smoke]
     runs-on: ubuntu-latest
+    # Holds PRODUCTION_DATABASE_URL. The environment and its secret are created
+    # by the repository owner (docs/DEPLOYMENT.md "Database migrations"); no
+    # required reviewers, so deploys stay fully automatic.
+    environment: production
+    # Two deploys must never run `prisma migrate deploy` in parallel.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     outputs:
       deployment_url: ${{ steps.vercel.outputs.url }}
     env:
@@ -181,6 +189,25 @@ jobs:
         run: npm ci
       - name: Generate Prisma client
         run: npx --no-install prisma generate
+      # Migrations run before the build and before `vercel deploy`, so a failed
+      # migration stops the job and never ships code ahead of its schema.
+      # PRODUCTION_DATABASE_URL must be the direct (non-pooled) connection
+      # string: schema.prisma has no directUrl, and a PgBouncer/transaction-
+      # pooled URL breaks the advisory lock `migrate deploy` takes.
+      - name: Check production database secret
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          if [ -z "$PRODUCTION_DATABASE_URL" ]; then
+            echo "::error::PRODUCTION_DATABASE_URL is empty. Create the 'production' GitHub environment and add the PRODUCTION_DATABASE_URL secret (direct, non-pooled connection string); see docs/DEPLOYMENT.md."
+            exit 1
+          fi
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          npx --no-install prisma migrate status || true
+          npx --no-install prisma migrate deploy
       - name: Build
         run: npm run build
         env:

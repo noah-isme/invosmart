@@ -221,7 +221,7 @@ Architecture, environment, tiers, CI budgets, how to add a scenario and the know
 InvoSmart deploys to Vercel from GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)):
 - **Pushes to `main`, PRs to `main` and `v*` tags** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
 - **A `v*` tag** additionally runs `deploy` (`vercel deploy --prod`) and then the `@staging` tier.
-- **Database migrations are not run by the pipeline.** Apply them with `npx prisma migrate deploy` before deploying schema-dependent code.
+- **Database migrations** are applied by the `deploy` job (`prisma migrate deploy`, before `vercel deploy`) using the `PRODUCTION_DATABASE_URL` secret of the `production` GitHub environment, which the repository owner creates (direct, non-pooled connection string).
 - **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes.
 
 Release order, rollback and verification: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Staging certification: [docs/runbooks/release-certification.md](./docs/runbooks/release-certification.md).

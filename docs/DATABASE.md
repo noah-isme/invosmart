@@ -72,7 +72,7 @@ npx prisma migrate deploy
 ```
 This command applies any pending versioned migrations from `prisma/migrations/` to the target database without modifying schema files or prompting for input.
 
-No CI workflow, `vercel.json` setting or npm script runs this command: the `deploy` job in `.github/workflows/release.yml` only runs `prisma generate`, `npm run build` and `vercel deploy --prod`, and `npm run release:certify` only runs `prisma migrate status`. An operator runs `migrate deploy` by hand. For when to run it relative to a release, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+In production the `deploy` job in `.github/workflows/release.yml` runs this command automatically, after `prisma generate` and before `npm run build` and `vercel deploy --prod`, with `DATABASE_URL` taken from the `PRODUCTION_DATABASE_URL` secret of the `production` GitHub environment (created by the repository owner). That secret must be the **direct (non-pooled) connection string**: this schema declares no `directUrl`, so the URL is used for DDL, and a PgBouncer/transaction-pooled URL breaks the advisory lock `migrate deploy` takes. Staging migrations are still applied by hand, and `npm run release:certify` only runs `prisma migrate status`. Release order, the manual fallback and the environment setup are in [DEPLOYMENT.md](./DEPLOYMENT.md#database-migrations).
 
 ### 3.3 Checking Migration Status (`npx prisma migrate status`)
 To verify whether the database schema is up to date with existing migrations:
@@ -310,7 +310,7 @@ A materialized occurrence counts as delivered only once one of its channel rows 
 | `npx prisma validate` | Validates the syntax and structural integrity of `prisma/schema.prisma`. |
 | `npx prisma generate` | Generates updated `@prisma/client` TypeScript types based on `prisma/schema.prisma`. |
 | `npx prisma migrate dev` | Creates and applies a new migration in local development. |
-| `npx prisma migrate deploy` | Applies pending migrations to a staging/production database (run manually; see [DEPLOYMENT.md](./DEPLOYMENT.md)). |
+| `npx prisma migrate deploy` | Applies pending migrations to a staging/production database (the production `deploy` job runs it automatically; staging is manual; see [DEPLOYMENT.md](./DEPLOYMENT.md)). |
 | `npx prisma migrate status` | Checks pending migrations against the connected database. |
 | `npx prisma studio` | Launches an interactive web UI (`http://localhost:5555`) to view and edit database records. |
 | `npm run db:seed` | Seeds the database with default initial data using `prisma/seed.ts`. |

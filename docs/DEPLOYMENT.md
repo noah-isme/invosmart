@@ -19,7 +19,7 @@ Related: [runbooks/release-certification.md](runbooks/release-certification.md)
 | Local | `npm run dev` (port 1234), Node 24 (`.nvmrc`) | Your PostgreSQL via `DATABASE_URL`; `npx prisma migrate dev` | `.env` copied from `.env.example` |
 | E2E / CI | `next start` on an `npm run e2e:build` build, started by `playwright.config.ts` | In-memory PGlite (`npm run e2e:db`) | Fixed values from the e2e harness; no `.env`, no provider accounts. See [E2E_TESTING.md](E2E_TESTING.md) |
 | Staging | A Vercel deployment at the URL in the `STAGING_NEXTAUTH_URL` secret | Staging PostgreSQL (`STAGING_DATABASE_URL`) | GitHub environment `staging` (`STAGING_*` secrets) for CI checks; the Vercel project's environment variables for the app itself |
-| Production | Vercel, deployed by the `deploy` job | Managed PostgreSQL | Vercel project environment variables |
+| Production | Vercel, deployed by the `deploy` job | Managed PostgreSQL; migrated by the `deploy` job | Vercel project environment variables for the app; GitHub environment `production` (`PRODUCTION_DATABASE_URL`, created by the repository owner) for migrations |
 
 > **Open decision / verify:** the workflows never deploy to staging; `deploy`
 > only runs `vercel deploy --prod`. How the staging deployment is created
@@ -70,10 +70,11 @@ It uploads `QA-report/` and `test-results/` as evidence.
 `E2E_WORKSPACE_AUTH_MODE=enforce`.
 
 **`deploy`** runs only for `v*` tags and only after both jobs above pass. It
+runs in the `production` environment. It applies database migrations with
+`prisma migrate deploy` (see [Database migrations](#database-migrations)),
 builds once more as a gate, then runs
 `npx vercel deploy --prod --token=$VERCEL_TOKEN`. Vercel builds the deployment
-itself, using the project's environment variables, not the CI build. The job
-does **not** run database migrations.
+itself, using the project's environment variables, not the CI build.
 
 **`post-deploy-tests`** (environment `staging`) runs the `@staging` Playwright
 tier against `STAGING_NEXTAUTH_URL`, **not** against the production URL the
@@ -102,8 +103,32 @@ pushes a `v*` tag by hand.
 ## Database migrations
 
 Migrations live in `prisma/migrations/` and are applied with
-`npx prisma migrate deploy`. **No pipeline runs this command.** It is a manual
-operator step against the target database.
+`npx prisma migrate deploy`. The `deploy` job in `release.yml` runs it
+automatically, before the build and before `vercel deploy --prod`:
+
+1. **Check production database secret** fails the job with a clear message
+   when `PRODUCTION_DATABASE_URL` is empty.
+2. **Apply database migrations** runs `npx --no-install prisma migrate status`
+   (informational, never fails the step) and then
+   `npx --no-install prisma migrate deploy` with
+   `DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}`. A failed migration
+   fails the job, so `vercel deploy` never runs against an unmigrated schema.
+
+The job runs in the `production` GitHub environment (no required reviewers,
+so deploys stay automatic) and in the concurrency group `production-deploy`
+with `cancel-in-progress: false`, so two deploys never run `migrate deploy`
+in parallel. `vercel.json` sets `git.deploymentEnabled.main` to `false`, so a
+Vercel Git integration, if one is ever connected, cannot deploy `main` ahead of
+the migrations this job runs.
+
+> **Before the first automated deploy, the repository owner must create the
+> `production` GitHub environment** (Settings → Environments) **and add the
+> `PRODUCTION_DATABASE_URL` secret to it.** Nothing in this repo creates
+> either. Without the secret the `deploy` job stops at the secret check.
+> The value must be the **direct (non-pooled) connection string**:
+> `prisma/schema.prisma` declares no `directUrl`, so this URL is used for DDL,
+> and a PgBouncer or transaction-pooled URL breaks the advisory lock that
+> `migrate deploy` takes (see [DATABASE.md](DATABASE.md#32-production-migration-execution-npx-prisma-migrate-deploy)).
 
 Procedure for a release that contains migrations:
 
@@ -111,16 +136,13 @@ Procedure for a release that contains migrations:
    database, then dispatch `staging-certification`, which must report no
    pending or failed migrations
    ([runbooks/release-certification.md](runbooks/release-certification.md#database-and-deployment)).
-2. Apply to production **before** pushing the release tag:
-   `DATABASE_URL=<production> npx prisma migrate deploy`. Then run
-   `npx prisma migrate status` and confirm nothing is pending.
-3. Push the `v*` tag. The deploy runs the new code against the already
-   migrated schema.
+2. Release as usual. The `deploy` job applies the migrations to production,
+   then builds and deploys the new code against the migrated schema.
 
 This order is safe only because migrations are additive (new tables, nullable
 columns, indexes), so the running old version keeps working against the new
-schema. For a change that removes or tightens something (drop a column, make
-a column non-null), use expand and contract:
+schema while the deploy is in progress. For a change that removes or tightens
+something (drop a column, make a column non-null), use expand and contract:
 
 1. Ship an additive migration and code that works with both shapes.
 2. Backfill and verify.
@@ -131,10 +153,11 @@ The workspace rollout in [WORKSPACE_RBAC.md](WORKSPACE_RBAC.md#migration-sequenc
 is the worked example. Payment-lifecycle migration notes are in
 [DATABASE.md](DATABASE.md).
 
-> **Open decision:** whether to automate `prisma migrate deploy`, either as a
-> CI step before `vercel deploy` (needs a production `DATABASE_URL` secret in
-> CI) or as part of the Vercel build command. Until then, a tag pushed without
-> step 2 deploys code against an unmigrated database.
+**Manual fallback.** If the pipeline cannot run (for example the secret is
+missing or GitHub Actions is down), an operator can apply migrations by hand:
+`DATABASE_URL=<production direct URL> npx prisma migrate deploy`, then
+`npx prisma migrate status` to confirm nothing is pending, and only then
+deploy the code.
 
 ## Rollback
 
