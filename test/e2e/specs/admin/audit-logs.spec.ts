@@ -226,16 +226,22 @@ test.describe("audit logs", () => {
       expect(pluralRows).toHaveLength(3);
       expect(singularRows).toEqual(pluralRows);
 
-      // Non-admins: both pages redirect; the API stays workspace-scoped (VIEWER reads its workspace).
+      // Non-admins: both pages redirect; the API stays workspace-scoped and
+      // OWNER/ADMIN only (an ADMIN reads its workspace, a VIEWER gets 403).
       for (const path of [LOGS_PAGE, LOG_PAGE_SINGULAR]) {
         await ownerPage.goto(path);
         await expect(ownerPage, `${path} redirects a workspace OWNER`).toHaveURL((url) => url.pathname === "/app");
       }
+      const workspaceAdmin = await persona("admin");
+      const adminWorkspace = (await workspaceAdmin.factory.listWorkspaces()).find((membership) => membership.active);
+      const adminRows = await auditLogs(workspaceAdmin.api, {}, LOG_API_SINGULAR);
+      expect(adminRows.logs.every((row) => row.tenantId === adminWorkspace!.organizationId)).toBe(true);
+      expect(adminRows.logs.some((row) => row.entityId === invoiceId)).toBe(false);
       const viewer = await persona("viewer");
-      const viewerWorkspace = (await viewer.factory.listWorkspaces()).find((membership) => membership.active);
-      const viewerRows = await auditLogs(viewer.api, {}, LOG_API_SINGULAR);
-      expect(viewerRows.logs.every((row) => row.tenantId === viewerWorkspace!.organizationId)).toBe(true);
-      expect(viewerRows.logs.some((row) => row.entityId === invoiceId)).toBe(false);
+      for (const path of [LOGS_API, LOG_API_SINGULAR]) {
+        const denied = await viewer.api.get(path);
+        expect(denied.status(), `GET ${path} as VIEWER`).toBe(403);
+      }
     },
   );
 });
