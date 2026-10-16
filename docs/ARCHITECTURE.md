@@ -100,7 +100,7 @@ flowchart LR
 
 ### Payments
 - **Providers**: Stripe Checkout and Midtrans Snap (`lib/payments/stripe.ts`, `lib/payments/midtrans.ts`).
-- **Starting a checkout**: a workspace member with `write` permission starts it from the invoice detail page (`components/payments/PaymentGatewayModal.tsx`). This creates a `PaymentAttempt` with an idempotency key. The attempt is unique per `(provider, idempotencyKey)` and per `(provider, providerOrderId)`, and it reuses an active attempt for 30 minutes (`lib/payments/lifecycle.ts:39`).
+- **Starting a checkout**: a workspace member with `write` permission starts it from the invoice detail page (`components/payments/PaymentGatewayModal.tsx`), or the invoice recipient starts it from the public share page through `POST /api/share/checkout`, authorised by the share token (see §3). Both paths use the shared helpers in `lib/payments/checkout.ts`. A checkout can be started for invoices in `SENT`/`UNPAID`/`OVERDUE` only (`DRAFT` and `PAID` are refused with `409`; `PAYABLE_INVOICE_STATUSES` in `lib/payments/lifecycle.ts`). This creates a `PaymentAttempt` with an idempotency key. The attempt is unique per `(provider, idempotencyKey)` and per `(provider, providerOrderId)`, and it reuses an active attempt for 30 minutes (`lib/payments/lifecycle.ts:39`).
 - **Attempt states**: `PENDING`, `AUTHORIZED`, `SETTLED`, `EXPIRED`, `CANCELLED`, `FAILED`, `REFUNDED`. Allowed transitions are decided in `decidePaymentTransition` (`lib/payments/lifecycle.ts:204`).
 - **Reconciliation**: signed provider events (Stripe `constructEvent`, Midtrans `verifyMidtransSignature`) are stored once in `PaymentEvent`, which is unique on `(provider, providerEventId)`. Settlement then runs `settleInvoiceOnce` (`lib/payments/settlement.ts:85`). It locks the attempt and the invoice, records at most one `Payment` per attempt, and flags duplicate settlements for refund or manual review rather than recording them twice. See [ADR 015](./adr/015-payment-providers-webhook-reconciliation.md).
 - **Amounts**: currency and amount are re-verified against the invoice on every event (`verifyAmountAndCurrency`). Stripe minor units are handled in `lib/payments/money.ts`.
@@ -150,17 +150,18 @@ sequenceDiagram
     App->>DB: append Invoice.emailLog
     Resend-->>App: POST /api/webhooks/resend (Standard Webhooks signature)
     App->>DB: update delivery status in emailLog
-    Recipient->>App: GET /share/:id?token=…
-    Member->>App: POST /api/payments/{stripe/create-session | midtrans/create}
+    Recipient->>App: GET /share/:id?token=…&action=pay
+    Recipient->>App: POST /api/share/checkout (token)
+    Note over Member,App: or, signed in: POST /api/payments/{stripe/create-session | midtrans/create}
     App->>DB: create or reuse PaymentAttempt (idempotency key)
     App->>PSP: create checkout
-    App-->>Member: checkout URL
+    App-->>Recipient: checkout URL / Snap token
     PSP-->>App: signed webhook / notification
     App->>DB: insert PaymentEvent (unique provider event id)
     App->>DB: lock attempt + invoice, settleInvoiceOnce → Payment, Invoice PAID
 ```
 
-The email also contains a payment link: the share URL with `?action=pay` (`send-email/route.ts:131`). The public share page (`app/share/[id]/page.tsx`) does not handle that parameter yet, so in practice checkout is started from the authenticated invoice detail page.
+The email also contains a payment link: the share URL with `?action=pay` (`send-email/route.ts:131`). The public share page (`app/share/[id]/page.tsx`) shows a pay button (`SharePayButton.tsx`) for payable invoices and, with `action=pay`, starts the default provider once on load: `IDR` → Midtrans, any other currency → Stripe, or whichever single provider is configured and can charge the currency (`pickShareCheckoutProvider` in `lib/payments/checkout.ts`). The button posts `{ invoiceId, token, provider }` to `POST /api/share/checkout`, which verifies the share token (bad, expired or foreign token → `404`), never reads a session or cookie, ignores any client `Idempotency-Key` and uses a server-side key per invoice, provider and 30-second window, and answers only the Stripe URL or the Snap token. Stripe returns the recipient to the share URL with `payment=success|cancelled`; that parameter is display-only, and the status shown is `invoice.status`, which only the signed webhooks move to `PAID`. Signed-in members still start checkout from the invoice detail page.
 
 ### Reminder pipeline
 

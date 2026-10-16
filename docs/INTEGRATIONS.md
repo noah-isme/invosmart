@@ -49,11 +49,41 @@ Both payment providers share one lifecycle (`lib/payments/lifecycle.ts`,
   `UNPAID`.
 - Checkout routes require the workspace `write` capability; reading payment
   status requires `read` ([WORKSPACE_RBAC.md](WORKSPACE_RBAC.md)).
+- A checkout can be started only for invoices in `SENT`, `UNPAID` or
+  `OVERDUE`. `PAID` returns `409 { error: "Invoice is already paid" }` and
+  `DRAFT` returns `409 { error: "Invoice is not payable" }`.
 
 Checkout routes accept an optional `Idempotency-Key` header. Reusing a key
 whose attempt is no longer active returns `409`. Without a header, the server
 derives a key per invoice and provider, so a retried click returns the active
 attempt instead of creating a second one.
+
+### Public checkout from the share link
+
+The invoice email links to `/share/<id>?token=…&action=pay`. The share page
+offers a pay button and `POST /api/share/checkout` starts the checkout without
+a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-links)).
+
+- **Provider choice**: `IDR` invoices default to Midtrans, any other currency
+  to Stripe; when only one provider is configured and can charge the
+  currency, that one is used. The other configured provider is offered as a
+  secondary button. With `action=pay` the default provider starts once on
+  load.
+- **Configured means**: Stripe `STRIPE_SECRET_KEY`; Midtrans
+  `MIDTRANS_SERVER_KEY` and `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` (snap.js is
+  loaded on the share page only when Midtrans is offered).
+- **Idempotency**: the route ignores a client `Idempotency-Key` and uses
+  `share:<provider>:<invoiceId>:<30-second window>`, so concurrent requests
+  share one attempt. A request that finds the attempt still waiting for the
+  provider gets `409 { retry: true }` and the page retries after a second.
+- **Return URLs**: Stripe `success_url`/`cancel_url` are the share URL plus
+  `payment=success` or `payment=cancelled`, built from `NEXT_PUBLIC_APP_URL`,
+  then `NEXTAUTH_URL`, then the request origin. Snap callbacks return to the
+  share URL with `payment=success` or `payment=pending`. The parameter only
+  shows a notice; the invoice becomes `PAID` through the signed webhooks
+  below, like any other checkout.
+- **Attribution**: the attempt metadata and the Stripe session metadata carry
+  `source: share_checkout`; the Stripe `userId` metadata is the invoice owner.
 
 ### Stripe
 

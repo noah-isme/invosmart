@@ -84,11 +84,14 @@ Double-submit cookie, enforced in `middleware.ts` with helpers from
   The middleware issues it on any `/app/*` or `/api/*` response that lacks it.
 - Exemptions:
   - `/api/auth/*` (NextAuth has its own CSRF token).
-  - The three signed provider webhooks, exact path and `POST` only:
-    `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`,
-    `/api/webhooks/resend`. Any path added to this list must verify a
-    signature before touching the database, fail closed when its secret is
-    missing, and never read session cookies.
+  - Signature-verified endpoints, exact path and `POST` only: the three
+    signed provider webhooks `/api/payments/stripe/webhook`,
+    `/api/payments/midtrans/notification`, `/api/webhooks/resend`, and the
+    public share-link checkout `/api/share/checkout`, whose verified
+    signature is the HMAC invoice share token in the request body. Any path
+    added to this list must verify a signature before touching the database,
+    fail closed when its secret is missing, and never read session cookies.
+    The middleware does not issue the CSRF cookie on these responses.
   - `/api/v1/*` requests that carry `Authorization: Bearer inv_live_…` (API-key
     clients are not browser sessions).
   - Everything when `NODE_ENV=test`.
@@ -166,6 +169,21 @@ the routes are open when it is unset.
   (default 7 days), keyed with `INVOICE_SHARE_SECRET`, falling back to
   `NEXTAUTH_SECRET` (`lib/invoice-delivery.ts`). Production refuses to issue
   links when neither is set.
+- The share page can start a checkout through `POST /api/share/checkout`
+  (`app/api/share/checkout/route.ts`). The token is the only credential: no
+  session or cookie is read. Checks, in order: per-instance IP rate limit
+  (`share-checkout` bucket, 10/min; a coarse first line only), a 4 KB body
+  cap, schema validation, token verification (`503` when the share secret is
+  missing in production; `404` for a missing, bad, expired or foreign token
+  and for a missing invoice, so the route never reveals whether an invoice
+  exists), provider configured, invoice payable (`SENT`/`UNPAID`/`OVERDUE`,
+  else `409`), currency. A client `Idempotency-Key` header is ignored; the
+  server derives the key from provider, invoice and a 30-second window, so
+  concurrent requests from any instance collapse onto one `PaymentAttempt`
+  and at most one new attempt per invoice and provider is created per
+  window. The response carries only the Stripe URL or the Snap token, never
+  attempt ids or amounts. The `payment=…` query parameter on the share page
+  is display-only; only signed provider webhooks mark an invoice `PAID`.
 - Workspace invitations expire after 7 days (`lib/team/invitations.ts`).
 
 ### Federation
