@@ -42,17 +42,37 @@ export const getActiveKey = (provided?: string): Buffer => {
   return parseKey(raw, "WORKSPACE_NOTIFICATION_ENCRYPTION_KEY");
 };
 
-/** The active key followed by each WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING entry, without duplicates. */
+/** Positions of malformed keyring entries already warned about (warn once per process, not per decrypt). */
+const warnedKeyringEntries = new Set<string>();
+
+/**
+ * The active key followed by each valid WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING
+ * entry, without duplicates. A malformed keyring entry is skipped with a
+ * warning naming only its position, never its value: one bad entry must not
+ * break decryption with the active key or the other entries.
+ */
 export const getKeyring = (provided?: string): Buffer[] => {
   const keys = [getActiveKey(provided)];
   const entries = (process.env.WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING ?? "")
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
-  for (const entry of entries) {
-    const key = parseKey(entry, "WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING entry");
+  entries.forEach((entry, index) => {
+    let key: Buffer;
+    try {
+      key = parseKey(entry, "WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING entry");
+    } catch {
+      const position = `${index + 1}/${entries.length}`;
+      if (!warnedKeyringEntries.has(position)) {
+        warnedKeyringEntries.add(position);
+        console.warn(
+          `[secrets] ignoring WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING entry ${position}: it does not encode 32 bytes`,
+        );
+      }
+      return;
+    }
     if (!keys.some((existing) => existing.equals(key))) keys.push(key);
-  }
+  });
   return keys;
 };
 

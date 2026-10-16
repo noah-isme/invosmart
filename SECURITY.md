@@ -250,7 +250,10 @@ are encrypted with AES-256-GCM (`lib/team/secrets.ts`) in one of two formats:
 
 `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` is the active key (it encrypts);
 `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING` lists previous keys, comma
-separated, that are still accepted for decryption.
+separated, that are still accepted for decryption. A keyring entry that does
+not encode 32 bytes is skipped with a warning naming only its position, so a
+typo there cannot break decryption with the active key; a malformed active
+key still fails closed.
 
 **One-time enablement of v2 writes.** New ciphertexts stay `v1` until
 `WORKSPACE_NOTIFICATION_ENCRYPTION_V2_WRITE=true`, so the release that added

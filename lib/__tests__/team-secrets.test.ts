@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { decryptWorkspaceSecret, encryptWorkspaceSecret, getKeyring, keyFingerprint } from "@/lib/team/secrets";
 
@@ -90,6 +90,33 @@ describe("workspace notification secret encryption", () => {
 
     expect(() => decryptWorkspaceSecret(tamper(v1, 2), key)).toThrow("Encrypted secret is invalid");
     expect(() => decryptWorkspaceSecret(tamper(v2, 3), key)).toThrow("Encrypted secret is invalid");
+  });
+
+  it("skips a malformed keyring entry with a warning that never contains key material", () => {
+    process.env.WORKSPACE_NOTIFICATION_ENCRYPTION_KEY = key;
+    const v1Active = encryptWorkspaceSecret(SLACK);
+    const v1Old = encryptWorkspaceSecret(SLACK, oldKey);
+    const malformed = "not-a-valid-key-material";
+    process.env.WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING = `${malformed},${oldKey}`;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(getKeyring().map((entry) => entry.toString("hex"))).toEqual([key, oldKey]);
+      // Decryption keeps working with the active key and the valid entries.
+      expect(decryptWorkspaceSecret(v1Active)).toBe(SLACK);
+      expect(decryptWorkspaceSecret(v1Old)).toBe(SLACK);
+
+      const logged = warn.mock.calls.map((call) => call.join(" ")).join("\n");
+      expect(logged).toContain("WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING entry 1/2");
+      for (const secret of [malformed, key, oldKey]) expect(logged).not.toContain(secret);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("still throws when the active key itself is malformed", () => {
+    process.env.WORKSPACE_NOTIFICATION_ENCRYPTION_KEY = "too-short";
+    process.env.WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING = oldKey;
+    expect(() => getKeyring()).toThrow("WORKSPACE_NOTIFICATION_ENCRYPTION_KEY must encode 32 bytes");
   });
 
   it("builds the keyring as the active key followed by distinct keyring entries", () => {
