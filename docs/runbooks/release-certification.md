@@ -38,8 +38,9 @@ checks `prisma migrate status`; and runs Prisma validation, lint, typecheck,
 Vitest, production build, and the invoice-delivery/payment Chromium contract.
 Use `npm run release:certify -- --allow-http` only for a local rehearsal.
 
-GitHub Actions runs the secret-free preflight on pull requests, `main`, and
-version tags. The `workflow_dispatch` → `Run staging certification` input is the
+GitHub Actions runs the secret-free preflight on pull requests and pushes to
+`main` (tags no longer trigger the workflow; see
+[DEPLOYMENT.md](../DEPLOYMENT.md#versioning-and-tags)). The `workflow_dispatch` → `Run staging certification` input is the
 only path that uses the protected `staging` environment and its `STAGING_*`
 secrets. This keeps unavailable staging credentials from blocking ordinary CI.
 Each run uploads `QA-report/` and `test-results/` as evidence.

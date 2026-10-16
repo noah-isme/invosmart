@@ -219,8 +219,8 @@ Architecture, environment, tiers, CI budgets, how to add a scenario and the know
 ## 🚀 Deployment
 
 InvoSmart deploys to Vercel from GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)):
-- **Pushes to `main`, PRs to `main` and `v*` tags** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, `docs:route-check`, `docs:link-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
-- **A `v*` tag** additionally runs `deploy` (`vercel deploy --prod`) and then the `@staging` tier.
+- **Pushes to `main` and PRs to `main`** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, `docs:route-check`, `docs:link-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
+- **A push to `main`** then runs `release` (semantic-release). When it publishes a version (`feat:`/`fix:` commits since the last `v*` tag), `deploy` ships that release commit (`vercel deploy --prod`) and the `@staging` tier runs. Pushing a tag deploys nothing.
 - **Database migrations** are applied by the `deploy` job (`prisma migrate deploy`, before `vercel deploy`) using the `PRODUCTION_DATABASE_URL` secret of the `production` GitHub environment, which the repository owner creates (direct, non-pooled connection string).
 - **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes.
 

@@ -44,12 +44,24 @@ All of this is in `.github/workflows/release.yml`.
 | Trigger | Jobs that run |
 |---|---|
 | Pull request to `main` | `build-and-test`, `e2e-smoke` |
-| Push to `main` | `build-and-test`, `e2e-smoke` |
-| Push of a tag `v*` | `build-and-test`, `e2e-smoke`, then `deploy`, then `post-deploy-tests` |
+| Push to `main` | `build-and-test`, `e2e-smoke`, then `release`; when `release` publishes a version, `deploy`, then `post-deploy-tests` |
 | Manual dispatch with `run_staging_certification: true` | `build-and-test`, `e2e-smoke`, `staging-certification` |
 
 A separate nightly workflow (`.github/workflows/e2e-full.yml`, 19:30 UTC)
 runs the full Playwright tier; it does not deploy.
+
+On a push to `main` the job graph is:
+
+```
+build-and-test ─┐
+                ├─> release ─> deploy ─> post-deploy-tests
+e2e-smoke ──────┘
+```
+
+Pushing a `v*` tag no longer triggers anything: the workflow has no tag
+trigger, and tags created by the `release` job with `GITHUB_TOKEN` would not
+start a workflow anyway. That is why `deploy` is chained after `release` in
+the same run.
 
 **`build-and-test`** (Node 24) runs, in order:
 
@@ -69,14 +81,24 @@ It uploads `QA-report/` and `test-results/` as evidence.
 `scripts/e2e-coverage-check.mjs`, then `npm run test:e2e:smoke` with
 `E2E_WORKSPACE_AUTH_MODE=enforce`.
 
-**`deploy`** runs only for `v*` tags and only after both jobs above pass. It
-runs in the `production` environment. It applies database migrations with
+**`release`** runs only on pushes to `main`, after both jobs above pass, and
+is the only job with write permissions (`contents`, `issues`,
+`pull-requests`; the workflow default is `contents: read`). It runs in the
+concurrency group `release`, so two pushes never release at the same time.
+See [Versioning and tags](#versioning-and-tags). Its outputs `published` and
+`version` decide whether the rest of the chain runs.
+
+**`deploy`** runs only when `release` published a version
+(`needs.release.outputs.published == 'true'`). It checks out the release
+commit (the new tag, which carries the bumped `package.json` and
+`CHANGELOG.md`) and runs in the `production` environment. It applies database migrations with
 `prisma migrate deploy` (see [Database migrations](#database-migrations)),
 builds once more as a gate, then runs
 `npx vercel deploy --prod --token=$VERCEL_TOKEN`. Vercel builds the deployment
 itself, using the project's environment variables, not the CI build.
 
-**`post-deploy-tests`** (environment `staging`) runs the `@staging` Playwright
+**`post-deploy-tests`** (environment `staging`) runs after `deploy`, under the
+same `published` condition, and the `@staging` Playwright
 tier against `STAGING_NEXTAUTH_URL`, **not** against the production URL the
 `deploy` job just published. The `@staging` specs write data and need sandbox
 provider keys.
@@ -88,17 +110,38 @@ secrets, then the `@staging` tier. `release:certify` checks
 
 ### Versioning and tags
 
-`.releaserc.json` configures semantic-release on `main` (tag format `v${version}`,
-writes `CHANGELOG.md`). The **Semantic Release** step in `build-and-test` is
-currently disabled (`if: false`) until Phase 8 of
-`.plans/tech-stack-upgrade.md` settles the base version. Until then no tag is
-created automatically, so a production deploy happens only when someone
-pushes a `v*` tag by hand.
+`.releaserc.json` configures semantic-release on `main` (tag format
+`v${version}`). The `release` job runs it on every push to `main`:
 
-> **Open decision / verify:** confirm whether `v*` tags exist on the remote
-> (the local clone has none) and whether the Vercel Git integration also
-> deploys pushes to `main`. If it does, production is deployed outside this
-> pipeline and its gates.
+- Commit messages decide the version: `fix:` → patch, `feat:` → minor, a
+  `BREAKING CHANGE` footer → major. A push with only `chore:`, `docs:`, `ci:`,
+  `test:` and similar commits publishes nothing (`published=false`) and
+  therefore does not deploy.
+- When a version is published, semantic-release updates `CHANGELOG.md`, bumps
+  `version` in `package.json` and `package-lock.json` (`@semantic-release/npm`
+  with `npmPublish: false`; nothing goes to the npm registry), commits them as
+  `chore(release): X.Y.Z`, tags that commit `vX.Y.Z`, pushes both and creates a
+  GitHub Release.
+- The job first checks for a `v*` tag reachable from `HEAD`. Without one it
+  logs the warning "no v* base tag reachable from HEAD, skipping release" and
+  sets `published=false`, so semantic-release never falls back to publishing
+  `v1.0.0`.
+- `GITHUB_TOKEN` is enough to push the release commit and tag because `main`
+  is not branch-protected. If branch protection is enabled later, the
+  `release` job fails until `github-actions` gets a bypass or the job uses a
+  PAT.
+
+Tags start at `v1.2.0`: the base tag sits on `4355721` (Phase 2, 2026-08-12)
+and is pushed by hand once, after the release workflow above is on `main`
+(until it exists, `release` is a no-op). The first `feat:` or `fix:` push
+after it publishes `v1.3.0`, which rolls up everything since v1.2.0.
+
+Production deploys happen **only** through `release.yml`. The Vercel Git
+integration is not connected (no Vercel deployments or commit statuses on
+`main` as of 2026-10-16), and `vercel.json` sets
+`git.deploymentEnabled.main` to `false` as a guard in case it is ever
+connected. A manual escape hatch is `vercel deploy --prod` from a checkout of
+the commit to ship (see [Rollback](#rollback)); apply its migrations first.
 
 ## Database migrations
 
@@ -136,7 +179,7 @@ Procedure for a release that contains migrations:
    database, then dispatch `staging-certification`, which must report no
    pending or failed migrations
    ([runbooks/release-certification.md](runbooks/release-certification.md#database-and-deployment)).
-2. Release as usual. The `deploy` job applies the migrations to production,
+2. Merge to `main` with a `feat:` or `fix:` commit. The `deploy` job applies the migrations to production,
    then builds and deploys the new code against the migrated schema.
 
 This order is safe only because migrations are additive (new tables, nullable
@@ -162,8 +205,9 @@ deploy the code.
 ## Rollback
 
 **Application.** Roll back by promoting the previous production deployment in
-the Vercel dashboard (instant; no rebuild), or by redeploying the previous `v*`
-tag through the workflow. Vercel environment variables are not versioned with
+the Vercel dashboard (instant; no rebuild), or by checking out the previous
+`v*` tag and running `npx vercel deploy --prod` by hand. Pushing or re-pushing
+a tag does not deploy anything. Vercel environment variables are not versioned with
 the deployment, so revert any env change separately.
 
 **Database.** Prisma has no down-migrations. Do not roll a migration back by
