@@ -164,7 +164,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | **Workspaces & team** | `/api/workspaces/*` (members, invitations, API keys, notifications, reminder rules), `/api/workspace-invitations/[token]/accept` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |
 | **Customer API v1** | `/api/v1/invoices/*`, `/api/v1/clients/*`, `/api/openapi.json` | [docs/API.md](./docs/API.md) |
 | **Receipts** | `/api/receipts/*` | |
-| **AI / optimizer** | `/api/ai/*`, `/api/ai-optimizer/*`, `/api/opt/*`, `/api/insight/revenue`, `/api/federation/status` | [docs/ai/](./docs/ai/) |
+| **AI / optimizer** | `/api/ai/*`, `/api/ai-optimizer/*`, `/api/opt/*`, `/api/insight/revenue`, `/api/federation/{status,events}` | [docs/ai/](./docs/ai/) |
 | **Admin / platform** | `/api/admin/*` (feature flags, uptime, audit logs), `/api/devtools/*`, `/api/dev/perf/summary` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators) |
 | **User settings** | `/api/user/{locale,theme,branding}` | |
 | **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |

@@ -192,7 +192,9 @@ sequenceDiagram
     participant Local as Local node (lib/federation/bus.ts)
     participant Peer as Peer node
     Local->>Local: build anonymized snapshot (sanitizeMetadata)
-    Local->>Peer: signed FDP event over HTTPS (FEDERATION_ENDPOINTS)
+    Local->>Peer: POST /api/federation/events (Bearer FEDERATION_TOKEN_SECRET, signed FDP event)
+    Peer->>Peer: verify signature, 5-min freshness, replay check (FederationInboundEvent)
+    Peer-->>Local: 202 accepted / 200 duplicate / 401
     Peer->>Local: GET /api/federation/status (Bearer FEDERATION_TOKEN_SECRET)
 ```
 

@@ -125,7 +125,7 @@ There are two limiters; neither is global.
 
 | Limiter | Where | Limit | Store |
 |---|---|---|---|
-| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket) | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
+| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket); peer `POST /api/federation/events` (`federation-events` bucket) | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
 | `consumeApiRateLimit` in `lib/api-v1/rate-limit.ts` | Every `/api/v1/*` request, before key validation | 120 requests per 60 s per API key (or per IP when the key is missing or invalid), `429` with rate-limit headers | Upstash Redis fixed window; falls back to process memory when Redis is not configured |
 
 Because the session limiter is in memory, the effective limit scales with the
@@ -193,15 +193,25 @@ the routes are open when it is unset.
 `lib/federation/bus.ts` and `lib/federation/protocol.ts`:
 
 - Outbound events are signed with RSA-SHA256 when `FEDERATION_PRIVATE_KEY`
-  is set, otherwise with HMAC-SHA256 using `FEDERATION_TOKEN_SECRET`.
-  Ingest verifies with the sender's public key or the shared secret, and
-  rejects unsigned events when neither is configured. `ed25519` appears in the
-  protocol schema's algorithm enum but has no signing or verification code.
+  is set, otherwise with HMAC-SHA256 using `FEDERATION_HMAC_SECRET`. The HMAC
+  key is separate from the bearer token `FEDERATION_TOKEN_SECRET`, which every
+  peer receives on each delivery and therefore must not be able to sign
+  events. Publishing fails when neither signing key is set.
+- Ingest verifies with the sender's registered public key or the HMAC key and
+  rejects events it cannot verify. A tenant with a registered public key must
+  sign with RSA. Only `hmac-sha256` and `rsa-sha256` are accepted.
+- Inbound events arrive on `POST /api/federation/events`: peer bearer
+  (`lib/federation/auth.ts`, fail closed), rate limit, 64 KB body cap,
+  signature, then a 5-minute freshness window on the event timestamp. Every
+  event that passes is recorded in `FederationInboundEvent`, whose unique
+  signature hash rejects replays (also when the unsigned event `id` is
+  changed). Contract: [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md#federation-peers).
 - Payloads can be encrypted for a recipient: AES-256-GCM with a random key,
   wrapped with the recipient's RSA public key (OAEP, SHA-256).
   `generateFederationKeyPair()` produces RSA-2048 PEM keys.
 - `/api/federation/status` accepts a peer bearer token equal to
-  `FEDERATION_TOKEN_SECRET` or a platform-admin session.
+  `FEDERATION_TOKEN_SECRET` or a platform-admin session; `/api/federation/events`
+  accepts the peer bearer only.
 - `ENABLE_AI_FEDERATION=false` (or `0`) disables the bus.
 
 ## Secrets
