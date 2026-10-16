@@ -36,6 +36,9 @@ Every maintained document, one line each. If you add a doc, add it here. If two 
 - [DEPLOYMENT.md](./DEPLOYMENT.md): environments, release flow, migrations, rollback, crons.
 - [runbooks/release-certification.md](./runbooks/release-certification.md): staging release certification gates (payments, email, browser, customer API).
 - [runbooks/ai-optimizer.md](./runbooks/ai-optimizer.md): AI content optimizer operations and troubleshooting.
+- [runbooks/reminder-delivery.md](./runbooks/reminder-delivery.md): invoice reminder pipeline; stuck `PROCESSING`, repeated `FAILED`, cron not firing, duplicate sends.
+- [runbooks/backup-restore.md](./runbooks/backup-restore.md): database backup expectations, restore-to-staging verification, interaction with Prisma migrations.
+- [OBSERVABILITY.md](./OBSERVABILITY.md): Sentry, PostHog, uptime, alert webhooks, audit logs, logging: where each signal goes and who is alerted, with gaps.
 
 ## Testing
 
