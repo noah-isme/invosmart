@@ -297,9 +297,9 @@ Receipt verification has its own trail in `ReceiptAuditLog`
 
 **Who can read it**: `GET /api/admin/audit-logs` (alias `/api/admin/audit-log`)
 returns the rows of the caller's current workspace. It requires
-`canReadWorkspace`, so every member, including `VIEWER`, can read the
-workspace's audit log. Without a workspace, callers see only their own rows.
-
-> **Open decision:** whether `VIEWER` and `MEMBER` should be able to read the
-> workspace audit log, which includes other members' login events and IP
-> addresses.
+`canManageWorkspace` (the `manage_workspace` permission), so only `OWNER` and
+`ADMIN` can read the workspace's audit log, which includes other members'
+login events and IP addresses; `MEMBER` and `VIEWER` get `403`. Without a
+workspace (the `LEGACY` compatibility context), callers see only their own
+rows. The `/app/admin/audit-logs` page is separate: it is platform-admin only
+and lists every tenant.

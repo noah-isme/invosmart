@@ -51,14 +51,12 @@ In code each role maps to permissions (`lib/workspaces.ts:52-61`): `OWNER` and `
 | Invitations | revoke | — | — | — | — | no endpoint (`revokedAt` exists in the schema) |
 | API keys | list, view, create, edit, revoke | ✅ | ✅ | ❌ | ❌ | `app/api/workspaces/[id]/api-keys/route.ts:54`, `api-keys/[keyId]/route.ts:55` (`manage_workspace`) |
 | Slack / notification settings | view, create, edit, delete | ✅ | ✅ | ❌ | ❌ | `app/api/workspaces/[id]/notifications/route.ts:21`, `notifications/[endpointId]/route.ts:18,32` (`manage_workspace`) |
-| Audit log | view (own workspace only) | ✅ | ✅ | ✅ | ✅ | `app/api/admin/audit-logs/route.ts:16` (`canReadWorkspace`; query scoped to the workspace at `:39-41`) |
+| Audit log | Read workspace audit log (own workspace only) | ✅ | ✅ | ❌ | ❌ | `app/api/admin/audit-logs/route.ts:16` (`canManageWorkspace`, i.e. `manage_workspace`; denied → `403`; query scoped to the workspace at `:39-41`) |
 | Analytics, AI insight, optimizer views | view | ✅ | ✅ | ✅ | ✅ | `app/api/insight/revenue`, `app/api/ai/invoice-insight`, `app/api/opt/experiments`, `opt/auto/logs` (`canReadWorkspace`) |
 | Optimizer actions | start, record metrics, choose winner, apply schedule, revert | ✅ | ✅ | ✅ | ❌ | `app/api/opt/*` POST routes (`canWriteWorkspace`) |
 
 ¹ Owner memberships cannot be changed or removed by anyone, and `OWNER` cannot be assigned (see "Ownership rules").
 ² An `ADMIN` can invite `MEMBER` or `VIEWER` only.
-
-> **Open decision:** any member, including VIEWER, can read the workspace audit log (app/api/admin/audit-logs/route.ts:16).
 
 ## Ownership rules
 
