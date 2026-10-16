@@ -91,7 +91,9 @@ async function handle(request: NextRequest) {
     console.error("[cron/retention] purge failed", {
       failedStep: failure.failedStep,
       partial: failure.partial,
-      message: cause instanceof Error ? cause.message : String(cause),
+      // Name and Prisma code only: the message may quote row data.
+      error: cause instanceof Error ? cause.name : typeof cause,
+      code: (cause as { code?: unknown } | null)?.code,
     });
   } finally {
     try {
