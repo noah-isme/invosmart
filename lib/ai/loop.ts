@@ -108,6 +108,12 @@ const dispatchLoopEvent = async (result: LoopRunResult) => {
 export const runLoop = async (overrides?: {
   telemetry?: Partial<LoopTelemetry>;
   scaling?: Partial<ScalingState>;
+  /**
+   * The previous tick's telemetry. The cron scheduler (lib/ai/loop-scheduler.ts)
+   * passes the value stored in AutonomyLoopState, because the in-memory history
+   * is empty on every serverless invocation.
+   */
+  previousTelemetry?: LoopTelemetry;
   emitEvent?: boolean;
 }): Promise<LoopRunResult> => {
   if (!isAutonomyEnabled()) {
@@ -173,7 +179,7 @@ export const runLoop = async (overrides?: {
     (await sampleBacklogSize(EVENT_STREAM_KEY)) ??
     snapshot.events.length;
 
-  const previousTelemetry = runtimeState.history.at(-1);
+  const previousTelemetry = overrides?.previousTelemetry ?? runtimeState.history.at(-1);
 
   const telemetry: LoopTelemetry = {
     timestamp: new Date().toISOString(),
@@ -266,6 +272,11 @@ const scheduleNextRun = async () => {
   }, runtimeState.intervalMs);
 };
 
+/**
+ * Starts the in-process setTimeout loop. Local development only: serverless
+ * instances do not live long enough to keep a timer, so production runs the
+ * loop from the /api/cron/autonomy cron (lib/ai/loop-scheduler.ts, ADR 016).
+ */
 export const startAutonomyLoop = async () => {
   if (!isAutonomyEnabled()) {
     return { started: false, reason: "ENABLE_AI_AUTONOMY=false" } as const;
@@ -287,8 +298,14 @@ export const stopAutonomyLoop = () => {
 export const getLoopState = async () => {
   const recoveryLog = await listRecoveryLog({ limit: 10 });
   const priorities = await db.agentPriority.findMany({ orderBy: { updatedAt: "desc" }, take: 10 });
+  // The cron scheduler's persisted switch (ADR 016). Running means either the
+  // local in-process timer is on or the persisted row is resumed.
+  const persisted = await db.autonomyLoopState.findUnique({ where: { id: "singleton" } });
   return {
-    enabled: runtimeState.enabled && isAutonomyEnabled(),
+    enabled: (runtimeState.enabled || persisted?.paused === false) && isAutonomyEnabled(),
+    paused: persisted?.paused ?? true,
+    nextRunAt: persisted?.nextRunAt?.toISOString() ?? null,
+    lastRunAt: persisted?.lastRunAt?.toISOString() ?? null,
     intervalMs: runtimeState.intervalMs,
     concurrency: runtimeState.concurrency,
     history: [...runtimeState.history],

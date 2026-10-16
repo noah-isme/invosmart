@@ -13,13 +13,15 @@
 //     ai-tuning     "AI Tuning & Guardrails"
 //     perf          "Performance observability"
 // - POST /api/devtools/autonomy (POST only): 403 unless platform admin;
-//   {action:"resume"} -> startAutonomyLoop() (runs one iteration, schedules the
-//   next >= 60 s later), {action:"pause"} -> stopAutonomyLoop(); both answer
-//   { state } from getLoopState() where state.enabled is the running flag.
+//   {action:"resume"} -> AutonomyLoopState.paused=false plus startAutonomyLoop()
+//   (runs one iteration, schedules the next >= 60 s later), {action:"pause"} ->
+//   paused=true plus stopAutonomyLoop(); both answer { state } from
+//   getLoopState() where state.enabled is the running flag (in-process timer
+//   on, or the persisted row resumed).
 //   The page (AutonomyDashboardClient) posts with csrfFetch from its "Resume" /
 //   "Pause" buttons (each disabled in the state it would not change) and shows
-//   an "Active" / "Paused" badge. The loop state is process-global, so this
-//   spec pauses it before and in afterAll, and asserts the paused { state }.
+//   an "Active" / "Paused" badge. The loop state is process-global and
+//   persisted, so this spec pauses it before and in afterAll, and asserts the paused { state }.
 // - GET /api/federation/status: a FEDERATION_TOKEN_SECRET bearer (blank in
 //   e2e, so that path is disabled) or a session: 401 anonymous, 403 for a
 //   non-admin session (fails closed), 200 for the platform admin with

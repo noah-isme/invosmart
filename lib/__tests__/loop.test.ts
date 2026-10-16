@@ -120,6 +120,32 @@ describe("autonomous loop", () => {
     expect(runRecoverySweepMock).toHaveBeenCalled();
   });
 
+  it("uses the previousTelemetry override for the priority signal", async () => {
+    const { runLoop } = await import("@/lib/ai/loop");
+    // Fill the in-memory history so the override is the only way to get this delta.
+    await runLoop({ emitEvent: false });
+    updateAgentPrioritiesMock.mockClear();
+
+    await runLoop({
+      emitEvent: false,
+      previousTelemetry: {
+        timestamp: "2026-10-17T08:55:00.000Z",
+        load: 0,
+        backlogSize: 0,
+        trustScore: 70,
+        successRate: 0.5,
+        errorRate: 0,
+        avgLatencyMs: 250,
+        regressionDetected: false,
+        recoveryAction: "noop",
+        rollbackCount: 0,
+      },
+    });
+
+    expect(updateAgentPrioritiesMock).toHaveBeenCalledTimes(1);
+    expect(updateAgentPrioritiesMock.mock.calls[0][0].successDelta).toBeCloseTo(0.25);
+  });
+
   it("returns disabled state when autonomy flag is false", async () => {
     delete process.env.ENABLE_AI_AUTONOMY;
     process.env.ENABLE_AI_AUTONOMY = "false";
