@@ -8,7 +8,10 @@ import {
   checkoutCurrencyError,
   isMidtransCheckoutConfigured,
   pickShareCheckoutProvider,
+  secondsUntilNextShareWindow,
   shareCheckoutIdempotencyKey,
+  shareCheckoutKeyPrefix,
+  stripeSessionExpiresAt,
 } from '@/lib/payments/checkout';
 import { PAYABLE_INVOICE_STATUSES, isInvoicePayable } from '@/lib/payments/lifecycle';
 
@@ -61,5 +64,36 @@ describe('shareCheckoutIdempotencyKey', () => {
     expect(shareCheckoutIdempotencyKey('stripe', 'inv', base)).toBe(shareCheckoutIdempotencyKey('stripe', 'inv', base + 29_999));
     expect(shareCheckoutIdempotencyKey('stripe', 'inv', base)).not.toBe(shareCheckoutIdempotencyKey('stripe', 'inv', base + 30_000));
     expect(shareCheckoutIdempotencyKey('midtrans', 'inv', base)).toBe(`share:midtrans:inv:${base / 30_000}`);
+  });
+});
+
+describe('shareCheckoutKeyPrefix', () => {
+  it('prefixes every window key of the invoice and provider', () => {
+    const key = shareCheckoutIdempotencyKey('stripe', 'inv', 1_700_000_010_000);
+    expect(key.startsWith(shareCheckoutKeyPrefix('stripe', 'inv'))).toBe(true);
+    expect(key.startsWith(shareCheckoutKeyPrefix('midtrans', 'inv'))).toBe(false);
+  });
+});
+
+describe('secondsUntilNextShareWindow', () => {
+  it('counts whole seconds to the next 30 s window, at least 1', () => {
+    const base = 1_700_000_010_000;
+    expect(secondsUntilNextShareWindow(base)).toBe(30);
+    expect(secondsUntilNextShareWindow(base + 10_000)).toBe(20);
+    expect(secondsUntilNextShareWindow(base + 29_999)).toBe(1);
+  });
+});
+
+describe('stripeSessionExpiresAt', () => {
+  const now = new Date('2026-01-01T00:00:00.000Z');
+  const minutes = (n: number) => now.getTime() + n * 60_000;
+
+  it('raises an attempt expiry below Stripe\'s 30-minute minimum to 32 minutes', () => {
+    expect(stripeSessionExpiresAt(new Date(minutes(30)), now)).toBe(minutes(32) / 1000);
+    expect(stripeSessionExpiresAt(null, now)).toBe(minutes(32) / 1000);
+  });
+
+  it('keeps a later attempt expiry', () => {
+    expect(stripeSessionExpiresAt(new Date(minutes(60)), now)).toBe(minutes(60) / 1000);
   });
 });

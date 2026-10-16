@@ -33,8 +33,10 @@ type CheckoutResponse =
   | { error?: string; retry?: boolean };
 
 const PROVIDER_LABEL: Record<Provider, string> = { stripe: "Stripe", midtrans: "Midtrans" };
-const MAX_PREPARE_RETRIES = 5;
-const RETRY_DELAY_MS = 1_000;
+// At most 4 requests per click, well inside the route's share-checkout rate
+// limit (20/min per IP, app/api/share/checkout/route.ts).
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1_500;
 const SNAP_WAIT_MS = 10_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,6 +56,17 @@ async function waitForSnap(): Promise<SnapGlobal> {
   }
 }
 
+/**
+ * Drop `action=pay` from the address bar so that coming back from the
+ * provider (Back, or a reload) does not start another checkout.
+ */
+function dropAutoStartParam() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("action")) return;
+  url.searchParams.delete("action");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 async function requestCheckout(body: { invoiceId: string; token: string; provider: Provider }) {
   for (let attempt = 0; ; attempt += 1) {
     // Plain fetch: the share-token checkout is CSRF-exempt and this public
@@ -65,7 +78,9 @@ async function requestCheckout(body: { invoiceId: string; token: string; provide
     });
     const data = (await response.json().catch(() => ({}))) as CheckoutResponse;
     if (response.ok) return data;
-    if (response.status === 409 && "retry" in data && data.retry && attempt < MAX_PREPARE_RETRIES) {
+    // 409 retry: the checkout is still being prepared. 503 retry: the
+    // provider call failed and the server accepts a new attempt shortly.
+    if ((response.status === 409 || response.status === 503) && "retry" in data && data.retry && attempt < MAX_RETRIES) {
       await sleep(RETRY_DELAY_MS);
       continue;
     }
@@ -98,6 +113,7 @@ export default function SharePayButton({
     async (provider: Provider) => {
       setLoading(provider);
       setError(null);
+      dropAutoStartParam();
       try {
         const data = await requestCheckout({ invoiceId, token, provider });
         if ("url" in data && data.url) {
@@ -125,6 +141,16 @@ export default function SharePayButton({
     },
     [invoiceId, returnTo, token],
   );
+
+  // Back from the provider can restore this page from the back/forward cache
+  // with the button still showing "Starting payment…".
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setLoading(null);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   useEffect(() => {
     if (!autoStart || autoStarted.current) return;

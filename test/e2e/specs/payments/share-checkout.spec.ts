@@ -13,6 +13,9 @@
 // - Stripe success/cancel URLs are the share URL plus payment=success|cancelled;
 //   `payment=…` is display-only, the PAID pill comes from a signed webhook.
 // - A bad, missing or foreign token is 404 on both the page and the route.
+// - next.config.ts sets Referrer-Policy: strict-origin-when-cross-origin on
+//   every route, so the share URL's ?token= never reaches the provider or
+//   snap.js in a Referer header.
 import { expect, test } from "../../fixtures";
 import { mintInvoiceShareToken, tamperShareToken } from "../../support/share";
 import { toStripeMinorUnit } from "../../../../lib/payments/money";
@@ -21,6 +24,8 @@ import { covers, parseStripeSessionForm } from "./payment-helpers";
 const USD_ITEMS = [{ name: "E2E share design", qty: 2, price: 150 }];
 const shareUrl = (invoiceId: string, token: string, extra = "") =>
   `/share/${invoiceId}?token=${encodeURIComponent(token)}${extra}`;
+// Policies that never send the path or query (the share token) cross-origin.
+const STRICT_REFERRER_POLICIES = ["no-referrer", "same-origin", "strict-origin", "strict-origin-when-cross-origin"];
 
 test.describe("payments: public share-link checkout", () => {
   // A fresh, unauthenticated browser context: the recipient has no session.
@@ -44,6 +49,13 @@ test.describe("payments: public share-link checkout", () => {
       // The CSRF-exempt route does not set the CSRF cookie (lib/security/csrf.ts).
       expect((await response.allHeaders())["set-cookie"]).toBeUndefined();
       const sessionId = await payments.waitForCheckoutPage(page);
+
+      // Back from the provider: action=pay was dropped before leaving, so the
+      // share page does not start a second checkout and the button is usable.
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`/share/${invoice.id}\\?token=[^&]+$`));
+      await expect(page.getByRole("button", { name: "Pay now" })).toBeEnabled();
+      await page.waitForLoadState("networkidle");
 
       const calls = (await stub.requests("/v1/checkout/sessions")).filter((entry) => entry.method === "POST");
       expect(calls).toHaveLength(1);
@@ -125,7 +137,9 @@ test.describe("payments: public share-link checkout", () => {
       expect(tampered?.status()).toBe(404);
 
       const paid = await owner.factory.createInvoice({ status: "PAID" });
-      expect((await page.goto(shareUrl(paid.id, mintInvoiceShareToken(paid.id))))?.status()).toBe(200);
+      const paidPage = await page.goto(shareUrl(paid.id, mintInvoiceShareToken(paid.id)));
+      expect(paidPage?.status()).toBe(200);
+      expect(STRICT_REFERRER_POLICIES).toContain(await paidPage?.headerValue("referrer-policy"));
       await expect(page.getByRole("heading", { name: `Invoice ${paid.number}` })).toBeVisible();
       await expect(page.getByRole("button", { name: /Pay/ })).toHaveCount(0);
 

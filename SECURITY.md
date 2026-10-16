@@ -123,7 +123,7 @@ There are two limiters; neither is global.
 
 | Limiter | Where | Limit | Store |
 |---|---|---|---|
-| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket) | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
+| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket) | 10 requests per 60 s per client IP per bucket (`share-checkout`: 20), `429` with `Retry-After` | Process memory, per serverless instance |
 | `consumeApiRateLimit` in `lib/api-v1/rate-limit.ts` | Every `/api/v1/*` request, before key validation | 120 requests per 60 s per API key (or per IP when the key is missing or invalid), `429` with rate-limit headers | Upstash Redis fixed window; falls back to process memory when Redis is not configured |
 
 Because the session limiter is in memory, the effective limit scales with the
@@ -172,7 +172,7 @@ the routes are open when it is unset.
 - The share page can start a checkout through `POST /api/share/checkout`
   (`app/api/share/checkout/route.ts`). The token is the only credential: no
   session or cookie is read. Checks, in order: per-instance IP rate limit
-  (`share-checkout` bucket, 10/min; a coarse first line only), a 4 KB body
+  (`share-checkout` bucket, 20/min; a coarse first line only), a 4 KB body
   cap, schema validation, token verification (`503` when the share secret is
   missing in production; `404` for a missing, bad, expired or foreign token
   and for a missing invoice, so the route never reveals whether an invoice
@@ -181,7 +181,10 @@ the routes are open when it is unset.
   server derives the key from provider, invoice and a 30-second window, so
   concurrent requests from any instance collapse onto one `PaymentAttempt`
   and at most one new attempt per invoice and provider is created per
-  window. The response carries only the Stripe URL or the Snap token, never
+  window. A request in a later window reuses the active share attempt
+  instead (never an attempt started from the app), so one payer never holds
+  two payable checkouts; a Stripe session expires with its attempt. The
+  response carries only the Stripe URL or the Snap token, never
   attempt ids or amounts. The `payment=…` query parameter on the share page
   is display-only; only signed provider webhooks mark an invoice `PAID`.
 - Workspace invitations expire after 7 days (`lib/team/invitations.ts`).
