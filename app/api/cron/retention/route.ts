@@ -3,7 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuditAction, AuditEntity, logAuditEvent } from "@/lib/audit/auditLogger";
 import { requireCronAuthorization } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
-import { RetentionConfigError, readRetentionConfig, runRetentionPurge } from "@/lib/retention/purge";
+import {
+  RetentionConfigError,
+  RetentionPurgeError,
+  readRetentionConfig,
+  runRetentionPurge,
+  type RetentionPurgeResult,
+  type RetentionPurgeStep,
+} from "@/lib/retention/purge";
 
 /**
  * Daily data-retention purge (vercel.json, 03:00 UTC). See lib/retention/purge.ts
@@ -17,7 +24,10 @@ import { RetentionConfigError, readRetentionConfig, runRetentionPurge } from "@/
  *   - config validation: invalid periods return 500 and purge nothing;
  *   - CronLease "retention": an overlapping invocation returns skipped:"locked";
  *     a crashed run holds the lease for at most LEASE_MS;
- *   - batch caps from the config, and one RETENTION_PURGE audit row per real run.
+ *   - batch caps from the config, and one RETENTION_PURGE audit row per real run,
+ *     also when the purge fails part-way: the batches already committed are
+ *     recorded with failed:true and the failing step (counts only, never the
+ *     error message, which may quote row data).
  */
 
 export const maxDuration = 60;
@@ -58,14 +68,31 @@ async function handle(request: NextRequest) {
     return NextResponse.json({ skipped: "locked" });
   }
 
-  let result;
+  let result: RetentionPurgeResult | undefined;
+  let failure: { partial: RetentionPurgeResult; failedStep: RetentionPurgeStep | null } | undefined;
   try {
     result = await runRetentionPurge({ now, dryRun, config, db });
   } catch (error) {
+    const cause = error instanceof RetentionPurgeError ? error.cause : error;
+    failure =
+      error instanceof RetentionPurgeError
+        ? { partial: error.partial, failedStep: error.failedStep }
+        : {
+            partial: {
+              dryRun,
+              auditLogsDeleted: 0,
+              ipAddressesCleared: 0,
+              reminderOccurrencesDeleted: 0,
+              batches: 0,
+              truncated: false,
+            },
+            failedStep: null,
+          };
     console.error("[cron/retention] purge failed", {
-      message: error instanceof Error ? error.message : String(error),
+      failedStep: failure.failedStep,
+      partial: failure.partial,
+      message: cause instanceof Error ? cause.message : String(cause),
     });
-    return NextResponse.json({ error: "Retention purge failed" }, { status: 500 });
   } finally {
     try {
       await db.cronLease.update({
@@ -78,6 +105,23 @@ async function handle(request: NextRequest) {
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  if (failure) {
+    // The batches committed before the failure are real deletions: audit them.
+    if (!dryRun) {
+      await logAuditEvent({
+        action: AuditAction.RETENTION_PURGE,
+        entity: AuditEntity.RETENTION,
+        userId: null,
+        tenantId: null,
+        details: { ...failure.partial, failed: true, failedStep: failure.failedStep },
+      });
+    }
+    return NextResponse.json(
+      { error: "Retention purge failed", failedStep: failure.failedStep, partial: failure.partial },
+      { status: 500 },
+    );
   }
 
   console.info("[cron/retention]", JSON.stringify(result));

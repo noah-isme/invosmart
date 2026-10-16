@@ -39,6 +39,25 @@ export type RetentionPurgeResult = {
   truncated: boolean;
 };
 
+export type RetentionPurgeStep = "auditLogs" | "ipAddresses" | "reminderOccurrences";
+
+/**
+ * A real run that failed part-way. `partial` holds what the completed batches
+ * already deleted or cleared (those writes are committed), so the caller can
+ * report and audit them.
+ */
+export class RetentionPurgeError extends Error {
+  readonly partial: RetentionPurgeResult;
+  readonly failedStep: RetentionPurgeStep;
+
+  constructor(partial: RetentionPurgeResult, failedStep: RetentionPurgeStep, cause: unknown) {
+    super(`Retention purge failed during ${failedStep}`, { cause });
+    this.name = "RetentionPurgeError";
+    this.partial = partial;
+    this.failedStep = failedStep;
+  }
+}
+
 export class RetentionConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -108,6 +127,8 @@ export type RunRetentionPurgeInput = {
 
 type StepOutcome = { affected: number; batches: number; truncated: boolean };
 
+const emptyOutcome = (): StepOutcome => ({ affected: 0, batches: 0, truncated: false });
+
 export const retentionCutoffs = (now: Date, config: RetentionConfig) => ({
   auditLog: new Date(now.getTime() - config.auditLogDays * DAY_MS),
   ip: new Date(now.getTime() - config.ipDays * DAY_MS),
@@ -116,29 +137,29 @@ export const retentionCutoffs = (now: Date, config: RetentionConfig) => ({
 
 /**
  * Select-then-delete in id batches. The deleted rows no longer match `where`,
- * so each batch reads the next oldest rows.
+ * so each batch reads the next oldest rows. Progress is written to `outcome`
+ * after every batch, so it is still accurate when a later batch throws.
  */
 const deleteInBatches = async (
   config: RetentionConfig,
+  outcome: StepOutcome,
   select: () => Promise<Array<{ id: string }>>,
   remove: (ids: string[]) => Promise<{ count: number }>,
-): Promise<StepOutcome> => {
-  let affected = 0;
-  let batches = 0;
+): Promise<void> => {
   let lastBatchFull = false;
-  while (batches < config.maxBatches) {
+  while (outcome.batches < config.maxBatches) {
     const rows = await select();
     if (rows.length === 0) {
       lastBatchFull = false;
       break;
     }
     const { count } = await remove(rows.map((row) => row.id));
-    affected += count;
-    batches += 1;
+    outcome.affected += count;
+    outcome.batches += 1;
     lastBatchFull = rows.length === config.batchSize;
     if (!lastBatchFull) break;
   }
-  return { affected, batches, truncated: batches === config.maxBatches && lastBatchFull };
+  outcome.truncated = outcome.batches === config.maxBatches && lastBatchFull;
 };
 
 export const runRetentionPurge = async ({
@@ -176,73 +197,81 @@ export const runRetentionPurge = async ({
     };
   }
 
-  // (a) AuditLog rows past the audit-log period.
-  const auditLogs = await deleteInBatches(
-    config,
-    () =>
-      db.auditLog.findMany({
-        where: auditLogWhere,
-        select: { id: true },
-        take: config.batchSize,
-        orderBy: { createdAt: "asc" },
-      }),
-    (ids) => db.auditLog.deleteMany({ where: { id: { in: ids } } }),
-  );
-
-  // (b) IP addresses past the IP period. Keyset cursor on createdAt: each
-  // batch starts after the last row of the previous one, so the loop always
-  // moves forward and terminates. Rows sharing the boundary timestamp are
-  // picked up by the next run.
-  let ipCleared = 0;
-  let ipBatches = 0;
-  let ipLastBatchFull = false;
-  let lastSeenCreatedAt: Date | undefined;
-  while (ipBatches < config.maxBatches) {
-    const rows = await db.auditLog.findMany({
-      where: ipWhere(lastSeenCreatedAt),
-      select: { id: true, createdAt: true },
-      take: config.batchSize,
-      orderBy: { createdAt: "asc" },
-    });
-    if (rows.length === 0) {
-      ipLastBatchFull = false;
-      break;
-    }
-    const { count } = await db.auditLog.updateMany({
-      where: { id: { in: rows.map((row) => row.id) } },
-      data: { ipAddress: null },
-    });
-    ipCleared += count;
-    ipBatches += 1;
-    lastSeenCreatedAt = rows[rows.length - 1].createdAt;
-    ipLastBatchFull = rows.length === config.batchSize;
-    if (!ipLastBatchFull) break;
-  }
-  const ip: StepOutcome = {
-    affected: ipCleared,
-    batches: ipBatches,
-    truncated: ipBatches === config.maxBatches && ipLastBatchFull,
-  };
-
-  // (c) Terminal reminder occurrences; deliveries cascade.
-  const reminders = await deleteInBatches(
-    config,
-    () =>
-      db.invoiceReminderOccurrence.findMany({
-        where: reminderWhere,
-        select: { id: true },
-        take: config.batchSize,
-        orderBy: { createdAt: "asc" },
-      }),
-    (ids) => db.invoiceReminderOccurrence.deleteMany({ where: { id: { in: ids } } }),
-  );
-
-  return {
+  const auditLogs = emptyOutcome();
+  const ip = emptyOutcome();
+  const reminders = emptyOutcome();
+  const result = (): RetentionPurgeResult => ({
     dryRun: false,
     auditLogsDeleted: auditLogs.affected,
     ipAddressesCleared: ip.affected,
     reminderOccurrencesDeleted: reminders.affected,
     batches: auditLogs.batches + ip.batches + reminders.batches,
     truncated: auditLogs.truncated || ip.truncated || reminders.truncated,
-  };
+  });
+
+  let step: RetentionPurgeStep = "auditLogs";
+  try {
+    // (a) AuditLog rows past the audit-log period.
+    await deleteInBatches(
+      config,
+      auditLogs,
+      () =>
+        db.auditLog.findMany({
+          where: auditLogWhere,
+          select: { id: true },
+          take: config.batchSize,
+          orderBy: { createdAt: "asc" },
+        }),
+      (ids) => db.auditLog.deleteMany({ where: { id: { in: ids } } }),
+    );
+
+    // (b) IP addresses past the IP period. Keyset cursor on createdAt: each
+    // batch starts after the last row of the previous one, so the loop always
+    // moves forward and terminates. Rows sharing the boundary timestamp are
+    // picked up by the next run.
+    step = "ipAddresses";
+    let ipLastBatchFull = false;
+    let lastSeenCreatedAt: Date | undefined;
+    while (ip.batches < config.maxBatches) {
+      const rows = await db.auditLog.findMany({
+        where: ipWhere(lastSeenCreatedAt),
+        select: { id: true, createdAt: true },
+        take: config.batchSize,
+        orderBy: { createdAt: "asc" },
+      });
+      if (rows.length === 0) {
+        ipLastBatchFull = false;
+        break;
+      }
+      const { count } = await db.auditLog.updateMany({
+        where: { id: { in: rows.map((row) => row.id) } },
+        data: { ipAddress: null },
+      });
+      ip.affected += count;
+      ip.batches += 1;
+      lastSeenCreatedAt = rows[rows.length - 1].createdAt;
+      ipLastBatchFull = rows.length === config.batchSize;
+      if (!ipLastBatchFull) break;
+    }
+    ip.truncated = ip.batches === config.maxBatches && ipLastBatchFull;
+
+    // (c) Terminal reminder occurrences; deliveries cascade.
+    step = "reminderOccurrences";
+    await deleteInBatches(
+      config,
+      reminders,
+      () =>
+        db.invoiceReminderOccurrence.findMany({
+          where: reminderWhere,
+          select: { id: true },
+          take: config.batchSize,
+          orderBy: { createdAt: "asc" },
+        }),
+      (ids) => db.invoiceReminderOccurrence.deleteMany({ where: { id: { in: ids } } }),
+    );
+  } catch (error) {
+    throw new RetentionPurgeError(result(), step, error);
+  }
+
+  return result();
 };

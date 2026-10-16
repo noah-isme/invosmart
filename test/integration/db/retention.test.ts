@@ -3,7 +3,8 @@
 // left, so the keyset cursor terminates), deletes terminal reminder
 // occurrences older than 12 months with their deliveries, leaves pending
 // occurrences and every payment row alone, and writes one RETENTION_PURGE
-// audit row. RET-INT-02: dry run changes nothing. RET-INT-03: without
+// audit row; a run that fails part-way answers 500 with the partial counts
+// and still writes the audit row (failed:true). RET-INT-02: dry run changes nothing. RET-INT-03: without
 // RETENTION_ENABLED the cron skips. RET-INT-04: a held CronLease skips.
 // @covers: /api/cron/retention (route handler called in-process; scripts/e2e-coverage-check.mjs)
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -190,6 +191,46 @@ describe("RET-INT-01 the retention cron purges only what the policy allows", () 
     const again = await (await cron()).json();
     expect(again).toMatchObject({ ipAddressesCleared: 0, auditLogsDeleted: 0, reminderOccurrencesDeleted: 0 });
     expect((await snapshot(s)).audits).toHaveLength(2);
+  });
+
+  it("answers 500 with the partial counts and still audits a run that fails part-way", async () => {
+    process.env.RETENTION_ENABLED = "true";
+    const s = await seed();
+    const auditRowsBefore = await purgeAuditRows();
+    // Step (c) fails in the database: a trigger rejects every reminder delete.
+    await db.$executeRawUnsafe(
+      `CREATE OR REPLACE FUNCTION ret_int_fail() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'simulated failure for ${s.marker}'; END $$ LANGUAGE plpgsql`,
+    );
+    await db.$executeRawUnsafe(
+      `CREATE TRIGGER ret_int_fail BEFORE DELETE ON "InvoiceReminderOccurrence" FOR EACH STATEMENT EXECUTE FUNCTION ret_int_fail()`,
+    );
+    let res: Response;
+    try {
+      res = await cron();
+    } finally {
+      await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ret_int_fail ON "InvoiceReminderOccurrence"`);
+      await db.$executeRawUnsafe(`DROP FUNCTION IF EXISTS ret_int_fail()`);
+    }
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toMatchObject({ error: "Retention purge failed", failedStep: "reminderOccurrences" });
+    expect(body.partial.auditLogsDeleted).toBeGreaterThanOrEqual(1);
+    expect(body.partial.ipAddressesCleared).toBeGreaterThanOrEqual(1);
+    expect(body.partial.reminderOccurrencesDeleted).toBe(0);
+
+    // Steps (a) and (b) committed; (c) did not.
+    const after = await snapshot(s);
+    expect(after.audits.map((row) => row.id)).toEqual([s.audits.midAudit.id, s.audits.recentAudit.id]);
+    expect(after.occurrences).toHaveLength(4);
+
+    // The committed deletions are audited, flagged as failed, without the error text.
+    expect(await purgeAuditRows()).toBe(auditRowsBefore + 1);
+    const purgeRow = await db.auditLog.findFirst({ where: { action: "RETENTION_PURGE" }, orderBy: { createdAt: "desc" } });
+    expect(purgeRow?.details).toEqual({ ...body.partial, failed: true, failedStep: "reminderOccurrences" });
+    expect(JSON.stringify(purgeRow?.details)).not.toContain(s.marker);
+
+    const lease = await db.cronLease.findUnique({ where: { name: "retention" } });
+    expect(lease?.claimedUntil).toBeNull();
   });
 
   it("returns 500 and purges nothing when RETENTION_IP_DAYS exceeds RETENTION_AUDIT_LOG_DAYS", async () => {

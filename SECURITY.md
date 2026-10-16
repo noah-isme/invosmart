@@ -336,7 +336,10 @@ safety gate (the cron purges nothing until it is `true`, see
 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#scheduled-jobs)). Each run deletes
 at most `RETENTION_BATCH_SIZE` x `RETENTION_MAX_BATCHES` rows per step,
 refuses an invalid configuration, skips while another run holds its
-`CronLease`, and writes a `RETENTION_PURGE` audit row with its counts.
+`CronLease`, and writes a `RETENTION_PURGE` audit row with its counts. A run
+that fails part-way answers `500` with the counts of the batches it already
+committed and still writes the audit row, with `failed: true` and the failing
+step (never the error message).
 
 Not covered: AI and agent logs, `UptimeCheck`, `FederationInboundEvent` and
 `FederationMetrics` are kept indefinitely; there is no export or erasure

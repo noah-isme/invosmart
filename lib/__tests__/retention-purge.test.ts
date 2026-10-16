@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   RetentionConfigError,
+  RetentionPurgeError,
   readRetentionConfig,
   runRetentionPurge,
   type RetentionConfig,
@@ -199,6 +200,47 @@ describe("runRetentionPurge", () => {
     const result = await runRetentionPurge({ now: NOW, dryRun: false, config: config({ maxBatches: 3 }), db });
 
     expect(result.truncated).toBe(false);
+  });
+
+  it("reports what committed batches already did when a later step fails", async () => {
+    const { db, auditLog, invoiceReminderOccurrence } = fakeDb({
+      audit: [rows("a", 2), rows("b", 1)],
+      ip: [rows("ip", 1, daysAgo(200))],
+      reminder: [rows("r", 2), rows("s", 2)],
+    });
+    // The second reminder batch fails after the first one committed.
+    invoiceReminderOccurrence.deleteMany
+      .mockImplementationOnce(async (args: { where: { id: { in: string[] } } }) => ({ count: args.where.id.in.length }))
+      .mockRejectedValueOnce(new Error("connection reset"));
+
+    const error = await runRetentionPurge({ now: NOW, dryRun: false, config: config(), db }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(RetentionPurgeError);
+    const failure = error as RetentionPurgeError;
+    expect(failure.failedStep).toBe("reminderOccurrences");
+    expect((failure.cause as Error).message).toBe("connection reset");
+    expect(failure.message).not.toContain("connection reset");
+    expect(failure.partial).toEqual({
+      dryRun: false,
+      auditLogsDeleted: 3,
+      ipAddressesCleared: 1,
+      reminderOccurrencesDeleted: 2,
+      batches: 4,
+      truncated: false,
+    });
+    expect(auditLog.deleteMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("names the step that failed first, with nothing counted after it", async () => {
+    const { db, auditLog } = fakeDb({ audit: [rows("a", 1)], ip: [rows("ip", 1, daysAgo(200))] });
+    auditLog.updateMany.mockRejectedValueOnce(new Error("boom"));
+
+    const error = (await runRetentionPurge({ now: NOW, dryRun: false, config: config(), db }).catch(
+      (e: unknown) => e,
+    )) as RetentionPurgeError;
+
+    expect(error.failedStep).toBe("ipAddresses");
+    expect(error.partial).toMatchObject({ auditLogsDeleted: 1, ipAddressesCleared: 0, reminderOccurrencesDeleted: 0 });
   });
 
   it("touches only AuditLog and InvoiceReminderOccurrence", async () => {
