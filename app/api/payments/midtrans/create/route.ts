@@ -3,19 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
-import { midtransSnap } from '@/lib/payments/midtrans';
-import { buildMidtransItemDetails } from '@/lib/payments/line-items';
+import { PAYMENT_PROVIDERS, isInvoicePayable } from '@/lib/payments/lifecycle';
 import {
-  ACTIVE_PAYMENT_ATTEMPT_STATUSES,
-  PAYMENT_ATTEMPT_STATUS,
-  PAYMENT_PROVIDERS,
-  createMidtransOrderId,
-  createPaymentAttemptId,
-  createRetryIdempotencyKey,
-  getAttemptExpiry,
-  isPaymentAttemptActive,
-  isUniqueConstraintError,
-} from '@/lib/payments/lifecycle';
+  checkoutCurrencyError,
+  createMidtransCheckout,
+  findOrCreatePaymentAttempt,
+} from '@/lib/payments/checkout';
 
 const provider = PAYMENT_PROVIDERS.MIDTRANS;
 
@@ -66,126 +59,35 @@ export async function POST(request: NextRequest) {
     if (invoice.status === 'PAID') {
       return NextResponse.json({ error: 'Invoice is already paid' }, { status: 409 });
     }
-
-    // Midtrans amounts are whole rupiah; gross_amount carries no currency, so
-    // any other currency would be charged as IDR.
-    if (invoice.currency.toUpperCase() !== 'IDR') {
-      return NextResponse.json({ error: 'Midtrans only supports IDR invoices' }, { status: 422 });
+    if (!isInvoicePayable(invoice.status)) {
+      return NextResponse.json({ error: 'Invoice is not payable' }, { status: 409 });
     }
 
-    const requestedIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
-    const now = new Date();
-    const activeAttempt = await db.paymentAttempt.findFirst({
-      where: {
-        invoiceId,
-        provider,
-        ...(requestedIdempotencyKey
-          ? { idempotencyKey: requestedIdempotencyKey }
-          : { status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES } }),
-      },
-      orderBy: { createdAt: 'desc' },
+    const currencyError = checkoutCurrencyError(provider, invoice.currency);
+    if (currencyError) {
+      return NextResponse.json({ error: currencyError }, { status: 422 });
+    }
+
+    const result = await findOrCreatePaymentAttempt({
+      invoice,
+      provider,
+      requestedIdempotencyKey: request.headers.get('idempotency-key')?.trim() || null,
+      now: new Date(),
+    });
+    if (result.kind === 'idempotency_conflict') {
+      return NextResponse.json({ error: 'Idempotency key has already been used' }, { status: 409 });
+    }
+    if (result.kind === 'existing') {
+      return NextResponse.json(serializeAttempt(result.attempt));
+    }
+
+    const attempt = await createMidtransCheckout({
+      invoice,
+      attempt: result.attempt,
+      actorUserId: session.user.id,
     });
 
-    if (activeAttempt) {
-      if (requestedIdempotencyKey && !ACTIVE_PAYMENT_ATTEMPT_STATUSES.includes(activeAttempt.status)) {
-        return NextResponse.json({ error: 'Idempotency key has already been used' }, { status: 409 });
-      }
-      if (isPaymentAttemptActive(activeAttempt.status, activeAttempt.expiresAt, now)) {
-        return NextResponse.json(serializeAttempt(activeAttempt));
-      }
-
-      // Expiry is persisted before a retry can create another attempt. This
-      // also makes a stale pending checkout visible to reconciliation jobs.
-      if (ACTIVE_PAYMENT_ATTEMPT_STATUSES.includes(activeAttempt.status)) {
-        await db.paymentAttempt.update({
-          where: { id: activeAttempt.id },
-          data: { status: PAYMENT_ATTEMPT_STATUS.EXPIRED },
-        });
-      }
-    }
-
-    const idempotencyKey = requestedIdempotencyKey || createRetryIdempotencyKey(provider, invoiceId);
-    const attemptId = createPaymentAttemptId();
-    const providerOrderId = createMidtransOrderId(attemptId);
-    const expiresAt = getAttemptExpiry(now);
-    let attempt;
-
-    try {
-      attempt = await db.paymentAttempt.create({
-        data: {
-          id: attemptId,
-          invoiceId,
-          provider,
-          idempotencyKey,
-          providerOrderId,
-          amount: invoice.total,
-          currency: invoice.currency.toUpperCase(),
-          status: PAYMENT_ATTEMPT_STATUS.PENDING,
-          expiresAt,
-          metadata: { source: 'midtrans_checkout' },
-        },
-      });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        const existing = await db.paymentAttempt.findFirst({
-          where: {
-            invoiceId,
-            provider,
-            status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (existing) return NextResponse.json(serializeAttempt(existing));
-      }
-      throw error;
-    }
-
-    // item_details must sum to gross_amount exactly (items + tax + any
-    // rounding adjustment); see lib/payments/line-items.ts.
-    const items = buildMidtransItemDetails(invoice);
-
-    const transactionDetails = {
-      transaction_details: {
-        order_id: providerOrderId,
-        gross_amount: invoice.total,
-      },
-      item_details: items,
-      customer_details: {
-        first_name: invoice.client,
-      },
-    };
-
-    try {
-      const transaction = await midtransSnap.createTransaction(transactionDetails);
-      const token = typeof transaction.token === 'string' ? transaction.token : null;
-      const redirectUrl = typeof transaction.redirect_url === 'string' ? transaction.redirect_url : null;
-
-      attempt = await db.paymentAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          providerToken: token,
-          checkoutUrl: redirectUrl,
-          metadata: JSON.parse(JSON.stringify({
-            source: 'midtrans_checkout',
-            transaction,
-          })),
-        },
-      });
-
-      return NextResponse.json(serializeAttempt(attempt));
-    } catch (error) {
-      await db.paymentAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: PAYMENT_ATTEMPT_STATUS.FAILED,
-          metadata: JSON.parse(JSON.stringify({
-            source: 'midtrans_checkout',
-            error: error instanceof Error ? error.message : 'provider_error',
-          })),
-        },
-      }).catch(() => undefined);
-      throw error;
-    }
+    return NextResponse.json(serializeAttempt(attempt));
   } catch (error) {
     console.error('Error creating Midtrans transaction:', error);
     return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 });

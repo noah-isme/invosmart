@@ -279,3 +279,16 @@ export function isUniqueConstraintError(error: unknown): boolean {
     (error as { code?: unknown }).code === "P2002",
   );
 }
+
+/**
+ * Invoice statuses a checkout may be started for. DRAFT has not been issued to
+ * the client yet and PAID is settled; both are refused by every checkout route
+ * (authenticated and public share link).
+ */
+export const PAYABLE_INVOICE_STATUSES = ["SENT", "UNPAID", "OVERDUE"] as const;
+
+export type PayableInvoiceStatus = (typeof PAYABLE_INVOICE_STATUSES)[number];
+
+export function isInvoicePayable(status: unknown): status is PayableInvoiceStatus {
+  return typeof status === "string" && (PAYABLE_INVOICE_STATUSES as readonly string[]).includes(status);
+}
