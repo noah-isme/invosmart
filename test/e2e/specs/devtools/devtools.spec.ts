@@ -13,9 +13,10 @@
 //     ai-tuning     "AI Tuning & Guardrails"
 //     perf          "Performance observability"
 // - POST /api/devtools/autonomy (POST only): 403 unless platform admin;
-//   {action:"resume"} -> AutonomyLoopState.paused=false plus startAutonomyLoop()
-//   (runs one iteration, schedules the next >= 60 s later), {action:"pause"} ->
-//   paused=true plus stopAutonomyLoop(); both answer { state } from
+//   {action:"resume"} -> AutonomyLoopState.paused=false (the e2e server is a
+//   production build, so no in-process timer starts: the cron would run the
+//   tick, ADR 016), {action:"pause"} -> paused=true plus stopAutonomyLoop();
+//   both answer { state } from
 //   getLoopState() where state.enabled is the running flag (in-process timer
 //   on, or the persisted row resumed).
 //   The page (AutonomyDashboardClient) posts with csrfFetch from its "Resume" /

@@ -255,6 +255,20 @@ export const runLoop = async (overrides?: {
   } satisfies LoopRunResult;
 };
 
+/**
+ * True where the in-process timer is the scheduler: local development and
+ * tests. Production builds run the loop only from the /api/cron/autonomy cron,
+ * which takes the AutonomyLoopState lease (ADR 016); a timer there would live
+ * in one arbitrary serverless instance and bypass the lease.
+ */
+export const usesInProcessAutonomyTimer = () => process.env.NODE_ENV !== "production";
+
+/** The cron scheduler's persisted switch. A missing row counts as paused, as the scheduler creates it paused. */
+const isPersistedPaused = async () => {
+  const row = await db.autonomyLoopState.findUnique({ where: { id: "singleton" }, select: { paused: true } });
+  return row?.paused ?? true;
+};
+
 const scheduleNextRun = async () => {
   if (!runtimeState.enabled) return;
   if (runtimeState.timer) {
@@ -263,6 +277,11 @@ const scheduleNextRun = async () => {
 
   runtimeState.timer = setTimeout(async () => {
     try {
+      // A pause persisted from any instance stops this timer too.
+      if (await isPersistedPaused()) {
+        stopAutonomyLoop();
+        return;
+      }
       await runLoop();
     } catch (error) {
       console.error("Autonomy loop failure", error);
@@ -275,11 +294,19 @@ const scheduleNextRun = async () => {
 /**
  * Starts the in-process setTimeout loop. Local development only: serverless
  * instances do not live long enough to keep a timer, so production runs the
- * loop from the /api/cron/autonomy cron (lib/ai/loop-scheduler.ts, ADR 016).
+ * loop from the /api/cron/autonomy cron (lib/ai/loop-scheduler.ts, ADR 016)
+ * and this refuses to start there. It also refuses while the persisted switch
+ * is paused, and each timer tick rechecks it.
  */
 export const startAutonomyLoop = async () => {
   if (!isAutonomyEnabled()) {
     return { started: false, reason: "ENABLE_AI_AUTONOMY=false" } as const;
+  }
+  if (!usesInProcessAutonomyTimer()) {
+    return { started: false, reason: "cron-scheduled" } as const;
+  }
+  if (await isPersistedPaused()) {
+    return { started: false, reason: "paused" } as const;
   }
   runtimeState.enabled = true;
   await runLoop();

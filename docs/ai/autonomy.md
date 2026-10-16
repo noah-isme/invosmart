@@ -42,7 +42,7 @@ Setiap iterasi `runLoop()` melakukan langkah berikut:
 - **Flag Enablement** – `ENABLE_AI_AUTONOMY=true` mengaktifkan loop. Bila false, modul berhenti dan menjaga state terakhir.
 - **Adaptive Interval** – Interval dihitung ulang setiap iterasi menggunakan kombinasi load, trust score, keberhasilan, dan error rate.
 - **Auto Scaling** – Kombinasi backlog dan latency menentukan status `scale_up`, `steady`, atau `scale_down`.
-- **Manual Override** – Dashboard menyediakan tombol pause/resume. Keduanya menyimpan flag `paused` di tabel `AutonomyLoopState` (berlaku untuk cron produksi) dan juga memanggil `startAutonomyLoop` / `stopAutonomyLoop` (timer in-process, hanya untuk pengembangan lokal).
+- **Manual Override** – Dashboard menyediakan tombol pause/resume. Keduanya menyimpan flag `paused` di tabel `AutonomyLoopState`; itulah satu-satunya saklar. Di build produksi resume hanya menyimpan flag, dan panggilan cron `/api/cron/autonomy` berikutnya menjalankan tick di bawah lease (tidak ada timer in-process). Di pengembangan lokal resume juga memanggil `startAutonomyLoop` (timer in-process); timer itu menolak mulai selama flag `paused` aktif dan memeriksa flag sebelum setiap tick, sehingga pause dari instance mana pun menghentikannya.
 
 ## Penjadwalan (cron)
 
