@@ -71,6 +71,9 @@ export const canReadWorkspace = (context: WorkspaceContext) =>
 export const canWriteWorkspace = (context: WorkspaceContext) =>
   hasWorkspacePermission(context.role, "write");
 
+export const canManageWorkspace = (context: WorkspaceContext) =>
+  hasWorkspacePermission(context.role, "manage_workspace");
+
 const legacyContext = (userId: string): WorkspaceContext => ({
   userId,
   organizationId: null,

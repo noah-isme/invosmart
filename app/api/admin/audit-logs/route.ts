@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { authOptions } from "@/server/auth";
-import { canReadWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
+import { canManageWorkspace, resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   }
 
   const workspace = await resolveWorkspaceContextForRequest(request, session);
-  if (!workspace || !canReadWorkspace(workspace)) {
+  if (!workspace || !canManageWorkspace(workspace)) {
     return NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
   }
 

@@ -3,21 +3,55 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/currency";
 import { verifyInvoiceShareToken } from "@/lib/invoice-delivery";
+import {
+  checkoutCurrencyError,
+  isMidtransCheckoutConfigured,
+  pickShareCheckoutProvider,
+} from "@/lib/payments/checkout";
+import { isInvoicePayable } from "@/lib/payments/lifecycle";
+import { isStripeConfigured } from "@/lib/payments/stripe";
+
+import SharePayButton from "./SharePayButton";
+
+type SearchValue = string | string[] | undefined;
 
 type SharePageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: SearchValue; action?: SearchValue; payment?: SearchValue }>;
+};
+
+const first = (value: SearchValue) => (Array.isArray(value) ? value[0] : value);
+
+// Display-only notices for the provider return URL. They never change state:
+// the status pill comes from invoice.status, which only the signed provider
+// webhooks move to PAID.
+const PAYMENT_NOTICES: Record<string, string> = {
+  success: "Payment received or processing; this page updates once the provider confirms.",
+  pending: "Payment pending; this page updates once the provider confirms.",
+  cancelled: "Payment cancelled. You can try again below.",
 };
 
 export default async function SharedInvoicePage({ params, searchParams }: SharePageProps) {
-  const [{ id }, { token }] = await Promise.all([params, searchParams]);
-  if (!verifyInvoiceShareToken(token, id)) notFound();
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const token = first(query.token);
+  const verified = verifyInvoiceShareToken(token, id);
+  if (!verified || !token) notFound();
 
   const invoice = await db.invoice.findUnique({
     where: { id },
     include: { client_rel: true, user: true },
   });
   if (!invoice) notFound();
+
+  // A provider is offered only when it is configured and can charge the
+  // invoice currency (Midtrans: IDR only).
+  const stripeEnabled = isStripeConfigured && !checkoutCurrencyError("stripe", invoice.currency);
+  const midtransEnabled = isMidtransCheckoutConfigured() && !checkoutCurrencyError("midtrans", invoice.currency);
+  const defaultProvider = isInvoicePayable(invoice.status)
+    ? pickShareCheckoutProvider({ currency: invoice.currency, stripeEnabled, midtransEnabled })
+    : null;
+  const payment = first(query.payment);
+  const paymentNotice = payment && invoice.status !== "PAID" ? PAYMENT_NOTICES[payment] : undefined;
 
   const items = Array.isArray(invoice.items) ? invoice.items as Array<{
     name?: string;
@@ -74,6 +108,21 @@ export default async function SharedInvoicePage({ params, searchParams }: ShareP
         </dl>
 
         {invoice.notes ? <p className="mt-6 rounded-xl bg-muted p-4 text-sm">{invoice.notes}</p> : null}
+
+        {paymentNotice ? (
+          <p role="status" className="mt-6 rounded-xl border border-border bg-muted p-4 text-sm">{paymentNotice}</p>
+        ) : null}
+
+        {defaultProvider ? (
+          <SharePayButton
+            invoiceId={invoice.id}
+            token={token}
+            stripeEnabled={stripeEnabled}
+            midtransEnabled={midtransEnabled}
+            defaultProvider={defaultProvider}
+            autoStart={first(query.action) === "pay" && !payment}
+          />
+        ) : null}
       </div>
     </main>
   );

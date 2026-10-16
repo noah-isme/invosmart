@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  canManageWorkspace,
   canReadWorkspace,
   canWriteWorkspace,
   getWorkspaceAuthMode,
@@ -46,6 +47,21 @@ describe("workspace RBAC", () => {
     expect(hasWorkspacePermission("MEMBER", "write")).toBe(true);
     expect(hasWorkspacePermission("VIEWER", "write")).toBe(false);
     expect(hasWorkspacePermission("VIEWER", "read")).toBe(true);
+  });
+
+  it("lets only OWNER, ADMIN and LEGACY contexts manage the workspace", () => {
+    const context = (role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER" | "LEGACY") => ({
+      userId: "user-a",
+      organizationId: role === "LEGACY" ? null : "org-a",
+      role,
+      membership: null,
+    });
+
+    expect(canManageWorkspace(context("OWNER"))).toBe(true);
+    expect(canManageWorkspace(context("ADMIN"))).toBe(true);
+    expect(canManageWorkspace(context("LEGACY"))).toBe(true);
+    expect(canManageWorkspace(context("MEMBER"))).toBe(false);
+    expect(canManageWorkspace(context("VIEWER"))).toBe(false);
   });
 
   it("resolves a requested workspace from a database membership", async () => {

@@ -3,13 +3,33 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { db } from "@/lib/db";
+import { resolveWorkspaceContextForRequest } from "@/lib/workspaces";
 import { GET } from "../audit-logs/route";
 
 vi.mock("next-auth", () => ({
   getServerSession: vi.fn(),
 }));
 
+// Keep the real resolver by default; individual cases pin a membership role.
+vi.mock("@/lib/workspaces", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/workspaces")>();
+  return {
+    ...actual,
+    resolveWorkspaceContextForRequest: vi.fn(actual.resolveWorkspaceContextForRequest),
+  };
+});
+
 const getServerSessionMock = vi.mocked(getServerSession);
+const resolveWorkspaceMock = vi.mocked(resolveWorkspaceContextForRequest);
+
+type Role = "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
+
+const memberContext = (role: Role) => ({
+  userId: "user_1",
+  organizationId: "org_1",
+  role,
+  membership: null,
+});
 
 describe("GET /api/admin/audit-logs", () => {
   beforeEach(() => {
@@ -125,6 +145,56 @@ describe("GET /api/admin/audit-logs", () => {
 
     expect(response.status).toBe(403);
     expect(db.auditLog.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(["VIEWER", "MEMBER"] as const)(
+    "returns 403 for a %s membership (OWNER/ADMIN only)",
+    async (role) => {
+      getServerSessionMock.mockResolvedValue({ user: { id: "user_1" } });
+      resolveWorkspaceMock.mockResolvedValueOnce(memberContext(role));
+
+      const response = await GET(new NextRequest("http://localhost:3000/api/admin/audit-logs"));
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "Workspace access denied" });
+      expect(db.auditLog.findMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["ADMIN", "OWNER"] as const)(
+    "returns 200 scoped to the organization for an %s membership",
+    async (role) => {
+      getServerSessionMock.mockResolvedValue({ user: { id: "user_1" } });
+      resolveWorkspaceMock.mockResolvedValueOnce(memberContext(role));
+      vi.mocked(db.auditLog.findMany).mockResolvedValue([]);
+      vi.mocked(db.auditLog.count).mockResolvedValue(0);
+
+      const response = await GET(new NextRequest("http://localhost:3000/api/admin/audit-logs"));
+
+      expect(response.status).toBe(200);
+      expect(db.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org_1" } }),
+      );
+    },
+  );
+
+  it("returns 200 scoped to the caller for a LEGACY (no organization) context", async () => {
+    getServerSessionMock.mockResolvedValue({ user: { id: "user_1" } });
+    resolveWorkspaceMock.mockResolvedValueOnce({
+      userId: "user_1",
+      organizationId: null,
+      role: "LEGACY",
+      membership: null,
+    });
+    vi.mocked(db.auditLog.findMany).mockResolvedValue([]);
+    vi.mocked(db.auditLog.count).mockResolvedValue(0);
+
+    const response = await GET(new NextRequest("http://localhost:3000/api/admin/audit-logs"));
+
+    expect(response.status).toBe(200);
+    expect(db.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "user_1" } }),
+    );
   });
 
   it("returns 500 when database query throws an error", async () => {

@@ -51,7 +51,7 @@ function post(url: string) {
   }) as never;
 }
 
-describe('create routes reject an already paid invoice', () => {
+describe('create routes reject an already paid or unpayable invoice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -67,6 +67,22 @@ describe('create routes reject an already paid invoice', () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: 'Invoice is already paid' });
+    expect(mocks.db.paymentAttempt.create).not.toHaveBeenCalled();
+    expect(mocks.createTransaction).not.toHaveBeenCalled();
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Midtrans', midtransCreate, '/api/payments/midtrans/create'],
+    ['Stripe', stripeCreate, '/api/payments/stripe/create-session'],
+  ] as const)('%s returns 409 for a DRAFT invoice and creates no attempt or provider checkout', async (_name, handler, url) => {
+    mocks.db.invoice.findFirst.mockResolvedValue({ ...paidInvoice, status: 'DRAFT' });
+
+    const response = await handler(post(url));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Invoice is not payable' });
+    expect(mocks.db.paymentAttempt.findFirst).not.toHaveBeenCalled();
     expect(mocks.db.paymentAttempt.create).not.toHaveBeenCalled();
     expect(mocks.createTransaction).not.toHaveBeenCalled();
     expect(mocks.createSession).not.toHaveBeenCalled();

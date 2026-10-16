@@ -27,6 +27,7 @@ import { expect, test } from "../../fixtures";
 import { E2E_APP_URL, E2E_PERSONA_PASSWORD, E2E_PERSONAS, E2E_PLATFORM_ADMIN_ID } from "../../playwright.env";
 import { loginViaCredentialsApi } from "../../support/auth";
 import {
+  acceptInvitation,
   apiRequest,
   createApiKey,
   createClient,
@@ -481,6 +482,32 @@ test.describe("SEC-11 cross-workspace verb matrix", () => {
       await expectStatus(await asB("GET", `${route}?tenantId=${world.a.org}`), 403, `GET ${route}?tenantId=<A>`);
     });
   }
+
+  test(
+    "SEC-11 the audit log is OWNER/ADMIN only: a VIEWER of the workspace gets 403",
+    { annotation: covers("/api/admin/audit-logs", "/api/admin/audit-log") },
+    async ({ playwright }, testInfo) => {
+      // The api project has no setup dependency, so the viewer is a fresh user
+      // invited into B's workspace rather than the shared viewer persona.
+      const baseURL = (testInfo.project.use.baseURL as string | undefined) ?? E2E_APP_URL;
+      const viewer = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+      try {
+        const viewerUser = await registerAndLogin(viewer, { email: uniqueEmail("sec11-viewer") });
+        const { token } = await inviteMember(world.b.request, world.b.org, { email: viewerUser.email, role: "VIEWER" });
+        expect((await acceptInvitation(viewer, token)).role).toBe("VIEWER");
+
+        for (const route of ["/api/admin/audit-logs", "/api/admin/audit-log"]) {
+          const response = await apiRequest(viewer, "GET", `${route}?limit=1`, { organizationId: world.b.org });
+          await expectStatus(response, 403, `GET ${route} as VIEWER`);
+          expect(await response.json()).toEqual({ error: "Workspace access denied" });
+        }
+        // Control: B (OWNER) still reads its own workspace's log.
+        await expectStatus(await asB("GET", "/api/admin/audit-logs?limit=1", { organizationId: world.b.org }), 200, "GET as OWNER");
+      } finally {
+        await viewer.dispose();
+      }
+    },
+  );
 
   test(
     "SEC-11 FeatureFlag: a workspace OWNER who is not a platform admin cannot change global flags; the platform admin can",

@@ -84,11 +84,14 @@ Double-submit cookie, enforced in `middleware.ts` with helpers from
   The middleware issues it on any `/app/*` or `/api/*` response that lacks it.
 - Exemptions:
   - `/api/auth/*` (NextAuth has its own CSRF token).
-  - The three signed provider webhooks, exact path and `POST` only:
-    `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`,
-    `/api/webhooks/resend`. Any path added to this list must verify a
-    signature before touching the database, fail closed when its secret is
-    missing, and never read session cookies.
+  - Signature-verified endpoints, exact path and `POST` only: the three
+    signed provider webhooks `/api/payments/stripe/webhook`,
+    `/api/payments/midtrans/notification`, `/api/webhooks/resend`, and the
+    public share-link checkout `/api/share/checkout`, whose verified
+    signature is the HMAC invoice share token in the request body. Any path
+    added to this list must verify a signature before touching the database,
+    fail closed when its secret is missing, and never read session cookies.
+    The middleware does not issue the CSRF cookie on these responses.
   - `/api/v1/*` requests that carry `Authorization: Bearer inv_live_…` (API-key
     clients are not browser sessions).
   - Everything when `NODE_ENV=test`.
@@ -120,7 +123,7 @@ There are two limiters; neither is global.
 
 | Limiter | Where | Limit | Store |
 |---|---|---|---|
-| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
+| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket) | 10 requests per 60 s per client IP per bucket (`share-checkout`: 20), `429` with `Retry-After` | Process memory, per serverless instance |
 | `consumeApiRateLimit` in `lib/api-v1/rate-limit.ts` | Every `/api/v1/*` request, before key validation | 120 requests per 60 s per API key (or per IP when the key is missing or invalid), `429` with rate-limit headers | Upstash Redis fixed window; falls back to process memory when Redis is not configured |
 
 Because the session limiter is in memory, the effective limit scales with the
@@ -166,6 +169,24 @@ the routes are open when it is unset.
   (default 7 days), keyed with `INVOICE_SHARE_SECRET`, falling back to
   `NEXTAUTH_SECRET` (`lib/invoice-delivery.ts`). Production refuses to issue
   links when neither is set.
+- The share page can start a checkout through `POST /api/share/checkout`
+  (`app/api/share/checkout/route.ts`). The token is the only credential: no
+  session or cookie is read. Checks, in order: per-instance IP rate limit
+  (`share-checkout` bucket, 20/min; a coarse first line only), a 4 KB body
+  cap, schema validation, token verification (`503` when the share secret is
+  missing in production; `404` for a missing, bad, expired or foreign token
+  and for a missing invoice, so the route never reveals whether an invoice
+  exists), provider configured, invoice payable (`SENT`/`UNPAID`/`OVERDUE`,
+  else `409`), currency. A client `Idempotency-Key` header is ignored; the
+  server derives the key from provider, invoice and a 30-second window, so
+  concurrent requests from any instance collapse onto one `PaymentAttempt`
+  and at most one new attempt per invoice and provider is created per
+  window. A request in a later window reuses the active share attempt
+  instead (never an attempt started from the app), so one payer never holds
+  two payable checkouts; a Stripe session expires with its attempt. The
+  response carries only the Stripe URL or the Snap token, never
+  attempt ids or amounts. The `payment=…` query parameter on the share page
+  is display-only; only signed provider webhooks mark an invoice `PAID`.
 - Workspace invitations expire after 7 days (`lib/team/invitations.ts`).
 
 ### Federation
@@ -279,9 +300,9 @@ Receipt verification has its own trail in `ReceiptAuditLog`
 
 **Who can read it**: `GET /api/admin/audit-logs` (alias `/api/admin/audit-log`)
 returns the rows of the caller's current workspace. It requires
-`canReadWorkspace`, so every member, including `VIEWER`, can read the
-workspace's audit log. Without a workspace, callers see only their own rows.
-
-> **Open decision:** whether `VIEWER` and `MEMBER` should be able to read the
-> workspace audit log, which includes other members' login events and IP
-> addresses.
+`canManageWorkspace` (the `manage_workspace` permission), so only `OWNER` and
+`ADMIN` can read the workspace's audit log, which includes other members'
+login events and IP addresses; `MEMBER` and `VIEWER` get `403`. Without a
+workspace (the `LEGACY` compatibility context), callers see only their own
+rows. The `/app/admin/audit-logs` page is separate: it is platform-admin only
+and lists every tenant.

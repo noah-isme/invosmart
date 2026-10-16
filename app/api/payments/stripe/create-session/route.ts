@@ -3,19 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { db } from '@/lib/db';
 import { canWriteWorkspace, resolveWorkspaceContextForRequest } from '@/lib/workspaces';
-import { isStripeConfigured, stripe } from '@/lib/payments/stripe';
-import { buildStripeLineItems } from '@/lib/payments/line-items';
-import { SUPPORTED_CURRENCIES } from '@/lib/currency';
+import { isStripeConfigured } from '@/lib/payments/stripe';
+import { PAYMENT_PROVIDERS, isInvoicePayable } from '@/lib/payments/lifecycle';
 import {
-  ACTIVE_PAYMENT_ATTEMPT_STATUSES,
-  PAYMENT_ATTEMPT_STATUS,
-  PAYMENT_PROVIDERS,
-  createPaymentAttemptId,
-  createRetryIdempotencyKey,
-  getAttemptExpiry,
-  isPaymentAttemptActive,
-  isUniqueConstraintError,
-} from '@/lib/payments/lifecycle';
+  checkoutCurrencyError,
+  createStripeCheckout,
+  findOrCreatePaymentAttempt,
+} from '@/lib/payments/checkout';
 
 const provider = PAYMENT_PROVIDERS.STRIPE;
 
@@ -69,121 +63,39 @@ export async function POST(request: NextRequest) {
     if (invoice.status === 'PAID') {
       return NextResponse.json({ error: 'Invoice is already paid' }, { status: 409 });
     }
-
-    // Invoice currency is free text; only charge currencies the app supports.
-    const invoiceCurrency = invoice.currency.toUpperCase();
-    if (!SUPPORTED_CURRENCIES.some((entry) => entry.code === invoiceCurrency)) {
-      return NextResponse.json({ error: `Unsupported invoice currency: ${invoiceCurrency}` }, { status: 422 });
+    if (!isInvoicePayable(invoice.status)) {
+      return NextResponse.json({ error: 'Invoice is not payable' }, { status: 409 });
     }
 
-    const requestedIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
-    const now = new Date();
-    const activeAttempt = await db.paymentAttempt.findFirst({
-      where: {
-        invoiceId,
-        provider,
-        ...(requestedIdempotencyKey
-          ? { idempotencyKey: requestedIdempotencyKey }
-          : { status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES } }),
-      },
-      orderBy: { createdAt: 'desc' },
+    const currencyError = checkoutCurrencyError(provider, invoice.currency);
+    if (currencyError) {
+      return NextResponse.json({ error: currencyError }, { status: 422 });
+    }
+
+    const result = await findOrCreatePaymentAttempt({
+      invoice,
+      provider,
+      requestedIdempotencyKey: request.headers.get('idempotency-key')?.trim() || null,
+      now: new Date(),
     });
-
-    if (activeAttempt) {
-      if (requestedIdempotencyKey && !ACTIVE_PAYMENT_ATTEMPT_STATUSES.includes(activeAttempt.status)) {
-        return NextResponse.json({ error: 'Idempotency key has already been used' }, { status: 409 });
-      }
-      if (isPaymentAttemptActive(activeAttempt.status, activeAttempt.expiresAt, now)) {
-        return NextResponse.json(serializeAttempt(activeAttempt));
-      }
-      if (ACTIVE_PAYMENT_ATTEMPT_STATUSES.includes(activeAttempt.status)) {
-        await db.paymentAttempt.update({
-          where: { id: activeAttempt.id },
-          data: { status: PAYMENT_ATTEMPT_STATUS.EXPIRED },
-        });
-      }
+    if (result.kind === 'idempotency_conflict') {
+      return NextResponse.json({ error: 'Idempotency key has already been used' }, { status: 409 });
     }
-
-    const idempotencyKey = requestedIdempotencyKey || createRetryIdempotencyKey(provider, invoiceId);
-    const attemptId = createPaymentAttemptId();
-    const providerOrderId = `invo_${attemptId}`;
-    const expiresAt = getAttemptExpiry(now);
-    let attempt;
-    try {
-      attempt = await db.paymentAttempt.create({
-        data: {
-          id: attemptId,
-          invoiceId,
-          provider,
-          idempotencyKey,
-          providerOrderId,
-          amount: invoice.total,
-          currency: invoice.currency.toUpperCase(),
-          status: PAYMENT_ATTEMPT_STATUS.PENDING,
-          expiresAt,
-          metadata: { source: 'stripe_checkout' },
-        },
-      });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        const existing = await db.paymentAttempt.findFirst({
-          where: { invoiceId, provider, status: { in: ACTIVE_PAYMENT_ATTEMPT_STATUSES } },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (existing) return NextResponse.json(serializeAttempt(existing));
-      }
-      throw error;
+    if (result.kind === 'existing') {
+      return NextResponse.json(serializeAttempt(result.attempt));
     }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const attempt = await createStripeCheckout({
+      invoice,
+      attempt: result.attempt,
+      actorUserId: session.user.id,
+      successUrl: `${origin}/app/invoices/${invoiceId}?payment=success`,
+      cancelUrl: `${origin}/app/invoices/${invoiceId}?payment=cancelled`,
+      idempotencyKey: result.attempt.idempotencyKey,
+    });
 
-    // Line items sum to the invoice total exactly (items + tax + rounding
-    // adjustment, or a single total line); see lib/payments/line-items.ts.
-    const finalLineItems = buildStripeLineItems(invoice);
-
-    try {
-      const checkoutSession = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        line_items: finalLineItems,
-        client_reference_id: providerOrderId,
-        success_url: `${origin}/app/invoices/${invoiceId}?payment=success`,
-        cancel_url: `${origin}/app/invoices/${invoiceId}?payment=cancelled`,
-        metadata: {
-          invoiceId,
-          userId: session.user.id,
-          attemptId: attempt.id,
-          orderId: providerOrderId,
-        },
-        // Stripe copies PaymentIntent metadata onto the charge, so a
-        // charge.refunded event can be traced back to this attempt.
-        payment_intent_data: {
-          metadata: { attemptId: attempt.id, invoiceId },
-        },
-      }, { idempotencyKey });
-
-      attempt = await db.paymentAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          providerSessionId: checkoutSession.id,
-          checkoutUrl: checkoutSession.url,
-          metadata: JSON.parse(JSON.stringify({ source: 'stripe_checkout', checkoutSession })),
-        },
-      });
-
-      return NextResponse.json(serializeAttempt(attempt));
-    } catch (error) {
-      await db.paymentAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: PAYMENT_ATTEMPT_STATUS.FAILED,
-          metadata: JSON.parse(JSON.stringify({
-            source: 'stripe_checkout',
-            error: error instanceof Error ? error.message : 'provider_error',
-          })),
-        },
-      }).catch(() => undefined);
-      throw error;
-    }
+    return NextResponse.json(serializeAttempt(attempt));
   } catch (error) {
     console.error('Error creating Stripe session:', error);
     return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });

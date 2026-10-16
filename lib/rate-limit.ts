@@ -10,7 +10,7 @@ type RateLimitEntry = {
 
 const limiter = new Map<string, RateLimitEntry>();
 const limitWindow = 60_000;
-const maxRequests = 10;
+const defaultMaxRequests = 10;
 
 const createKey = (bucket: string, ip: string) => `${bucket}:${ip}`;
 
@@ -26,6 +26,7 @@ const incrementEntry = (key: string, entry: RateLimitEntry) => {
 export const rateLimit = (
   request: NextRequest,
   bucket: string,
+  { maxRequests = defaultMaxRequests }: { maxRequests?: number } = {},
 ): Response | null => {
   const ip = getClientIp(request);
   const now = Date.now();

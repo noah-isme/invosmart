@@ -2,7 +2,8 @@
 // entry tenanted to the user's active workspace, so the workspace-scoped
 // listing shows it; a user without an active workspace still gets an
 // (untenanted) entry. AUD-INT-02: registration writes AUTH_REGISTER tenanted
-// to the personal workspace it provisions.
+// to the personal workspace it provisions. AUD-INT-03: the listing is
+// OWNER/ADMIN only; a VIEWER member gets 403.
 // @covers: /api/admin/audit-logs, /api/auth/register (route handlers called in-process; scripts/e2e-coverage-check.mjs)
 import { describe, expect, it, vi } from "vitest";
 
@@ -85,6 +86,20 @@ describe("AUD-INT-01 signIn audit entry", () => {
     );
     expect(entry.tenantId).toBeNull();
     expect(await db.auditLog.count({ where: { tenantId: organization.id, userId: removed.id } })).toBe(0);
+  });
+});
+
+describe("AUD-INT-03 audit-log read access", () => {
+  it("refuses a VIEWER member of the workspace with 403", async () => {
+    const { organization } = await createUserWithWorkspace();
+    const viewer = await createUser();
+    await db.membership.create({ data: { organizationId: organization.id, userId: viewer.id, role: "VIEWER" } });
+    await db.user.update({ where: { id: viewer.id }, data: { activeOrganizationId: organization.id } });
+
+    signInAs(viewer);
+    const res = await listAuditLogs(request("/api/admin/audit-logs"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Workspace access denied" });
   });
 });
 

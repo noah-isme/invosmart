@@ -3,7 +3,7 @@
 ## Arsitektur
 
 1. **Observability ingest** – `lib/ai/optimizer.ts` memanggil PostHog (RUM) dan Sentry untuk mengambil agregasi p95 LCP, INP, latency API, dan error rate via `fetchMetrics()`.
-2. **Analisis AI** – `generateOptimizationRecommendations()` menyiapkan payload untuk GPT-4o-mini (atau Gemini fallback) dan memvalidasi respons dengan Zod schema `{ route, suggestion, impact, confidence }`.
+2. **Analisis AI** – `generateOptimizationRecommendations()` menyiapkan payload untuk model dari `lib/ai.ts` (Gemini `gemini-2.5-flash` bila `GEMINI_API_KEY` diset, selain itu OpenAI `gpt-4o-mini`; bila kedua kunci diset, kegagalan yang dapat diulang (timeout, error jaringan, HTTP 408/429/5xx) diulang sekali ke provider lain, lihat ADR 012) dan memvalidasi respons dengan Zod schema `{ route, suggestion, impact, confidence }`.
 3. **Guardrails** – hanya rute non-kritis (`/app/...`) yang dipertahankan. Rute `api`, `auth`, `admin`, dan `devtools` otomatis difilter.
 4. **Persistensi** – rekomendasi tersimpan di tabel Prisma `OptimizationLog` dengan status awal `PENDING`. Mutasi `APPLIED/REJECTED` dicatat via server action.
 5. **Prefetch adaptif** – `AiOptimizerProvider` + `usePredictivePrefetch()` menjalankan prefetch saat idle bila confidence ≥ 0.7 dan fitur diaktifkan pengguna.

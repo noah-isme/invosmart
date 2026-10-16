@@ -31,9 +31,10 @@ export function handleCsrfAndResponse(req: NextRequest): Response {
     pathname.startsWith("/api/v1/") &&
     /^Bearer\s+inv_live_/i.test(req.headers.get("authorization") ?? "");
 
-  // Provider webhooks (exact path, POST only; see lib/security/csrf.ts) are
-  // authenticated by a signature check inside the route, not by a browser
-  // session, so they bypass CSRF and do not receive a CSRF cookie.
+  // Provider webhooks and the share-link checkout (exact path, POST only; see
+  // lib/security/csrf.ts) are authenticated by a signature check inside the
+  // route (provider signature or HMAC share token), not by a browser session,
+  // so they bypass CSRF and do not receive a CSRF cookie.
   const isSignedWebhook = isCsrfExemptWebhook(pathname, method);
   if (isSignedWebhook) {
     return NextResponse.next();

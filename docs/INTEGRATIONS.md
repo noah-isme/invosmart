@@ -49,11 +49,53 @@ Both payment providers share one lifecycle (`lib/payments/lifecycle.ts`,
   `UNPAID`.
 - Checkout routes require the workspace `write` capability; reading payment
   status requires `read` ([WORKSPACE_RBAC.md](WORKSPACE_RBAC.md)).
+- A checkout can be started only for invoices in `SENT`, `UNPAID` or
+  `OVERDUE`. `PAID` returns `409 { error: "Invoice is already paid" }` and
+  `DRAFT` returns `409 { error: "Invoice is not payable" }`.
 
 Checkout routes accept an optional `Idempotency-Key` header. Reusing a key
 whose attempt is no longer active returns `409`. Without a header, the server
 derives a key per invoice and provider, so a retried click returns the active
 attempt instead of creating a second one.
+
+### Public checkout from the share link
+
+The invoice email links to `/share/<id>?token=…&action=pay`. The share page
+offers a pay button and `POST /api/share/checkout` starts the checkout without
+a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-links)).
+
+- **Provider choice**: `IDR` invoices default to Midtrans, any other currency
+  to Stripe; when only one provider is configured and can charge the
+  currency, that one is used. The other configured provider is offered as a
+  secondary button. With `action=pay` the default provider starts once on
+  load.
+- **Configured means**: Stripe `STRIPE_SECRET_KEY`; Midtrans
+  `MIDTRANS_SERVER_KEY` and `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` (snap.js is
+  loaded on the share page only when Midtrans is offered).
+- **Idempotency**: the route ignores a client `Idempotency-Key` and uses
+  `share:<provider>:<invoiceId>:<30-second window>`, so concurrent requests
+  share one attempt. Any later request first reuses the active, unexpired
+  attempt whose key starts with `share:<provider>:<invoiceId>:` (an attempt
+  started from the app is never reused: its return URLs point into the app),
+  so a reload after the window still gets the same checkout; a new attempt
+  is created only once that one is no longer active. A request that finds
+  the attempt still waiting for the provider gets `409 { retry: true }`; one
+  whose window attempt failed at the provider gets
+  `503 { retry: true }` with `Retry-After` until the next window. The page
+  retries a `retry: true` answer up to 3 times, 1.5 s apart (at most 4
+  requests per click; the route allows 20 per minute per IP).
+- **Back from the provider**: the page drops `action=pay` from the address
+  bar before leaving for the provider, so Back or a reload does not start
+  another checkout, and resets the button when the page is restored from the
+  back/forward cache.
+- **Return URLs**: Stripe `success_url`/`cancel_url` are the share URL plus
+  `payment=success` or `payment=cancelled`, built from `NEXT_PUBLIC_APP_URL`,
+  then `NEXTAUTH_URL`, then the request origin. Snap callbacks return to the
+  share URL with `payment=success` or `payment=pending`. The parameter only
+  shows a notice; the invoice becomes `PAID` through the signed webhooks
+  below, like any other checkout.
+- **Attribution**: the attempt metadata and the Stripe session metadata carry
+  `source: share_checkout`; the Stripe `userId` metadata is the invoice owner.
 
 ### Stripe
 
@@ -171,13 +213,18 @@ attempt instead of creating a second one.
 - **Code**: `lib/ai.ts`, used by `/api/invoices/ai`, `/api/receipts/ai-scan`,
   `/api/ai/invoice-insight`, `/api/ai/theme-suggest`, `/api/ai/explain` and
   `lib/ai/*`.
-- **Env**: `GEMINI_API_KEY`, `OPENAI_API_KEY`.
-- **Selection, not fallback**: when `GEMINI_API_KEY` is set, every call goes
-  to Gemini (`gemini-2.5-flash`, REST `generativelanguage.googleapis.com`).
-  Otherwise calls go to OpenAI (`gpt-4o-mini`). A Gemini error is **not**
-  retried on OpenAI. With neither key set, creating the client throws.
+- **Env**: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_REQUEST_TIMEOUT_MS`
+  (optional, default 20000).
+- **Selection and failover**: when `GEMINI_API_KEY` is set, calls go first to
+  Gemini (`gemini-2.5-flash`, REST `generativelanguage.googleapis.com`).
+  Otherwise they go to OpenAI (`gpt-4o-mini`). When **both** keys are set, a
+  timeout, network error or HTTP 408/429/5xx from the primary is retried once
+  on the other provider (a model of the primary is swapped for the other
+  provider's default); 400/401/403/404 are not retried. With neither key set,
+  creating the client throws. See ADR 012.
 - **Limits**: the AI session routes use the in-memory rate limiter (10 per
-  minute per IP per bucket). No explicit request timeout is set.
+  minute per IP per bucket). Each provider call is aborted after
+  `AI_REQUEST_TIMEOUT_MS`, so a failed-over request can take up to twice that.
 
 ## Upstash Redis / Vercel KV
 

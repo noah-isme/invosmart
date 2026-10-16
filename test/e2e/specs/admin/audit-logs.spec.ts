@@ -97,7 +97,7 @@ test.describe("audit logs", () => {
         {
           type: "note",
           description:
-            "/app/admin/audit-logs is platform-admin only and global since the admin-access fix; the page part runs as the platformAdmin persona, scoped with the Tenant ID filter. The API is workspace-scoped and needs only read access.",
+            "/app/admin/audit-logs is platform-admin only and global since the admin-access fix; the page part runs as the platformAdmin persona, scoped with the Tenant ID filter. The API is workspace-scoped and OWNER/ADMIN only (manage_workspace); newApiUser is the OWNER of its personal workspace.",
         },
       ],
     },
@@ -198,7 +198,7 @@ test.describe("audit logs", () => {
         {
           type: "note",
           description:
-            "No divergence: app/api/admin/audit-log/route.ts re-exports the plural GET and app/app/admin/audit-log/page.tsx re-exports the plural page. The divergence that does exist is between API and page: the API is workspace-scoped for any member with read access (VIEWER included), the pages are platform-admin only and list every tenant.",
+            "No divergence: app/api/admin/audit-log/route.ts re-exports the plural GET and app/app/admin/audit-log/page.tsx re-exports the plural page. The divergence that does exist is between API and page: the API is workspace-scoped and OWNER/ADMIN only (MEMBER and VIEWER get 403), the pages are platform-admin only and list every tenant.",
         },
       ],
     },
@@ -226,16 +226,22 @@ test.describe("audit logs", () => {
       expect(pluralRows).toHaveLength(3);
       expect(singularRows).toEqual(pluralRows);
 
-      // Non-admins: both pages redirect; the API stays workspace-scoped (VIEWER reads its workspace).
+      // Non-admins: both pages redirect; the API stays workspace-scoped and
+      // OWNER/ADMIN only (an ADMIN reads its workspace, a VIEWER gets 403).
       for (const path of [LOGS_PAGE, LOG_PAGE_SINGULAR]) {
         await ownerPage.goto(path);
         await expect(ownerPage, `${path} redirects a workspace OWNER`).toHaveURL((url) => url.pathname === "/app");
       }
+      const workspaceAdmin = await persona("admin");
+      const adminWorkspace = (await workspaceAdmin.factory.listWorkspaces()).find((membership) => membership.active);
+      const adminRows = await auditLogs(workspaceAdmin.api, {}, LOG_API_SINGULAR);
+      expect(adminRows.logs.every((row) => row.tenantId === adminWorkspace!.organizationId)).toBe(true);
+      expect(adminRows.logs.some((row) => row.entityId === invoiceId)).toBe(false);
       const viewer = await persona("viewer");
-      const viewerWorkspace = (await viewer.factory.listWorkspaces()).find((membership) => membership.active);
-      const viewerRows = await auditLogs(viewer.api, {}, LOG_API_SINGULAR);
-      expect(viewerRows.logs.every((row) => row.tenantId === viewerWorkspace!.organizationId)).toBe(true);
-      expect(viewerRows.logs.some((row) => row.entityId === invoiceId)).toBe(false);
+      for (const path of [LOGS_API, LOG_API_SINGULAR]) {
+        const denied = await viewer.api.get(path);
+        expect(denied.status(), `GET ${path} as VIEWER`).toBe(403);
+      }
     },
   );
 });

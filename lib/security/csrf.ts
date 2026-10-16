@@ -34,9 +34,15 @@ export function getCsrfCookieName(): string {
 }
 
 /**
- * Provider webhooks that authenticate by verifying a signature over the raw
- * body and therefore cannot carry a browser CSRF token. Matched by exact
- * pathname and POST only; never use prefix matching.
+ * Signature-verified endpoints that authenticate the request itself rather
+ * than a browser session, and therefore neither need nor can carry a browser
+ * CSRF token. Matched by exact pathname and POST only; never use prefix
+ * matching.
+ *
+ * - Provider webhooks verify a signature over the raw body.
+ * - `/api/share/checkout` (public invoice share page) verifies the HMAC
+ *   invoice share token from the request body (`verifyInvoiceShareToken` in
+ *   lib/invoice-delivery.ts), which is bound to one invoice id and expires.
  *
  * Any path added here MUST verify a signature before any side effect (DB
  * access included), fail closed when its secret is missing, and MUST NOT read
@@ -46,6 +52,7 @@ const CSRF_EXEMPT_WEBHOOK_SET: ReadonlySet<string> = new Set([
   "/api/payments/stripe/webhook",
   "/api/payments/midtrans/notification",
   "/api/webhooks/resend",
+  "/api/share/checkout",
 ]);
 
 /** Frozen copy of the allowlist, for documentation and tests. */
@@ -53,7 +60,7 @@ export const CSRF_EXEMPT_WEBHOOK_PATHS: readonly string[] = Object.freeze([
   ...CSRF_EXEMPT_WEBHOOK_SET,
 ]);
 
-/** True for a POST to one of the signature-verified webhook endpoints. */
+/** True for a POST to one of the signature-verified endpoints above. */
 export function isCsrfExemptWebhook(pathname: string, method: string): boolean {
   return (
     method.toUpperCase() === "POST" && CSRF_EXEMPT_WEBHOOK_SET.has(pathname)

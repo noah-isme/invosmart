@@ -100,7 +100,7 @@ flowchart LR
 
 ### Payments
 - **Providers**: Stripe Checkout and Midtrans Snap (`lib/payments/stripe.ts`, `lib/payments/midtrans.ts`).
-- **Starting a checkout**: a workspace member with `write` permission starts it from the invoice detail page (`components/payments/PaymentGatewayModal.tsx`). This creates a `PaymentAttempt` with an idempotency key. The attempt is unique per `(provider, idempotencyKey)` and per `(provider, providerOrderId)`, and it reuses an active attempt for 30 minutes (`lib/payments/lifecycle.ts:39`).
+- **Starting a checkout**: a workspace member with `write` permission starts it from the invoice detail page (`components/payments/PaymentGatewayModal.tsx`), or the invoice recipient starts it from the public share page through `POST /api/share/checkout`, authorised by the share token (see §3). Both paths use the shared helpers in `lib/payments/checkout.ts`. A checkout can be started for invoices in `SENT`/`UNPAID`/`OVERDUE` only (`DRAFT` and `PAID` are refused with `409`; `PAYABLE_INVOICE_STATUSES` in `lib/payments/lifecycle.ts`). This creates a `PaymentAttempt` with an idempotency key. The attempt is unique per `(provider, idempotencyKey)` and per `(provider, providerOrderId)`, and it reuses an active attempt for 30 minutes (`lib/payments/lifecycle.ts:39`). A Stripe Checkout Session gets `expires_at` at the attempt expiry, raised to Stripe's 30-minute minimum plus a 2-minute margin, and the attempt expiry is moved to match (`stripeSessionExpiresAt` in `lib/payments/checkout.ts`), so an attempt never expires while its session can still be paid.
 - **Attempt states**: `PENDING`, `AUTHORIZED`, `SETTLED`, `EXPIRED`, `CANCELLED`, `FAILED`, `REFUNDED`. Allowed transitions are decided in `decidePaymentTransition` (`lib/payments/lifecycle.ts:204`).
 - **Reconciliation**: signed provider events (Stripe `constructEvent`, Midtrans `verifyMidtransSignature`) are stored once in `PaymentEvent`, which is unique on `(provider, providerEventId)`. Settlement then runs `settleInvoiceOnce` (`lib/payments/settlement.ts:85`). It locks the attempt and the invoice, records at most one `Payment` per attempt, and flags duplicate settlements for refund or manual review rather than recording them twice. See [ADR 015](./adr/015-payment-providers-webhook-reconciliation.md).
 - **Amounts**: currency and amount are re-verified against the invoice on every event (`verifyAmountAndCurrency`). Stripe minor units are handled in `lib/payments/money.ts`.
@@ -119,11 +119,11 @@ flowchart LR
 ### Platform features
 - **i18n**: `en` and `id` locales (`lib/i18n/locales/`). The user's choice is stored in `User.locale` through `/api/user/locale`.
 - **Feature flags**: stored in the database and evaluated by `getFlag()`, with tenant and user targeting (`lib/feature-flags.ts`). Platform admins manage them in `/app/admin/feature-flags`.
-- **Uptime**: cron `/api/cron/uptime` checks `UPTIME_MONITORED_ENDPOINTS` and stores `UptimeCheck` rows. Failures are alerted through `dispatchWebhookAlert` to Slack/Discord (`lib/monitoring/uptime.ts`).
+- **Uptime**: cron `/api/cron/uptime` checks `UPTIME_MONITORED_ENDPOINTS` (default `/api/health?db=1` on the deployed host: `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` or `https://$VERCEL_URL`) and stores `UptimeCheck` rows. `/api/health` alone is a shallow liveness check; `?db=1` adds a rate-limited `SELECT 1` with a 2 s timeout and answers `503` when it fails. Failures are alerted through `dispatchWebhookAlert` to Slack/Discord (`lib/monitoring/uptime.ts`).
 - **Audit logging**: `logAuditEvent` writes to `AuditLog` for invoice, auth, security and AI auto-action events (`lib/audit/auditLogger.ts`).
 
 ### AI features
-- **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The provider is chosen by configuration. There is no runtime failover: a Gemini error is returned to the caller. See [ADR 012](./adr/012-gemini-first-ai-provider.md).
+- **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The primary is chosen by configuration; when both keys are set, a timeout, network error or HTTP 408/429/5xx is retried once on the other provider, and every call is bounded by `AI_REQUEST_TIMEOUT_MS` (default 20 s). See [ADR 012](./adr/012-gemini-first-ai-provider.md).
 - **Uses**: invoice composition from natural language (`app/api/invoices/ai`), receipt scanning, invoice insight, theme suggestions, and recommendation explanations.
 - **Autonomous agent subsystem**: six agents (optimizer, learning, governance, insight, recovery, federation) communicate through the MAP protocol and an orchestrator. Each is gated by `ENABLE_AI_*` flags. Content variants are scored with LinUCB ([ADR 013](./adr/013-linucb-content-selection.md)). Details: [docs/ai/](./ai/) and [AGENTS.md](../AGENTS.md).
   - The autonomy loop (`lib/ai/loop.ts`) runs in-process on `setTimeout`. A platform admin starts it through `/api/devtools/autonomy`, and no cron schedules it. On serverless instances it lasts only as long as the instance does.
@@ -150,17 +150,18 @@ sequenceDiagram
     App->>DB: append Invoice.emailLog
     Resend-->>App: POST /api/webhooks/resend (Standard Webhooks signature)
     App->>DB: update delivery status in emailLog
-    Recipient->>App: GET /share/:id?token=…
-    Member->>App: POST /api/payments/{stripe/create-session | midtrans/create}
+    Recipient->>App: GET /share/:id?token=…&action=pay
+    Recipient->>App: POST /api/share/checkout (token)
+    Note over Member,App: or, signed in: POST /api/payments/{stripe/create-session | midtrans/create}
     App->>DB: create or reuse PaymentAttempt (idempotency key)
     App->>PSP: create checkout
-    App-->>Member: checkout URL
+    App-->>Recipient: checkout URL / Snap token
     PSP-->>App: signed webhook / notification
     App->>DB: insert PaymentEvent (unique provider event id)
     App->>DB: lock attempt + invoice, settleInvoiceOnce → Payment, Invoice PAID
 ```
 
-The email also contains a payment link: the share URL with `?action=pay` (`send-email/route.ts:131`). The public share page (`app/share/[id]/page.tsx`) does not handle that parameter yet, so in practice checkout is started from the authenticated invoice detail page.
+The email also contains a payment link: the share URL with `?action=pay` (`send-email/route.ts:131`). The public share page (`app/share/[id]/page.tsx`) shows a pay button (`SharePayButton.tsx`) for payable invoices and, with `action=pay`, starts the default provider once on load: `IDR` → Midtrans, any other currency → Stripe, or whichever single provider is configured and can charge the currency (`pickShareCheckoutProvider` in `lib/payments/checkout.ts`). The button posts `{ invoiceId, token, provider }` to `POST /api/share/checkout`, which verifies the share token (bad, expired or foreign token → `404`), never reads a session or cookie, ignores any client `Idempotency-Key` and uses a server-side key per invoice, provider and 30-second window (a later window reuses the active share attempt), and answers only the Stripe URL or the Snap token. Stripe returns the recipient to the share URL with `payment=success|cancelled`; that parameter is display-only, and the status shown is `invoice.status`, which only the signed webhooks move to `PAID`. Signed-in members still start checkout from the invoice detail page.
 
 ### Reminder pipeline
 

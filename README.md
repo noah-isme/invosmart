@@ -160,6 +160,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | **Auth** | `/api/auth/[...nextauth]`, `/api/auth/register` | [SECURITY.md](./SECURITY.md) |
 | **Invoices** | `/api/invoices`, `/api/invoices/[id]` (+ `/pdf`, `/send-email`), `/api/invoices/export` (CSV, or `?format=xlsx` for an Excel 2003 XML Spreadsheet served as `.xml`), `/api/invoices/templates/*`, `/api/invoices/ai`, `/api/clients/*` | session API, workspace-scoped |
 | **Payments** | `/api/payments`, `/api/payments/[attemptId]`, `/api/payments/{stripe,midtrans}/*` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
+| **Public share** | `/api/share/checkout` (checkout from the invoice share link, authorised by the share token, no session) | [SECURITY.md](./SECURITY.md#public-links), [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md#payments) |
 | **Workspaces & team** | `/api/workspaces/*` (members, invitations, API keys, notifications, reminder rules), `/api/workspace-invitations/[token]/accept` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |
 | **Customer API v1** | `/api/v1/invoices/*`, `/api/v1/clients/*`, `/api/openapi.json` | [docs/API.md](./docs/API.md) |
 | **Receipts** | `/api/receipts/*` | |
@@ -168,7 +169,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | **User settings** | `/api/user/{locale,theme,branding}` | |
 | **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 | **Webhooks** | `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`, `/api/webhooks/resend` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
-| **Health** | `/api/health` | |
+| **Health** | `/api/health` (shallow), `/api/health?db=1` (adds a database ping; the uptime cron's default probe) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 
 ---
 
