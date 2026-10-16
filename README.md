@@ -219,9 +219,9 @@ Architecture, environment, tiers, CI budgets, how to add a scenario and the know
 ## 🚀 Deployment
 
 InvoSmart deploys to Vercel from GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)):
-- **Pushes to `main`, PRs to `main` and `v*` tags** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
-- **A `v*` tag** additionally runs `deploy` (`vercel deploy --prod`) and then the `@staging` tier.
-- **Database migrations are not run by the pipeline.** Apply them with `npx prisma migrate deploy` before deploying schema-dependent code.
+- **Pushes to `main` and PRs to `main`** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, `docs:route-check`, `docs:link-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
+- **A push to `main`** then runs `release` (semantic-release). When it publishes a version (`feat:`/`fix:` commits since the last `v*` tag), `deploy` ships that release commit (`vercel deploy --prod`) and the `@staging` tier runs. Pushing a tag deploys nothing.
+- **Database migrations** are applied by the `deploy` job (`prisma migrate deploy`, before `vercel deploy`) using the `PRODUCTION_DATABASE_URL` secret of the `production` GitHub environment, which the repository owner creates (direct, non-pooled connection string).
 - **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes.
 
 Release order, rollback and verification: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Staging certification: [docs/runbooks/release-certification.md](./docs/runbooks/release-certification.md).
@@ -233,7 +233,7 @@ Release order, rollback and verification: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT
 1. Branch from `main` (`feat/…`, `fix/…`, `docs/…`, `test/…`) and use [Conventional Commits](https://www.conventionalcommits.org/) (semantic-release reads them).
 2. Before pushing, run the same gates CI runs:
    ```bash
-   npm run lint && npm run typecheck && npm run test && npm run docs:env-check
+   npm run lint && npm run typecheck && npm run test && npm run docs:env-check && npm run docs:route-check && npm run docs:link-check
    ```
    Run `npm run test:integration` / `npm run test:e2e:smoke` when you touch the database or user flows.
 3. Open a PR to `main` and fill in the [PR template](./.github/pull_request_template.md), including which docs you updated (see "Saat mengubah X, perbarui Y" in [AGENTS.md](./AGENTS.md)).

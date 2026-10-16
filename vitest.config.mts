@@ -41,6 +41,8 @@ export default defineConfig({
       "test/e2e/**/*.spec.ts",
       // node:test suites (stub, DB guard, schema helper); not Vitest files.
       "test/e2e/**/*.test.mjs",
+      // node:test suites for the doc checks (npm run test:doc-checks).
+      "scripts/docs-*.test.mjs",
       // [INT] layer: real Prisma against its own pglite-server, run by vitest.integration.config.mts.
       "test/integration/db/**",
       "**/node_modules/**",

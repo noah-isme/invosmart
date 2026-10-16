@@ -270,4 +270,4 @@ test/                    # e2e (Playwright), integration (Vitest + PGlite)
 
 ## 7. Deployment
 
-The app runs on Vercel, and three Vercel crons each run every 5 minutes (`vercel.json`). CI and release run in `.github/workflows/release.yml`. Database migrations are **not** applied by any pipeline step. [DEPLOYMENT.md](./DEPLOYMENT.md) covers the release order, migrations, rollback and environment configuration.
+The app runs on Vercel, and three Vercel crons each run every 5 minutes (`vercel.json`). CI and release run in `.github/workflows/release.yml`. The `deploy` job applies database migrations (`prisma migrate deploy`) before `vercel deploy --prod`. [DEPLOYMENT.md](./DEPLOYMENT.md) covers the release order, migrations, rollback and environment configuration.
