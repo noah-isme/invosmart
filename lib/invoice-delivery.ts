@@ -310,6 +310,16 @@ const getShareSecret = () => {
   return LOCAL_SHARE_SECRET;
 };
 
+/**
+ * Throws when no share secret is configured in production.
+ * `verifyInvoiceShareToken` swallows that error and returns null, so callers
+ * that must tell "misconfigured" (503) apart from "bad token" (404) call this
+ * first.
+ */
+export const assertInvoiceShareSecretConfigured = (): void => {
+  getShareSecret();
+};
+
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
 const decode = (value: string) => Buffer.from(value, "base64url").toString("utf8");
 

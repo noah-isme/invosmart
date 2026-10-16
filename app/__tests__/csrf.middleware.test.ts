@@ -96,16 +96,17 @@ describe("CSRF cookie rotation", () => {
   });
 });
 
-describe("Signed provider webhook CSRF exemption", () => {
+describe("Signature-verified CSRF exemption (webhooks and share checkout)", () => {
   const CSRF_BODY = { error: "Invalid or missing CSRF token" };
 
   const exempt = [
     "/api/payments/stripe/webhook",
     "/api/payments/midtrans/notification",
     "/api/webhooks/resend",
+    "/api/share/checkout",
   ];
 
-  it("lists exactly the three webhook paths and is frozen", () => {
+  it("lists exactly the three webhook paths plus the share checkout and is frozen", () => {
     expect([...CSRF_EXEMPT_WEBHOOK_PATHS]).toEqual(exempt);
     expect(Object.isFrozen(CSRF_EXEMPT_WEBHOOK_PATHS)).toBe(true);
   });
@@ -136,6 +137,11 @@ describe("Signed provider webhook CSRF exemption", () => {
       ["DELETE on exempt path", "/api/payments/midtrans/notification", "DELETE"],
       ["normal route", "/api/invoices", "POST"],
       ["sibling payments route", "/api/payments/stripe/create-session", "POST"],
+      ["PUT on share checkout", "/api/share/checkout", "PUT"],
+      ["DELETE on share checkout", "/api/share/checkout", "DELETE"],
+      ["share checkout trailing slash", "/api/share/checkout/", "POST"],
+      ["share checkout sub-path", "/api/share/checkout/x", "POST"],
+      ["share prefix only", "/api/share", "POST"],
     ])("still enforces CSRF for %s (%s %s)", async (_label, pathname, method) => {
       process.env.NODE_ENV = env;
       const res = handleCsrfAndResponse(
@@ -145,6 +151,31 @@ describe("Signed provider webhook CSRF exemption", () => {
       expect(await res.json()).toEqual(CSRF_BODY);
       expect(res.headers.get("x-middleware-next")).toBeNull();
     });
+  });
+
+  it("POST /api/share/checkout passes without x-csrf-token and gets no CSRF cookie", () => {
+    process.env.NODE_ENV = "production";
+    const res = handleCsrfAndResponse(
+      new NextRequest("http://localhost:3000/api/share/checkout", {
+        method: "POST",
+        body: JSON.stringify({ invoiceId: "inv", token: "t", provider: "stripe" }),
+        headers: { "content-type": "application/json" },
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+    expect(setCookies(res)).toEqual([]);
+  });
+
+  it("does not treat GET /api/share/checkout as exempt (normal path, cookie issued; the route exports no GET, so 405)", async () => {
+    process.env.NODE_ENV = "production";
+    const res = handleCsrfAndResponse(
+      new NextRequest("http://localhost:3000/api/share/checkout", { method: "GET" })
+    );
+    expect(res.headers.get("set-cookie")).toContain("__Host-csrf-token=");
+    const route = await import("@/app/api/share/checkout/route");
+    expect("GET" in route).toBe(false);
+    expect(typeof route.POST).toBe("function");
   });
 
   it("still issues the CSRF cookie for non-webhook GETs", () => {
