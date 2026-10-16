@@ -55,6 +55,12 @@ graphify-out/graph.html
 .agents/teamwork_*/
 .agents/explorer_*/
 .agents/orchestrator_*/
+# Agent run working files (BRIEFING/DISPATCH/progress); keep only shared
+# skills, rules and workflows under .agents/.
+.agents/*
+!.agents/skills/
+!.agents/rules/
+!.agents/workflows/
 
 # local scratch output (curl session cookies, CSRF dumps, lint logs)
 cookiejar.txt
