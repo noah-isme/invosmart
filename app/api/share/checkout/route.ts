@@ -31,6 +31,10 @@ import {
 
 const MAX_BODY_BYTES = 4 * 1024;
 const SOURCE = 'share_checkout';
+// Above the default 10/min: one click on the share page sends up to 4
+// requests (SharePayButton retries a `retry: true` answer 3 times), and
+// payers behind one NAT share an IP.
+const RATE_LIMIT_PER_MINUTE = 20;
 
 const bodySchema = z.object({
   invoiceId: z.string().min(1).max(200),
@@ -54,7 +58,7 @@ function withPaymentParam(url: string, payment: 'success' | 'cancelled'): string
 
 export async function POST(request: NextRequest) {
   // Per-instance, per-IP (first x-forwarded-for hop): a coarse first line only.
-  const limited = rateLimit(request, 'share-checkout');
+  const limited = rateLimit(request, 'share-checkout', { maxRequests: RATE_LIMIT_PER_MINUTE });
   if (limited) return limited;
 
   const declaredLength = Number(request.headers.get('content-length') ?? '0');

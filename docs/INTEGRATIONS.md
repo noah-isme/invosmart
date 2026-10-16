@@ -82,7 +82,8 @@ a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-li
   the attempt still waiting for the provider gets `409 { retry: true }`; one
   whose window attempt failed at the provider gets
   `503 { retry: true }` with `Retry-After` until the next window. The page
-  retries a `retry: true` answer after a second.
+  retries a `retry: true` answer up to 3 times, 1.5 s apart (at most 4
+  requests per click; the route allows 20 per minute per IP).
 - **Return URLs**: Stripe `success_url`/`cancel_url` are the share URL plus
   `payment=success` or `payment=cancelled`, built from `NEXT_PUBLIC_APP_URL`,
   then `NEXTAUTH_URL`, then the request origin. Snap callbacks return to the

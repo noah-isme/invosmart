@@ -411,12 +411,12 @@ describe('POST /api/share/checkout', () => {
   });
 
   // lib/rate-limit.ts is in-memory: this covers the per-instance limiter only.
-  it('answers 429 on the 11th call from one IP within a minute', async () => {
+  it('answers 429 on the 21st call from one IP within a minute', async () => {
     const statuses: number[] = [];
-    for (let i = 0; i < 11; i += 1) {
+    for (let i = 0; i < 21; i += 1) {
       statuses.push((await POST(post({}))).status);
     }
-    expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
-    expect(statuses[10]).toBe(429);
+    expect(statuses.slice(0, 20).every((s) => s === 400)).toBe(true);
+    expect(statuses[20]).toBe(429);
   });
 });
