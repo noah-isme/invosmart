@@ -123,7 +123,7 @@ flowchart LR
 - **Audit logging**: `logAuditEvent` writes to `AuditLog` for invoice, auth, security and AI auto-action events (`lib/audit/auditLogger.ts`).
 
 ### AI features
-- **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The provider is chosen by configuration. There is no runtime failover: a Gemini error is returned to the caller. See [ADR 012](./adr/012-gemini-first-ai-provider.md).
+- **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The primary is chosen by configuration; when both keys are set, a timeout, network error or HTTP 408/429/5xx is retried once on the other provider, and every call is bounded by `AI_REQUEST_TIMEOUT_MS` (default 20 s). See [ADR 012](./adr/012-gemini-first-ai-provider.md).
 - **Uses**: invoice composition from natural language (`app/api/invoices/ai`), receipt scanning, invoice insight, theme suggestions, and recommendation explanations.
 - **Autonomous agent subsystem**: six agents (optimizer, learning, governance, insight, recovery, federation) communicate through the MAP protocol and an orchestrator. Each is gated by `ENABLE_AI_*` flags. Content variants are scored with LinUCB ([ADR 013](./adr/013-linucb-content-selection.md)). Details: [docs/ai/](./ai/) and [AGENTS.md](../AGENTS.md).
   - The autonomy loop (`lib/ai/loop.ts`) runs in-process on `setTimeout`. A platform admin starts it through `/api/devtools/autonomy`, and no cron schedules it. On serverless instances it lasts only as long as the instance does.

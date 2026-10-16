@@ -201,13 +201,18 @@ a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-li
 - **Code**: `lib/ai.ts`, used by `/api/invoices/ai`, `/api/receipts/ai-scan`,
   `/api/ai/invoice-insight`, `/api/ai/theme-suggest`, `/api/ai/explain` and
   `lib/ai/*`.
-- **Env**: `GEMINI_API_KEY`, `OPENAI_API_KEY`.
-- **Selection, not fallback**: when `GEMINI_API_KEY` is set, every call goes
-  to Gemini (`gemini-2.5-flash`, REST `generativelanguage.googleapis.com`).
-  Otherwise calls go to OpenAI (`gpt-4o-mini`). A Gemini error is **not**
-  retried on OpenAI. With neither key set, creating the client throws.
+- **Env**: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `AI_REQUEST_TIMEOUT_MS`
+  (optional, default 20000).
+- **Selection and failover**: when `GEMINI_API_KEY` is set, calls go first to
+  Gemini (`gemini-2.5-flash`, REST `generativelanguage.googleapis.com`).
+  Otherwise they go to OpenAI (`gpt-4o-mini`). When **both** keys are set, a
+  timeout, network error or HTTP 408/429/5xx from the primary is retried once
+  on the other provider (a model of the primary is swapped for the other
+  provider's default); 400/401/403/404 are not retried. With neither key set,
+  creating the client throws. See ADR 012.
 - **Limits**: the AI session routes use the in-memory rate limiter (10 per
-  minute per IP per bucket). No explicit request timeout is set.
+  minute per IP per bucket). Each provider call is aborted after
+  `AI_REQUEST_TIMEOUT_MS`, so a failed-over request can take up to twice that.
 
 ## Upstash Redis / Vercel KV
 
