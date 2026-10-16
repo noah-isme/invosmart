@@ -167,7 +167,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | **AI / optimizer** | `/api/ai/*`, `/api/ai-optimizer/*`, `/api/opt/*`, `/api/insight/revenue`, `/api/federation/{status,events}` | [docs/ai/](./docs/ai/) |
 | **Admin / platform** | `/api/admin/*` (feature flags, uptime, audit logs), `/api/devtools/*`, `/api/dev/perf/summary` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators) |
 | **User settings** | `/api/user/{locale,theme,branding}` | |
-| **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
+| **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`), `/api/cron/retention` (daily 03:00 UTC data-retention purge, gated by `RETENTION_ENABLED`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 | **Webhooks** | `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`, `/api/webhooks/resend` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
 | **Health** | `/api/health` (shallow), `/api/health?db=1` (adds a database ping; the uptime cron's default probe) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 
@@ -222,7 +222,7 @@ InvoSmart deploys to Vercel from GitHub Actions ([`.github/workflows/release.yml
 - **Pushes to `main` and PRs to `main`** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, `docs:route-check`, `docs:link-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
 - **A push to `main`** then runs `release` (semantic-release). When it publishes a version (`feat:`/`fix:` commits since the last `v*` tag), `deploy` ships that release commit (`vercel deploy --prod`) and the `@staging` tier runs. Pushing a tag deploys nothing.
 - **Database migrations** are applied by the `deploy` job (`prisma migrate deploy`, before `vercel deploy`) using the `PRODUCTION_DATABASE_URL` secret of the `production` GitHub environment, which the repository owner creates (direct, non-pooled connection string).
-- **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes.
+- **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes; `/api/cron/retention`, daily at 03:00 UTC (purges nothing until `RETENTION_ENABLED=true`; see [SECURITY.md](./SECURITY.md#retention-and-deletion)).
 
 Release order, rollback and verification: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Staging certification: [docs/runbooks/release-certification.md](./docs/runbooks/release-certification.md).
 

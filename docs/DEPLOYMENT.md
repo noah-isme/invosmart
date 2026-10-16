@@ -238,18 +238,39 @@ Vercel environment variables and redeploy.
 
 ## Scheduled jobs
 
-`vercel.json` runs three crons, each every 5 minutes. Vercel calls them with
-`GET` and `Authorization: Bearer $CRON_SECRET`, which `lib/cron-auth.ts`
-requires in production; without `CRON_SECRET` they return `503`.
+`vercel.json` runs four crons: three every 5 minutes and the retention purge
+daily at 03:00 UTC. Vercel calls them with `GET` and
+`Authorization: Bearer $CRON_SECRET`, which `lib/cron-auth.ts` requires in
+production; without `CRON_SECRET` they return `503`.
 
 | Path | What it does | Failure signals |
 |---|---|---|
 | `/api/cron/uptime` | `runUptimeChecks()` (`lib/monitoring/uptime.ts`) probes `UPTIME_MONITORED_ENDPOINTS` with a 5 s timeout (default when unset: `/api/health?db=1`, a health check with a database ping; relative entries resolve against `NEXT_PUBLIC_APP_URL`, then `NEXTAUTH_URL`, then `https://$VERCEL_URL`, so the deployed host is probed; absolute URLs are used as is), stores `UptimeCheck` rows, and sends a Slack/Discord alert for endpoints that are down | `500` from the route; gaps in `UptimeCheck` rows; the admin uptime page |
 | `/api/cron/reminders` | For every enabled `InvoiceReminderRule`, creates an `InvoiceReminderOccurrence` for `SENT`, `UNPAID` and `OVERDUE` invoices whose reminder time fell within the last 24 hours. A unique `occurrenceKey` makes reruns idempotent | If the cron is down for more than 24 hours, the missed reminders are **skipped**, not caught up |
 | `/api/cron/reminder-delivery` | `dispatchReminderDeliveries({ limit: 50 })` (`lib/team/reminder-delivery.ts`) claims pending delivery rows, sends through Resend or the workspace's encrypted Slack endpoint, retries after 5 min, 15 min, 1 h and 6 h, and reclaims rows stuck in `PROCESSING` for more than 10 minutes | `500` from the route; delivery rows in `RETRY`/`FAILED`; occurrences with no `SENT` delivery |
+| `/api/cron/retention` (daily, `0 3 * * *`) | `runRetentionPurge()` (`lib/retention/purge.ts`) deletes `AuditLog` rows older than 12 months, nulls `AuditLog.ipAddress` older than 90 days, and deletes `SENT`/`FAILED`/`SKIPPED` reminder occurrences (with their deliveries) scheduled more than 12 months ago, in id batches (`RETENTION_BATCH_SIZE` x `RETENTION_MAX_BATCHES` per step). Payments, invoices and receipts are never touched. Returns `skipped:"disabled"` until `RETENTION_ENABLED=true`, `skipped:"locked"` while another run holds the `CronLease`, and `500` for an invalid `RETENTION_*` configuration. Policy: [SECURITY.md](../SECURITY.md#retention-and-deletion) | `500` from the route; `truncated:true` in the response or audit details (more rows than one run's cap; the next run continues); no new `RETENTION_PURGE` audit row in a day |
 
 Vercel shows cron invocations and their status codes in the project's
 **Cron Jobs** page.
+
+### Enabling the retention purge
+
+Deletes are irreversible, so the first run is gated. The 12-month and 90-day
+periods are the product decision; `RETENTION_ENABLED` is only a first-run
+safety gate.
+
+1. Deploy with `RETENTION_ENABLED` unset. The daily cron answers
+   `{"skipped":"disabled"}` and writes nothing.
+2. Run a dry run and review the counts (`auditLogsDeleted`,
+   `ipAddressesCleared`, `reminderOccurrencesDeleted`):
+   `curl -H "Authorization: Bearer $CRON_SECRET" "$URL/api/cron/retention?dryRun=1"`
+3. Set `RETENTION_ENABLED=true` in the Vercel environment and redeploy.
+4. After the next 03:00 UTC run, check its `RETENTION_PURGE` audit row
+   (`entity` `Retention`, counts in `details`). `truncated: true` means the
+   backlog is larger than one run's cap; later runs continue it.
+
+To pause purging, unset `RETENTION_ENABLED` (or set `RETENTION_DRY_RUN=true`)
+and redeploy.
 
 If reminders are not arriving, rows are stuck in `PROCESSING` or deliveries
 keep failing, follow [runbooks/reminder-delivery.md](runbooks/reminder-delivery.md).

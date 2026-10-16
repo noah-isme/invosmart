@@ -280,14 +280,27 @@ it on Vercel or with live provider keys, and `release:certify` rejects it.
 
 ### Retention and deletion
 
-The code has no retention job: audit logs, delivery records, payment events
-and AI logs are kept indefinitely. Nothing exports or erases a user's data on
-request, and there is no account-deletion endpoint.
+A daily cron, `/api/cron/retention` (03:00 UTC, `lib/retention/purge.ts`),
+applies these periods:
 
-> **Open decision:** retention periods per table (in particular `AuditLog`
-> IP addresses, `PaymentEvent` payloads and delivery error messages), a
-> deletion/export procedure for data-subject requests, and what federation
-> peers may retain.
+| Data | Kept for | What happens after |
+|---|---|---|
+| `AuditLog` rows | 12 months (`RETENTION_AUDIT_LOG_DAYS`, default 365) | Deleted. This also removes the audit evidence older than 12 months. |
+| `AuditLog.ipAddress` | 90 days (`RETENTION_IP_DAYS`, default 90; must not exceed the audit-log period) | Set to `null`; the row stays until its own 12 months are up. |
+| Reminder occurrences and their deliveries (`InvoiceReminderOccurrence`, `InvoiceReminderDelivery`, including delivery error messages) | 12 months after `scheduledAt`, once the occurrence is `SENT`, `FAILED` or `SKIPPED` (`RETENTION_REMINDER_DAYS`, default 365) | Deleted; deliveries go with their occurrence (FK cascade). Pending or retrying occurrences are never deleted. |
+| Payments, payment attempts, payment events (including provider payloads), invoices, receipts and receipt audit logs | Indefinitely | Not purged. They are financial records needed for reconciliation and dispute handling, and the unique `PaymentEvent (provider, providerEventId)` is what stops a replayed webhook from settling twice, so deleting events would weaken that idempotency. |
+
+The periods are a product decision; `RETENTION_ENABLED` is only a first-run
+safety gate (the cron purges nothing until it is `true`, see
+[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#scheduled-jobs)). Each run deletes
+at most `RETENTION_BATCH_SIZE` x `RETENTION_MAX_BATCHES` rows per step,
+refuses an invalid configuration, skips while another run holds its
+`CronLease`, and writes a `RETENTION_PURGE` audit row with its counts.
+
+Not covered: AI and agent logs, `UptimeCheck`, `FederationInboundEvent` and
+`FederationMetrics` are kept indefinitely; there is no export or erasure
+procedure for data-subject requests and no account-deletion endpoint (out of
+scope for the retention job).
 
 ## Audit logging
 

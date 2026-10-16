@@ -202,7 +202,7 @@ How invoice status changes:
 | Model | Purpose | Key relationships / constraints | Ownership | Status / enum |
 |---|---|---|---|---|
 | `InvoiceReminderRule` | A reminder policy: `offsetDays` relative to the due date (−365…365) and `channels` (`EMAIL`, `SLACK`). | Has occurrences. | Workspace | `enabled` flag |
-| `InvoiceReminderOccurrence` | One scheduled reminder for one invoice and rule. `/api/cron/reminders` creates it, and the unique `occurrenceKey` keeps cron retries idempotent. | `@@unique(occurrenceKey)`. Has one delivery per channel. | Workspace | `status` (string), rolled up from its deliveries: `PENDING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
+| `InvoiceReminderOccurrence` | One scheduled reminder for one invoice and rule. `/api/cron/reminders` creates it, and the unique `occurrenceKey` keeps cron retries idempotent. `/api/cron/retention` deletes `SENT`/`FAILED`/`SKIPPED` occurrences scheduled more than 12 months ago, with their deliveries (cascade); pending ones are kept. | `@@unique(occurrenceKey)`. Has one delivery per channel. | Workspace | `status` (string), rolled up from its deliveries: `PENDING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
 | `InvoiceReminderDelivery` | One delivery attempt row per channel, processed by `/api/cron/reminder-delivery`. | `@@unique([occurrenceId, channel])` | Via occurrence | `InvoiceReminderDeliveryStatus`: `PENDING`, `PROCESSING`, `RETRY`, `SENT`, `FAILED`, `SKIPPED` |
 
 Invoice email delivery (`POST /api/invoices/[id]/send-email`) has no table of its own. Attempts are appended to `Invoice.emailLog` (JSON) and `emailedAt` is set. A send is tried at most 4 times (`MAX_EMAIL_ATTEMPTS`, `lib/invoice-delivery.ts:21-22`).
@@ -226,7 +226,7 @@ Idempotency keys and rate-limit windows for `/api/v1` are kept in Upstash Redis,
 
 | Model | Purpose | Ownership |
 |---|---|---|
-| `AuditLog` | The general audit trail: invoice, auth, workspace, payment, reminder and AI auto-action events. Columns: `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), `ipAddress`. Written by `logAuditEvent()` in `lib/audit/auditLogger.ts`. | Tenant-tagged (`tenantId`). Users are attached with `SetNull` on delete. |
+| `AuditLog` | The general audit trail: invoice, auth, workspace, payment, reminder and AI auto-action events. Columns: `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), `ipAddress`. Written by `logAuditEvent()` in `lib/audit/auditLogger.ts`. Purged by `/api/cron/retention`: rows are deleted after 12 months and `ipAddress` is set to `null` after 90 days ([SECURITY.md](../SECURITY.md#retention-and-deletion)). | Tenant-tagged (`tenantId`). Users are attached with `SetNull` on delete. |
 | `FeatureFlag` | Runtime toggles. `targetTenants` / `targetUsers` are JSON allowlists (`lib/feature-flags.ts`). | Global |
 | `UptimeCheck` | Results from `/api/cron/uptime`: status code, latency, `UP`/`DOWN`. | Global |
 | `CronLease` | One row per named scheduled job (`name` is the key, e.g. `retention`). A cron claims it with a conditional update that sets `claimedUntil` in the future only when it is null or past, so an overlapping invocation skips; it clears `claimedUntil` and sets `lastRunAt` when done. A crashed run blocks the next one only until `claimedUntil` passes. | Global |
