@@ -243,7 +243,7 @@ All of these are global platform telemetry, with no tenant column.
 | `AgentEventLog` | Persisted MAP events (`traceId`, type, source/target agent, priority, payload). The fallback for the Redis stream. | `eventType` string (see `lib/ai/protocol.ts`) |
 | `AgentPriority` | The current dynamic weight per agent. | — |
 | `RecoveryLog` | Rollback and re-evaluation actions by the recovery agent, with trust before/after. | — |
-| `AutonomyLoopState` | Single row (`id = "singleton"`) driving the autonomy loop from the `/api/cron/autonomy` cron (ADR 016): `paused` (defaults to `true`; a platform admin resumes it in DevTools), `nextRunAt`, `lastRunAt`, the scaler state carried between serverless invocations (`lastIntervalMs`, `lastConcurrency`, `lastTelemetry`), `lastSummary`, `lastResult` (scaling and recovery), and a `claimedUntil` lease so overlapping cron invocations skip. | — |
+| `AutonomyLoopState` | Single row (`id = "singleton"`) driving the autonomy loop from the `/api/cron/autonomy` cron ([ADR 016](./adr/016-autonomy-loop-cron-scheduling.md)): `paused` (defaults to `true`; a platform admin resumes it in DevTools), `nextRunAt`, `lastRunAt`, the scaler state carried between serverless invocations (`lastIntervalMs`, `lastConcurrency`, `lastTelemetry`), `lastSummary`, `lastResult` (scaling and recovery), and a `claimedUntil` lease so overlapping cron invocations skip. | — |
 
 ### 4.11 Content optimization
 

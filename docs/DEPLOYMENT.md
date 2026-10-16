@@ -238,7 +238,7 @@ Vercel environment variables and redeploy.
 
 ## Scheduled jobs
 
-`vercel.json` runs four crons: three every 5 minutes and the retention purge
+`vercel.json` runs five crons: four every 5 minutes and the retention purge
 daily at 03:00 UTC. Vercel calls them with `GET` and
 `Authorization: Bearer $CRON_SECRET`, which `lib/cron-auth.ts` requires in
 production; without `CRON_SECRET` they return `503`.
@@ -248,10 +248,28 @@ production; without `CRON_SECRET` they return `503`.
 | `/api/cron/uptime` | `runUptimeChecks()` (`lib/monitoring/uptime.ts`) probes `UPTIME_MONITORED_ENDPOINTS` with a 5 s timeout (default when unset: `/api/health?db=1`, a health check with a database ping; relative entries resolve against `NEXT_PUBLIC_APP_URL`, then `NEXTAUTH_URL`, then `https://$VERCEL_URL`, so the deployed host is probed; absolute URLs are used as is), stores `UptimeCheck` rows, and sends a Slack/Discord alert for endpoints that are down | `500` from the route; gaps in `UptimeCheck` rows; the admin uptime page |
 | `/api/cron/reminders` | For every enabled `InvoiceReminderRule`, creates an `InvoiceReminderOccurrence` for `SENT`, `UNPAID` and `OVERDUE` invoices whose reminder time fell within the last 24 hours. A unique `occurrenceKey` makes reruns idempotent | If the cron is down for more than 24 hours, the missed reminders are **skipped**, not caught up |
 | `/api/cron/reminder-delivery` | `dispatchReminderDeliveries({ limit: 50 })` (`lib/team/reminder-delivery.ts`) claims pending delivery rows, sends through Resend or the workspace's encrypted Slack endpoint, retries after 5 min, 15 min, 1 h and 6 h, and reclaims rows stuck in `PROCESSING` for more than 10 minutes | `500` from the route; delivery rows in `RETRY`/`FAILED`; occurrences with no `SENT` delivery |
+| `/api/cron/autonomy` | `runScheduledTick()` (`lib/ai/loop-scheduler.ts`) runs one autonomy-loop tick (`runLoop()`: priorities, scaling, recovery sweep with possible automatic rollbacks) when `AutonomyLoopState.nextRunAt` is due (30 s tolerance), then stores the next run time (`max(adaptive interval, 5 min)`, so the effective minimum interval is 5 minutes) and the scaler state. Answers `skipped:"paused"` until a platform admin resumes the loop (it ships paused; see [Enabling the autonomy loop](#enabling-the-autonomy-loop)), `skipped:"disabled"` when `ENABLE_AI_AUTONOMY=false`, `skipped:"not_due"` between runs and `skipped:"locked"` while another tick holds the lease. `?force=1` runs a tick that is not due. [ADR 016](./adr/016-autonomy-loop-cron-scheduling.md) | `500` from the route; `lastRunAt` in the DevTools autonomy page stops advancing while the loop is resumed |
 | `/api/cron/retention` (daily, `0 3 * * *`) | `runRetentionPurge()` (`lib/retention/purge.ts`) deletes `AuditLog` rows older than 12 months, nulls `AuditLog.ipAddress` older than 90 days, and deletes `SENT`/`FAILED`/`SKIPPED` reminder occurrences (with their deliveries) scheduled more than 12 months ago, in id batches (`RETENTION_BATCH_SIZE` x `RETENTION_MAX_BATCHES` per step). Payments, invoices and receipts are never touched. Returns `skipped:"disabled"` until `RETENTION_ENABLED=true`, `skipped:"locked"` while another run holds the `CronLease`, and `500` for an invalid `RETENTION_*` configuration. Policy: [SECURITY.md](../SECURITY.md#retention-and-deletion) | `500` from the route; `truncated:true` in the response or audit details (more rows than one run's cap; the next run continues); no new `RETENTION_PURGE` audit row in a day |
 
 Vercel shows cron invocations and their status codes in the project's
 **Cron Jobs** page.
+
+### Enabling the autonomy loop
+
+The loop can roll back AI-applied changes on its own, so it ships paused: the
+first deploy of `/api/cron/autonomy` creates the `AutonomyLoopState` row with
+`paused = true` and every tick answers `{"skipped":"paused"}`.
+
+1. Sign in as a platform admin (`ADMIN_USER_IDS`) and open
+   `/devtools/ai-autonomy`.
+2. Press **Resume**. This sets `paused = false` (and also runs one tick in the
+   serving instance).
+3. Within 5 minutes, check the cron response or the `lastRunAt` /
+   `nextRunAt` values (`GET /api/cron/autonomy` with the cron bearer answers
+   `{"ran":true,...}` or `{"skipped":"not_due",...}`).
+
+**Pause** on the same page stops production ticks. If nobody resumes the loop,
+it never runs in production.
 
 ### Enabling the retention purge
 

@@ -42,7 +42,17 @@ Setiap iterasi `runLoop()` melakukan langkah berikut:
 - **Flag Enablement** – `ENABLE_AI_AUTONOMY=true` mengaktifkan loop. Bila false, modul berhenti dan menjaga state terakhir.
 - **Adaptive Interval** – Interval dihitung ulang setiap iterasi menggunakan kombinasi load, trust score, keberhasilan, dan error rate.
 - **Auto Scaling** – Kombinasi backlog dan latency menentukan status `scale_up`, `steady`, atau `scale_down`.
-- **Manual Override** – Dashboard menyediakan tombol pause/resume yang memanggil `startAutonomyLoop` atau `stopAutonomyLoop`.
+- **Manual Override** – Dashboard menyediakan tombol pause/resume. Keduanya menyimpan flag `paused` di tabel `AutonomyLoopState` (berlaku untuk cron produksi) dan juga memanggil `startAutonomyLoop` / `stopAutonomyLoop` (timer in-process, hanya untuk pengembangan lokal).
+
+## Penjadwalan (cron)
+
+Di produksi (Vercel serverless) tidak ada proses yang hidup cukup lama untuk `setTimeout`, jadi loop dijalankan oleh cron `/api/cron/autonomy` setiap 5 menit ([ADR 016](../adr/016-autonomy-loop-cron-scheduling.md)):
+
+- `runScheduledTick()` (`lib/ai/loop-scheduler.ts`) membaca baris tunggal `AutonomyLoopState` (dibuat dengan `paused = true`).
+- Lewati dengan `skipped:"disabled"` bila `ENABLE_AI_AUTONOMY=false`, `skipped:"paused"` bila loop dijeda, `skipped:"not_due"` bila `nextRunAt` masih lebih dari 30 detik lagi (toleransi jitter cron), dan `skipped:"locked"` bila tick lain memegang lease `claimedUntil` (4 menit).
+- Satu tick memanggil `runLoop()` dengan state yang tersimpan (`lastIntervalMs`, `lastConcurrency`, `lastTelemetry` sebagai `previousTelemetry`), lalu menyimpan `nextRunAt = now + max(interval adaptif, 5 menit)`. **Interval minimum efektif di produksi adalah 5 menit**, meskipun scaler menghitung 1–15 menit.
+- `?force=1` menjalankan tick yang belum jatuh tempo (tetap tunduk pada `paused` dan lease).
+- **Loop dikirim dalam keadaan dijeda.** Setelah deploy pertama, platform admin harus menekan **Resume** di `/devtools/ai-autonomy`; langkahnya ada di [DEPLOYMENT.md](../DEPLOYMENT.md#enabling-the-autonomy-loop).
 
 ## Telemetry & Audit
 
@@ -68,6 +78,8 @@ npm run lint && npm run test && CI=1 npm run build
 Tes baru meliputi:
 
 - `lib/__tests__/loop.test.ts`
+- `lib/__tests__/loop-scheduler.test.ts`
+- `test/integration/db/autonomy-cron.test.ts`
 - `lib/__tests__/priority.test.ts`
 - `lib/__tests__/recovery-agent.test.ts`
 - `lib/__tests__/scaler.test.ts`

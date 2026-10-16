@@ -1,7 +1,7 @@
 # 9. Autonomous Loop Adaptive Scaling
 
 ## Status
-Accepted
+Accepted. Superseded in part by [ADR 016](016-autonomy-loop-cron-scheduling.md): the loop is now scheduled by a Vercel cron with its state in the database, not by an in-process timer.
 
 ## Context
 Our AI agents operate in an autonomous optimization loop, continuously monitoring telemetry and adjusting platform parameters. These agents must run continuously without manual intervention. However, system load varies, and aggressive optimization during high-traffic periods could destabilize the platform.

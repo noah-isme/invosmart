@@ -13,7 +13,7 @@ flowchart LR
     Browser[Browser<br/>workspace members]
     Recipient[Invoice recipient<br/>public share link]
     ApiClient[Customer API client<br/>Bearer inv_live_ key]
-    Cron[Vercel Cron<br/>every 5 min]
+    Cron[Vercel Cron<br/>every 5 min + daily]
     Peers[Federation peers]
 
     subgraph Vercel["Next.js app (Vercel)"]
@@ -66,7 +66,7 @@ flowchart LR
 | Pages | Authenticated app (`app/app/*`), auth pages (`app/auth/*`), platform-admin DevTools (`app/devtools/*`), public invoice share page (`app/share/[id]`), public receipt verification (`app/receipts/[id]/verify`) | `app/` |
 | Route handlers | Browser-session JSON API (72 `route.ts` files) | `app/api/` |
 | Customer API | Versioned API authenticated by workspace API keys | `app/api/v1/`, `lib/api-v1/` |
-| PostgreSQL | System of record for every entity (32 Prisma models) | `prisma/schema.prisma` |
+| PostgreSQL | System of record for every entity (35 Prisma models) | `prisma/schema.prisma` |
 | Upstash Redis | Optional. Used for the AI event stream, scaler state, theme-suggestion cache, and v1 rate limiting and idempotency. Each use has an in-process fallback (see §6) | `lib/ai/orchestrator.ts`, `lib/ai/scaler.ts`, `lib/cache/`, `lib/api-v1/redis.ts` |
 
 ## 2. Domains
@@ -126,7 +126,7 @@ flowchart LR
 - **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The primary is chosen by configuration; when both keys are set, a timeout, network error or HTTP 408/429/5xx is retried once on the other provider, and every call is bounded by `AI_REQUEST_TIMEOUT_MS` (default 20 s). See [ADR 012](./adr/012-gemini-first-ai-provider.md).
 - **Uses**: invoice composition from natural language (`app/api/invoices/ai`), receipt scanning, invoice insight, theme suggestions, and recommendation explanations.
 - **Autonomous agent subsystem**: six agents (optimizer, learning, governance, insight, recovery, federation) communicate through the MAP protocol and an orchestrator. Each is gated by `ENABLE_AI_*` flags. Content variants are scored with LinUCB ([ADR 013](./adr/013-linucb-content-selection.md)). Details: [docs/ai/](./ai/) and [AGENTS.md](../AGENTS.md).
-  - The autonomy loop (`lib/ai/loop.ts`) runs in-process on `setTimeout`. A platform admin starts it through `/api/devtools/autonomy`, and no cron schedules it. On serverless instances it lasts only as long as the instance does.
+  - The autonomy loop (`lib/ai/loop.ts`) is driven by the `/api/cron/autonomy` cron every 5 minutes (`lib/ai/loop-scheduler.ts`). The schedule, the scaler state and the pause flag persist in `AutonomyLoopState`, so the effective minimum interval in production is 5 minutes. The loop ships paused; a platform admin resumes it through `/api/devtools/autonomy`. The in-process `setTimeout` loop remains for local development only. See [ADR 016](./adr/016-autonomy-loop-cron-scheduling.md).
 
 ## 3. Key flows
 
@@ -176,9 +176,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Telemetry[PostHog / Sentry metrics] --> Loop[lib/ai/loop.ts]
+    Cron["/api/cron/autonomy<br/>every 5 min"] --> Loop[lib/ai/loop.ts]
+    Telemetry[PostHog / Sentry metrics] --> Loop
+    State[(AutonomyLoopState<br/>paused, nextRunAt, scaler state)] <--> Cron
     Loop --> Priority[Agent priorities]
-    Loop --> Scaler[lib/ai/scaler.ts<br/>concurrency 1–6, interval 1–15 min]
+    Loop --> Scaler[lib/ai/scaler.ts<br/>concurrency 1–6, interval 1–15 min<br/>5 min floor in production]
     Loop --> Recovery[Recovery sweep / rollback]
     Loop --> Orchestrator[lib/ai/orchestrator.ts]
     Orchestrator --> Stream[(Redis stream or in-memory)]
@@ -272,4 +274,4 @@ test/                    # e2e (Playwright), integration (Vitest + PGlite)
 
 ## 7. Deployment
 
-The app runs on Vercel, and three Vercel crons each run every 5 minutes (`vercel.json`). CI and release run in `.github/workflows/release.yml`. The `deploy` job applies database migrations (`prisma migrate deploy`) before `vercel deploy --prod`. [DEPLOYMENT.md](./DEPLOYMENT.md) covers the release order, migrations, rollback and environment configuration.
+The app runs on Vercel with five Vercel crons (`vercel.json`): four every 5 minutes (uptime, reminders, reminder delivery, autonomy loop) and the daily retention purge. CI and release run in `.github/workflows/release.yml`. The `deploy` job applies database migrations (`prisma migrate deploy`) before `vercel deploy --prod`. [DEPLOYMENT.md](./DEPLOYMENT.md) covers the release order, migrations, rollback and environment configuration.
