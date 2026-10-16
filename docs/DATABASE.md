@@ -173,7 +173,7 @@ erDiagram
 | `Organization` | A workspace. Every signup gets a personal one (`lib/workspace-provisioning.ts`). Holds workspace branding and currency. | Owns members, invoices, clients, templates, invitations, notification endpoints, reminder rules, API keys. | Root of a tenant | — |
 | `Membership` | The user ↔ workspace link that carries the role. It is the only source of authorization. | `@@unique([organizationId, userId])`. Cascades with both sides. | Workspace | `WorkspaceRole`: `OWNER`, `ADMIN`, `MEMBER`, `VIEWER` |
 | `WorkspaceInvitation` | A one-time invitation that expires after seven days. Only the SHA-256 `tokenHash` is stored. | `invitedById` → `User`. `tokenHash` is unique. | Workspace | `WorkspaceRole` (only `ADMIN`/`MEMBER`/`VIEWER` can be invited). State is implied by `acceptedAt` / `revokedAt` / `expiresAt`. |
-| `WorkspaceNotificationEndpoint` | Per-workspace provider settings (currently Slack). The webhook URL is stored encrypted in `secretCiphertext` with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY`. | `@@unique([organizationId, type])` | Workspace | `enabled` flag |
+| `WorkspaceNotificationEndpoint` | Per-workspace provider settings (currently Slack). The webhook URL is stored encrypted in `secretCiphertext` with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (AES-256-GCM): `v1:<iv>:<tag>:<ct>` (legacy) or `v2:<key fingerprint>:<iv>:<tag>:<ct>`. `npm run secrets:reencrypt` rewrites every row with the active key after a rotation ([SECURITY.md](../SECURITY.md#notification-key-rotation)). | `@@unique([organizationId, type])` | Workspace | `enabled` flag |
 
 ### 4.4 Invoicing & clients
 

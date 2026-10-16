@@ -265,7 +265,9 @@ There are two separate uses:
 
 1. **Workspace notifications.** Each workspace stores its own incoming-webhook
    URL, encrypted with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (AES-256-GCM,
-   `lib/team/secrets.ts`).
+   `lib/team/secrets.ts`; format `v1`, or `v2` with a key fingerprint, and
+   previous keys accepted from `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING`;
+   rotation in [SECURITY.md](../SECURITY.md#notification-key-rotation)).
    - Only `hooks.slack.com` and `hooks.slack-gov.com` URLs are accepted
      (`lib/team/slack.ts`).
    - Requests time out after 5 s. Up to 3 attempts with a 250 ms backoff, and

@@ -31,11 +31,33 @@ Production must set every variable marked required in `.env.example`, plus:
 - `WORKSPACE_AUTH_MODE=enforce` (after the backfill; see [Workspace auth mode](#workspace-auth-mode))
 - `ADMIN_USER_IDS`
 - `CRON_SECRET`
-- `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY`
+- `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (plus `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING` during a rotation, and `WORKSPACE_NOTIFICATION_ENCRYPTION_V2_WRITE=true` once v2 writes are enabled; see [Rotating the notification key](#rotating-the-notification-key))
 - the Stripe, Midtrans and Resend keys and webhook secrets
 - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, so `/api/v1` rate limits and idempotency hold across instances
 
 `INVOSMART_E2E_PROVIDER_BASE_URL` must never be set outside the e2e suite.
+
+### Rotating the notification key
+
+`WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` encrypts workspace Slack webhook URLs.
+The formats, the one-time enablement of v2 writes and the rotation runbook are
+in [SECURITY.md](../SECURITY.md#notification-key-rotation). The deploy-side
+steps:
+
+1. Once (before the first rotation): after a release with the v2 reader is
+   live and Slack delivery is verified, set
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_V2_WRITE=true` and redeploy. From then
+   on, rolling back to a build without the v2 reader is unsafe.
+2. In the Vercel production environment, set the new key as
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` and put the old key in
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING`. Deploy.
+3. From a trusted machine, with the production `DATABASE_URL` and the same
+   three key variables exported, run `npm run secrets:reencrypt` (dry run),
+   then `npm run secrets:reencrypt -- --apply`. Run it on staging first.
+4. On the next deploy, remove the old key from
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING`.
+
+Recommended cadence: quarterly.
 
 ## Release flow
 

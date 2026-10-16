@@ -229,16 +229,57 @@ values in the Vercel project settings and staging values in the GitHub
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Checkout, webhook verification | Rotate in the Stripe dashboard first, then redeploy |
 | `MIDTRANS_SERVER_KEY` | Snap API and webhook signatures | Same as above, in the Midtrans dashboard |
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | Email sending, webhook verification | Same as above, in Resend |
-| `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` | AES-256-GCM encryption of workspace Slack webhook URLs (`lib/team/secrets.ts`) | No key versioning: existing ciphertexts cannot be decrypted with a new key, so every workspace must re-enter its Slack endpoint |
+| `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY`, `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING` | AES-256-GCM encryption of workspace Slack webhook URLs (`lib/team/secrets.ts`) | Keep the old key in the keyring and re-encrypt; see [Notification key rotation](#notification-key-rotation) |
 | `FEDERATION_TOKEN_SECRET`, `FEDERATION_PRIVATE_KEY` | Federation signatures and peer auth | Coordinate with every peer |
 | `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `SENTRY_AUTH_TOKEN`, `POSTHOG_API_KEY`, `UPSTASH_REDIS_REST_TOKEN` | Third-party access | Rotate at the provider |
 
 `INVOSMART_E2E_PROVIDER_BASE_URL` is test-only. The app refuses to start with
 it on Vercel or with live provider keys, and `release:certify` rejects it.
 
-> **Open decision:** there is no rotation schedule, and
-> `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` has no key-versioning support, so
-> rotating it is a breaking change for every workspace.
+### Notification key rotation
+
+Workspace Slack webhook URLs (`WorkspaceNotificationEndpoint.secretCiphertext`)
+are encrypted with AES-256-GCM (`lib/team/secrets.ts`) in one of two formats:
+
+- `v1:<iv>:<tag>:<ciphertext>`: legacy. The key is not recorded, so the
+  reader tries the active key, then each keyring key.
+- `v2:<fingerprint>:<iv>:<tag>:<ciphertext>`: the fingerprint is the first 8
+  hex characters of SHA-256 of the key, and the reader picks that key from the
+  keyring. An unknown fingerprint fails closed (the delivery is marked
+  `invalid_config`).
+
+`WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` is the active key (it encrypts);
+`WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING` lists previous keys, comma
+separated, that are still accepted for decryption.
+
+**One-time enablement of v2 writes.** New ciphertexts stay `v1` until
+`WORKSPACE_NOTIFICATION_ENCRYPTION_V2_WRITE=true`, so the release that added
+the v2 reader can be rolled back safely until then.
+
+1. Deploy the release with the v2 reader (flag unset).
+2. Verify that Slack reminder delivery still works.
+3. Set `WORKSPACE_NOTIFICATION_ENCRYPTION_V2_WRITE=true` and redeploy.
+
+After the first `v2` write, rolling back to a build without the v2 reader is
+unsafe: that build cannot decrypt `v2` endpoints.
+
+**Rotation runbook** (requires v2 writes to be enabled):
+
+1. Generate a new key (`openssl rand -base64 32`). Set it as
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` and move the old key into
+   `WORKSPACE_NOTIFICATION_ENCRYPTION_KEYRING`.
+2. Deploy. Existing endpoints keep working through the keyring.
+3. Run `npm run secrets:reencrypt` (dry run) and then
+   `npm run secrets:reencrypt -- --apply` with the production `DATABASE_URL`
+   and the same key variables. The script re-encrypts every endpoint with the
+   active key, verifies each new value before writing, never overwrites a
+   secret changed while it runs (`skipped_concurrent`), and prints counts and
+   failing ids only. Re-run it until `failed` and `skipped_concurrent` are 0.
+4. Remove the old key from the keyring on the next deploy.
+
+Rotate this key quarterly, and immediately if it may have leaked. The steps
+for the deploy side are in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#rotating-the-notification-key).
 
 ## Data privacy
 
