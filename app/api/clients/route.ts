@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       where: { ...scope, email: parsed.data.email },
     });
     if (existing) {
-      return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });
+      return clientEmailConflict();
     }
   }
 

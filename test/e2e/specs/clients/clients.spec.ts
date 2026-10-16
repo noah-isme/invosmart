@@ -10,8 +10,8 @@
 //   (window.confirm, refused while the client has invoices) and calls
 //   notFound() for a client outside the active workspace.
 // - POST /api/clients first looks for a client with the same email in the
-//   caller's workspace scope and answers 400 "A client with this email already
-//   exists." (a plain string, not a field error); only then does
+//   caller's workspace scope and answers 409 { code: "CLIENT_EMAIL_CONFLICT",
+//   field: "email" }; only then does
 //   prisma.client.create run, where @@unique([organizationId, email]) and
 //   @@unique([userId, email]) (prisma/schema.prisma) apply. A P2002 from
 //   create answers 409 { code: "CLIENT_EMAIL_CONFLICT", field: "email" }
@@ -121,8 +121,8 @@ test.describe("CLI-03 duplicate client email", () => {
       // pre-check (scope { organizationId: W }) answers before
       // @@unique([organizationId, email]) is reached.
       const duplicate = await b.api.post("/api/clients", { organizationId: workspace, data: { name: `E2E CLI-03 ${tag()}`, email } });
-      expect(duplicate.status()).toBe(400);
-      expect(typeof (await duplicate.json()).error).toBe("string");
+      expect(duplicate.status()).toBe(409);
+      expect(await duplicate.json()).toMatchObject({ code: "CLIENT_EMAIL_CONFLICT", field: "email" });
 
       // B in B's own workspace: different organisation and user, so 201.
       const own = await b.api.post("/api/clients", {

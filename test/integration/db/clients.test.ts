@@ -36,7 +36,8 @@ describe("CLI-INT-01 client email uniqueness", () => {
 
     // The workspace-scoped pre-check still answers first inside one workspace.
     const duplicate = await post(organization.id, { name: `Int client ${uid()}`, email });
-    expect(duplicate.status).toBe(400);
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ code: "CLIENT_EMAIL_CONFLICT", field: "email" });
 
     // The connection survives the constraint violation: a different email in
     // the second workspace is created.
