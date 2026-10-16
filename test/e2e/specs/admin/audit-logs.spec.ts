@@ -12,8 +12,9 @@
 //   the rows whose tenantId is the caller's resolved workspace, newest first
 //   (createdAt desc), filters action/entity/userId/fromDate/toDate,
 //   limit (1..100, default 50)/skip, `total`; a tenantId other than the
-//   caller's workspace -> 403. AUD-INT-01 (integration layer) covers the
-//   signIn entry, whose tenantId is null and so never shows up here.
+//   caller's workspace -> 403. AUD-INT-01/02 (integration layer) cover the
+//   signIn and registration entries, tenanted to the active/personal
+//   workspace so they show up here.
 // - GET /api/admin/audit-log (singular) is `export { GET } from
 //   "../audit-logs/route"`; /app/admin/audit-log (singular page) is
 //   `export { default } from "../audit-logs/page"`. AUD-03 documents that they

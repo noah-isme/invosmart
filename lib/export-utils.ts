@@ -9,15 +9,32 @@ export interface InvoiceExportData {
 }
 
 /**
+ * Leading characters that make spreadsheet apps evaluate a cell as a formula,
+ * including after leading whitespace (spaces, NBSP and other Unicode spaces),
+ * which Excel and LibreOffice skip when parsing a cell.
+ */
+const FORMULA_TRIGGER = /^[=+\-@\t\r]|^[\s\u00a0]+[=+\-@]/;
+
+/**
  * Escapes a cell value for CSV formatting per RFC 4180 rules.
  * If the value contains commas, double quotes, or line breaks,
  * it is wrapped in double quotes and any internal double quotes are doubled.
+ *
+ * CSV injection (OWASP): a STRING value starting with `=`, `+`, `-`, `@`, tab
+ * or carriage return (optionally after leading whitespace) is prefixed with a
+ * single quote so spreadsheet apps show it as text instead of evaluating it. Only strings are prefixed: numbers
+ * (the Total column is passed as a number) are written unchanged, so a
+ * negative amount stays a number. A text field that happens to start with
+ * `-` or `+` (e.g. "+62 811...") is prefixed too; that is intended.
  */
 export function escapeCSVCell(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
-  const str = String(value);
+  let str = String(value);
+  if (typeof value === "string" && FORMULA_TRIGGER.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -25,16 +42,50 @@ export function escapeCSVCell(value: unknown): string {
 }
 
 /**
- * Formats a date into YYYY-MM-DD format for export output.
+ * Business timezone for exported calendar dates. Neither Invoice nor
+ * Organization stores a timezone, so every export uses the Indonesian
+ * business date (WIB, UTC+7, no DST).
  */
-export function formatDateForExport(val: string | Date | null | undefined): string {
+export const EXPORT_TIME_ZONE = "Asia/Jakarta";
+
+/** An ISO 8601 date-time that pins an instant (ends in Z or a ±hh:mm offset). */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:?\d{2})$/i;
+
+const calendarDateIn = (instant: Date, timeZone: string): string => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+
+/**
+ * Formats a date into YYYY-MM-DD format for export output, as the calendar
+ * date in `timeZone` (default Asia/Jakarta), not the UTC date.
+ *
+ * - Date objects and ISO strings with Z or an offset are instants and are
+ *   converted to the business date (2026-10-09T17:30:00Z -> 2026-10-10).
+ * - Date-only strings ("2026-10-09") and date-times without a zone are
+ *   already calendar values: their date part is kept unchanged.
+ */
+export function formatDateForExport(
+  val: string | Date | null | undefined,
+  timeZone: string = EXPORT_TIME_ZONE,
+): string {
   if (!val) return "";
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return "";
-    return val.toISOString().split("T")[0];
+    return calendarDateIn(val, timeZone);
   }
   const str = String(val).trim();
   if (!str) return "";
+  if (ISO_INSTANT.test(str)) {
+    const instant = new Date(str);
+    if (!isNaN(instant.getTime())) return calendarDateIn(instant, timeZone);
+  }
   if (str.includes("T")) {
     return str.split("T")[0];
   }
@@ -85,7 +136,12 @@ export function exportToCSV(invoices: InvoiceExportData[]): string {
 export const generateCSV = exportToCSV;
 
 /**
- * Exports an array of invoice export data into SpreadsheetML XML format (.xlsx compatible).
+ * Exports an array of invoice export data as an Excel 2003 XML Spreadsheet
+ * (SpreadsheetML). This is NOT an OOXML .xlsx (a ZIP package): serve it as
+ * `.xml` with `application/vnd.ms-excel`, which Excel and LibreOffice open as
+ * a workbook. The name is kept for the `?format=xlsx` API value.
+ * Text goes into <Data ss:Type="String"> cells, which are never evaluated as
+ * formulas, so no CSV-style formula prefix is needed here.
  * Required columns: Invoice Number, Client Name, Status, Issued Date, Due Date, Total, Currency.
  */
 export function exportToXLSX(invoices: InvoiceExportData[]): string {
@@ -124,12 +180,12 @@ export function exportToXLSX(invoices: InvoiceExportData[]): string {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-microsoft-com:office:spreadsheet"
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- <DocumentProperties xmlns="urn:schemas-microsoft-microsoft-com:office:office">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
   <Author>InvoSmart</Author>
  </DocumentProperties>
  <Styles>

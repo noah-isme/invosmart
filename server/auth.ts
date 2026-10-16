@@ -204,6 +204,39 @@ const handleGoogleSignIn = async ({
   }
 };
 
+/**
+ * AUTH_LOGIN_SUCCESS belongs to the user's active workspace (when they have
+ * one and are still a member), so the workspace-scoped audit API lists it. Never throws: the lookup
+ * and the write are best-effort like every audit entry.
+ */
+const logSignInSuccess = async (userId: string | null, email: string | null, provider: string) => {
+  let tenantId: string | null = null;
+  if (userId) {
+    try {
+      const row = await db.user.findUnique({ where: { id: userId }, select: { activeOrganizationId: true } });
+      const activeOrganizationId = row?.activeOrganizationId ?? null;
+      if (activeOrganizationId) {
+        // activeOrganizationId is not cleared when a member is removed, so only
+        // tenant the entry to a workspace the user still belongs to.
+        const membership = await db.membership.findUnique({
+          where: { organizationId_userId: { organizationId: activeOrganizationId, userId } },
+          select: { id: true },
+        });
+        tenantId = membership ? activeOrganizationId : null;
+      }
+    } catch {
+      // Fall back to an untenanted entry rather than losing the audit row.
+    }
+  }
+  await logAuditEvent({
+    tenantId,
+    userId,
+    action: AuditAction.AUTH_LOGIN_SUCCESS,
+    entity: AuditEntity.AUTH,
+    details: { provider, email },
+  });
+};
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   providers,
@@ -213,15 +246,7 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signIn({ user, account }) {
-      void logAuditEvent({
-        userId: user?.id ?? null,
-        action: AuditAction.AUTH_LOGIN_SUCCESS,
-        entity: AuditEntity.AUTH,
-        details: {
-          provider: account?.provider ?? "credentials",
-          email: user?.email ?? null,
-        },
-      });
+      void logSignInSuccess(user?.id ?? null, user?.email ?? null, account?.provider ?? "credentials");
     },
     async signOut({ token, session }) {
       const userId = token?.sub ?? (session as { user?: { id?: string } })?.user?.id ?? null;

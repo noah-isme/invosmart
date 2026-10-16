@@ -109,7 +109,12 @@ export const consumeApiRateLimit = async (
   return consumeLocal(identifier, bucket, limit, now, windowMs);
 };
 
-export const isRateLimited = (state: ApiRateLimitState) => state.remaining <= 0;
+/**
+ * `remaining` is computed after the current request was counted, so the
+ * limit-th request leaves 0 and is still allowed; only a request beyond the
+ * limit (remaining < 0) is refused. Exactly `limit` requests succeed per window.
+ */
+export const isRateLimited = (state: ApiRateLimitState) => state.remaining < 0;
 
 export const rateLimitHeaders = (state: ApiRateLimitState) => ({
   "x-ratelimit-limit": String(state.limit),

@@ -16,6 +16,7 @@ const requestSchema = z.object({
     recommendedAt: z.string(),
     day: z.string(),
     hour: z.number().int(),
+    // Ignored: the gate recomputes the confidence server-side (lib/ai/scheduler.ts).
     confidence: z.number(),
     reason: z.string(),
     quotaRemaining: z.number(),

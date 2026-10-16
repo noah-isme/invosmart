@@ -21,6 +21,11 @@
 - Payments: correct line items sent to Stripe and Midtrans; Stripe minor units for IDR; non-IDR invoices rejected on Midtrans; settlement serialised per attempt; manual `PAID` handled; Stripe refunds for attempts without a `Payment`; fully refunded payments ignored when detecting duplicate settlement.
 - Workspaces: personal workspace provisioned at signup, provisioning race locked, and a safe backfill script for stranded users (`npm run db:backfill-workspaces`).
 - `/app-settings` now requires a session.
+- Export: Excel export is an Excel 2003 XML Spreadsheet served as `.xml` with the correct namespace; export dates use the Asia/Jakarta business date; CSV cells that start with `=`, `+`, `-`, `@` (also behind leading whitespace) are neutralised.
+- Clients: a duplicate client email answers 409 `CLIENT_EMAIL_CONFLICT` on both create and update instead of 400/500.
+- Audit: payment settlement, registration and sign-in rows are tenanted, and sign-in rows only land in workspaces the user still belongs to.
+- Customer API v1: the rate limiter admits exactly the advertised number of requests per window.
+- AI: schedule applies consume the daily auto-publish quota and gate on server-side confidence.
 
 ### Security
 - Platform admin access is keyed on `ADMIN_USER_IDS` (user ids). `ADMIN_EMAILS` / `NEXT_PUBLIC_ADMIN_EMAILS` are deprecated and ignored.

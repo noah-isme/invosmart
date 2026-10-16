@@ -9,6 +9,7 @@ import { logAuditEvent, AuditAction, AuditEntity, getClientIp } from "@/lib/audi
 import {
   canReadWorkspace,
   canWriteWorkspace,
+  isUniqueConstraintError,
   resolveWorkspaceContextForRequest,
   workspaceData,
   workspaceScope,
@@ -17,6 +18,16 @@ import {
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 const notFound = () => NextResponse.json({ error: "Client not found" }, { status: 404 });
 const forbidden = () => NextResponse.json({ error: "Workspace access denied" }, { status: 403 });
+// Same body as POST /api/clients (route files cannot export shared helpers).
+const clientEmailConflict = () =>
+  NextResponse.json(
+    {
+      error: "A client with this email already exists for your account.",
+      code: "CLIENT_EMAIL_CONFLICT",
+      field: "email",
+    },
+    { status: 409 },
+  );
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const httpsCheck = enforceHttps(request);
@@ -82,14 +93,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       where: { ...scope, email: parsed.data.email },
     });
     if (existingEmail) {
-      return NextResponse.json({ error: "A client with this email already exists." }, { status: 400 });
+      return clientEmailConflict();
     }
   }
 
-  const client = await db.client.update({
-    where: { id },
-    data: { ...parsed.data, ...workspaceData(workspace) }
-  });
+  let client;
+  try {
+    client = await db.client.update({
+      where: { id },
+      data: { ...parsed.data, ...workspaceData(workspace) }
+    });
+  } catch (error) {
+    // The pre-check above is workspace-scoped, but the schema also has
+    // @@unique([userId, email]): the same user reusing a client email from
+    // another workspace (or an update racing the pre-check) lands here.
+    if (isUniqueConstraintError(error)) {
+      return clientEmailConflict();
+    }
+    throw error;
+  }
 
   void logAuditEvent({
     tenantId: workspace.organizationId,

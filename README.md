@@ -158,7 +158,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | Domain | Route prefixes | Reference |
 |--------|----------------|-----------|
 | **Auth** | `/api/auth/[...nextauth]`, `/api/auth/register` | [SECURITY.md](./SECURITY.md) |
-| **Invoices** | `/api/invoices`, `/api/invoices/[id]` (+ `/pdf`, `/send-email`), `/api/invoices/export`, `/api/invoices/templates/*`, `/api/invoices/ai`, `/api/clients/*` | session API, workspace-scoped |
+| **Invoices** | `/api/invoices`, `/api/invoices/[id]` (+ `/pdf`, `/send-email`), `/api/invoices/export` (CSV, or `?format=xlsx` for an Excel 2003 XML Spreadsheet served as `.xml`), `/api/invoices/templates/*`, `/api/invoices/ai`, `/api/clients/*` | session API, workspace-scoped |
 | **Payments** | `/api/payments`, `/api/payments/[attemptId]`, `/api/payments/{stripe,midtrans}/*` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
 | **Workspaces & team** | `/api/workspaces/*` (members, invitations, API keys, notifications, reminder rules), `/api/workspace-invitations/[token]/accept` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |
 | **Customer API v1** | `/api/v1/invoices/*`, `/api/v1/clients/*`, `/api/openapi.json` | [docs/API.md](./docs/API.md) |

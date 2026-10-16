@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
     }>({ name, email, password: hashedPassword });
 
     void logAuditEvent({
+      // The personal workspace provisioned above, so the workspace audit log lists it.
+      tenantId: user.activeOrganizationId,
       userId: user.id,
       action: AuditAction.AUTH_REGISTER,
       entity: AuditEntity.USER,

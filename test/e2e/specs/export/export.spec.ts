@@ -10,12 +10,15 @@
 //   workspace's invoices (workspaceScope), newest first, no row limit.
 // - CSV: header "Invoice Number,Client Name,Status,Issued Date,Due Date,Total,Currency",
 //   CRLF line breaks, RFC 4180 quoting only for '"', ',', CR, LF
-//   (escapeCSVCell); no formula neutralising (EXP-05). Dates are
-//   toISOString().split("T")[0], i.e. the UTC date (EXP-06).
-// - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text, served with the
-//   OOXML content type and an .xlsx file name (EXP-02 product bug).
+//   (escapeCSVCell); text cells starting with = + - @ TAB CR get a leading
+//   single quote (CSV injection, EXP-05). Dates are the Asia/Jakarta
+//   calendar date of the stored instant (formatDateForExport, EXP-06).
+// - "xlsx": exportToXLSX returns SpreadsheetML 2003 XML text (namespace
+//   urn:schemas-microsoft-com:office:spreadsheet), served as
+//   application/vnd.ms-excel with an .xml file name (EXP-02).
 import { expect, test, type Api } from "../../fixtures";
 import type { InvoiceRecord } from "../../support/api-factories";
+import { jakartaDate } from "../../support/dates";
 
 const covers = (...routes: string[]) => routes.map((description) => ({ type: "covers", description }));
 const EXPORT = "/api/invoices/export";
@@ -97,8 +100,8 @@ test.describe("export", () => {
           "Invoice Number": invoice.number,
           "Client Name": invoice.client,
           Status: invoice.status,
-          "Issued Date": invoice.issuedAt.slice(0, 10),
-          "Due Date": invoice.dueAt?.slice(0, 10) ?? "",
+          "Issued Date": jakartaDate(invoice.issuedAt),
+          "Due Date": invoice.dueAt ? jakartaDate(invoice.dueAt) : "",
           Total: String(invoice.total),
           Currency: "IDR",
         });
@@ -110,17 +113,8 @@ test.describe("export", () => {
   );
 
   test(
-    "EXP-02 ?format=xlsx returns SpreadsheetML XML (<?xml ... <Workbook) under an .xlsx name",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "?format=xlsx serves SpreadsheetML 2003 XML (starts with <?xml, root <Workbook>) with the OOXML content type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet and an .xlsx file name; a real .xlsx is a ZIP (PK\\x03\\x04). Excel warns about the format/extension mismatch. The Workbook namespace is also misspelled (urn:schemas-microsoft-microsoft-com:office:spreadsheet). Fix belongs to lib/export-utils.ts (momus-gated).",
-        },
-      ],
-    },
+    "EXP-02 ?format=xlsx returns SpreadsheetML XML labelled as such (.xml, application/vnd.ms-excel, correct namespace)",
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
       const { api, factory } = await newApiUser("exp02");
       const invoice = await factory.createInvoice({ client: `EXP-02 <&> ${tag()}` });
@@ -128,15 +122,18 @@ test.describe("export", () => {
       const response = await api.get(`${EXPORT}?format=xlsx`);
       expect(response.status()).toBe(200);
       const headers = response.headers();
-      expect(headers["content-disposition"]).toMatch(/filename="invoices-export-\d{4}-\d{2}-\d{2}\.xlsx"$/);
-      test.info().annotations.push({ type: "observed-content-type", description: headers["content-type"] });
+      // Excel 2003 XML is not an OOXML zip, so it is not served as .xlsx.
+      expect(headers["content-type"]).toBe("application/vnd.ms-excel; charset=utf-8");
+      expect(headers["content-disposition"]).toMatch(/^attachment; filename="invoices-export-\d{4}-\d{2}-\d{2}\.xml"$/);
 
       const body = await response.body();
-      // Actual bytes: XML text, not a ZIP container.
       expect(body.subarray(0, 2).toString("latin1")).not.toBe("PK");
       const text = body.toString("utf8");
       expect(text.startsWith("<?xml")).toBe(true);
-      expect(text).toContain("<Workbook");
+      expect(text).toContain('<?mso-application progid="Excel.Sheet"?>');
+      expect(text).toContain('<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(text).toContain('xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"');
+      expect(text).not.toContain("microsoft-microsoft");
       expect(text).toContain('<Worksheet ss:Name="Invoices">');
       expect(text).toContain(`<Data ss:Type="String">${invoice.number}</Data>`);
       // The client name is XML-escaped.
@@ -194,18 +191,8 @@ test.describe("export", () => {
 
   test(
     "EXP-05 a formula-like client name is neutralised in the CSV (CSV injection)",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "CSV formula injection: escapeCSVCell only applies RFC 4180 quoting, so a client named =HYPERLINK(\"http://evil.example\",\"x\") is exported as \"=HYPERLINK(\"\"http://evil.example\"\",\"\"x\"\")\", which spreadsheet apps evaluate as a formula. Desired: cells starting with = + - @ TAB CR are prefixed (e.g. with ') so they are text.",
-        },
-      ],
-    },
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
-      test.fail(true, "product bug: CSV export does not neutralise formula cells (lib/export-utils.ts escapeCSVCell, momus-gated)");
       const { api, factory } = await newApiUser("exp05");
       const formula = '=HYPERLINK("http://evil.example","x")';
       const client = await factory.createClient({ name: formula });
@@ -221,44 +208,35 @@ test.describe("export", () => {
         { type: "observed-client-cell", description: record!["Client Name"] },
       );
 
-      // Desired: the parsed cell is not a formula (no leading = + - @ TAB CR)
-      // and still carries the original text.
+      // The parsed cell is not a formula (no leading = + - @ TAB CR): it is the
+      // original text behind a single-quote prefix (escapeCSVCell).
       expect(record!["Client Name"], "client cell must not start a formula").not.toMatch(/^[=+\-@\t\r]/);
-      expect(record!["Client Name"]).toContain("HYPERLINK");
+      expect(record!["Client Name"]).toBe(`'${formula}`);
+      expect(rawLine).toBe(`${invoice.number},"'=HYPERLINK(""http://evil.example"",""x"")",${record!.Status},${record!["Issued Date"]},${record!["Due Date"]},${invoice.total},IDR`);
     },
   );
 
   test(
     "EXP-06 the exported due date is the Asia/Jakarta calendar date",
-    {
-      annotation: [
-        ...covers(EXPORT),
-        {
-          type: "product-bug",
-          description:
-            "formatDateForExport uses toISOString().split(\"T\")[0] (UTC), so dueAt <today>T17:30:00.000Z, which is 00:30 the next day in Asia/Jakarta (UTC+7), is exported as <today>. Desired: the Jakarta date (<today+1>).",
-        },
-      ],
-    },
+    { annotation: covers(EXPORT) },
     async ({ newApiUser }) => {
-      test.fail(true, "product bug: export dates are UTC, not Asia/Jakarta (lib/export-utils.ts formatDateForExport, momus-gated)");
       const { api, factory } = await newApiUser("exp06");
       const utcToday = new Date().toISOString().slice(0, 10);
       const dueAt = `${utcToday}T17:30:00.000Z`;
-      const jakartaDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(dueAt));
+      const expected = jakartaDate(dueAt);
       // A DRAFT with a past dueAt stays DRAFT (only SENT/UNPAID turn OVERDUE).
       const invoice = await factory.createInvoice({ dueAt });
       expect(invoice.dueAt).toBe(dueAt);
-      expect(jakartaDate).not.toBe(utcToday);
+      expect(expected).not.toBe(utcToday);
 
       const { records } = await exportCsv(api);
       const record = byNumber(records, invoice);
       expect(record, "the invoice row is exported").toBeDefined();
       test.info().annotations.push(
-        { type: "observed-due-date", description: `dueAt ${dueAt} exported as ${record!["Due Date"]}; Jakarta date ${jakartaDate}` },
+        { type: "observed-due-date", description: `dueAt ${dueAt} exported as ${record!["Due Date"]}; Jakarta date ${expected}` },
       );
 
-      expect(record!["Due Date"], "due date must be the Asia/Jakarta date").toBe(jakartaDate);
+      expect(record!["Due Date"], "due date must be the Asia/Jakarta date").toBe(expected);
     },
   );
 });
