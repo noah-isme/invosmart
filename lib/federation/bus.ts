@@ -24,7 +24,10 @@ export const generateFederationKeyPair = (): { publicKey: string; privateKey: st
 
 export type FederationBusOptions = {
   tenantId?: string;
+  /** Bearer token sent to peers (FEDERATION_TOKEN_SECRET). Never used as a signing key. */
   secret?: string;
+  /** HMAC-SHA256 signing key (FEDERATION_HMAC_SECRET); must differ from the bearer token. */
+  hmacSecret?: string;
   privateKey?: string;
   publicKey?: string;
   keyId?: string;
@@ -63,6 +66,7 @@ export class FederationBus {
   private readonly emitter = new EventEmitter();
   private readonly tenantId: string;
   private readonly secret: string;
+  private readonly hmacSecret: string;
   private readonly privateKey?: string;
   private readonly publicKey?: string;
   private readonly keyId?: string;
@@ -77,6 +81,7 @@ export class FederationBus {
   constructor(options?: FederationBusOptions) {
     this.tenantId = options?.tenantId ?? process.env.FEDERATION_TENANT_ID ?? "local";
     this.secret = options?.secret ?? process.env.FEDERATION_TOKEN_SECRET ?? "";
+    this.hmacSecret = options?.hmacSecret ?? process.env.FEDERATION_HMAC_SECRET ?? "";
     this.privateKey = options?.privateKey ?? process.env.FEDERATION_PRIVATE_KEY;
     this.publicKey = options?.publicKey ?? process.env.FEDERATION_PUBLIC_KEY;
     this.keyId = options?.keyId ?? process.env.FEDERATION_KEY_ID;
@@ -94,7 +99,10 @@ export class FederationBus {
   get isEnabled() {
     return (
       this.enabled &&
-      (Boolean(this.secret) || Boolean(this.privateKey) || Boolean(this.publicKey))
+      (Boolean(this.secret) ||
+        Boolean(this.hmacSecret) ||
+        Boolean(this.privateKey) ||
+        Boolean(this.publicKey))
     );
   }
 
@@ -154,7 +162,15 @@ export class FederationBus {
       const signature = signer.sign(this.privateKey, "hex");
       return { signature, signatureAlgorithm: "rsa-sha256" };
     }
-    const hmac = createHmac("sha256", this.secret);
+    // The HMAC key is deliberately separate from the bearer token that deliver()
+    // sends to every peer: keying HMAC with the bearer would let any bearer
+    // holder forge events for any tenant. No silent fallback.
+    if (!this.hmacSecret) {
+      throw new Error(
+        "Federation signing key missing: set FEDERATION_PRIVATE_KEY or FEDERATION_HMAC_SECRET",
+      );
+    }
+    const hmac = createHmac("sha256", this.hmacSecret);
     hmac.update(signableString);
     return { signature: hmac.digest("hex"), signatureAlgorithm: "hmac-sha256" };
   }
@@ -376,7 +392,12 @@ export class FederationBus {
           payload: event.payload,
         });
 
-    const senderPublicKey = this.peerPublicKeys[event.tenantId] ?? this.publicKey;
+    const registeredPeerKey = this.peerPublicKeys[event.tenantId];
+    // A tenant with a registered public key must sign with RSA; accepting HMAC
+    // for it would let anyone holding the shared HMAC key impersonate it.
+    if (registeredPeerKey && event.signatureAlgorithm === "hmac-sha256") return false;
+
+    const senderPublicKey = registeredPeerKey ?? this.publicKey;
 
     if (
       event.signatureAlgorithm === "rsa-sha256" ||
@@ -393,9 +414,9 @@ export class FederationBus {
       }
     }
 
-    // Fallback to HMAC-SHA256
-    if (!this.secret) return false;
-    const expected = createHmac("sha256", this.secret).update(signableString).digest();
+    // HMAC-SHA256 with the dedicated HMAC key (never the bearer token).
+    if (!this.hmacSecret) return false;
+    const expected = createHmac("sha256", this.hmacSecret).update(signableString).digest();
     const provided = Buffer.from(event.signature, "hex");
 
     if (expected.length !== provided.length) return false;

@@ -348,6 +348,7 @@ describe("Tier 3: Cross-Feature Interactions E2E Test Suite", () => {
       const bus = new FederationBus({
         tenantId: "tenant-local-32",
         secret: "secret-key-t32",
+        hmacSecret: "secret-key-t32-hmac",
         enabled: true,
       });
 
@@ -503,6 +504,7 @@ describe("Tier 3: Cross-Feature Interactions E2E Test Suite", () => {
       const bus = new FederationBus({
         tenantId: "tenant-local-33",
         secret: "fed-secret-33",
+        hmacSecret: "fed-secret-33-hmac",
         enabled: true,
       });
 

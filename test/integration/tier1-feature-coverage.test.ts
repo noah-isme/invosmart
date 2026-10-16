@@ -652,7 +652,7 @@ describe("Tier 1 E2E Feature Coverage Test Suite", () => {
     });
 
     it("T1.3.3: Event pub/sub subscriptions for telemetry_sync, priority_share, trust_aggregate, model_update", async () => {
-      const bus = new FederationBus({ tenantId: "tenant-sub", secret: "sub-secret", enabled: true });
+      const bus = new FederationBus({ tenantId: "tenant-sub", secret: "sub-secret", hmacSecret: "sub-secret-hmac", enabled: true });
 
       const telemetryListener = vi.fn();
       const priorityListener = vi.fn();

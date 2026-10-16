@@ -27,7 +27,7 @@ describe("FederationAgent", () => {
   let bus: FederationBus;
 
   beforeEach(() => {
-    bus = new FederationBus({ tenantId: "tenant-a", secret: "secret", enabled: true });
+    bus = new FederationBus({ tenantId: "tenant-a", secret: "secret", hmacSecret: "secret-hmac", enabled: true });
   });
 
   it("broadcasts local snapshot and records metrics", async () => {

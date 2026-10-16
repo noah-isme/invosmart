@@ -15,6 +15,7 @@ describe("FederationBus", () => {
     const bus = new FederationBus({
       tenantId: "tenant-a",
       secret,
+      hmacSecret: `${secret}-hmac`,
       endpoints: ["https://tenant-b.com"],
       enabled: true,
       fetchImpl: fetchMock,
@@ -50,8 +51,8 @@ describe("FederationBus", () => {
   });
 
   it("verifies signatures when ingesting remote events", async () => {
-    const producer = new FederationBus({ tenantId: "tenant-a", secret, enabled: true });
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret, enabled: true });
+    const producer = new FederationBus({ tenantId: "tenant-a", secret, hmacSecret: `${secret}-hmac`, enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret, hmacSecret: `${secret}-hmac`, enabled: true });
 
     const listener = vi.fn();
     consumer.subscribe("telemetry_sync", listener);
@@ -73,7 +74,7 @@ describe("FederationBus", () => {
   });
 
   it("rejects events with invalid signatures", async () => {
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret, enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret, hmacSecret: `${secret}-hmac`, enabled: true });
 
     const invalidEvent: FederationEvent = {
       id: "evt-1",
@@ -305,6 +306,7 @@ describe("FederationBus", () => {
     const consumer = new FederationBus({
       tenantId: "tenant-b",
       secret: "secret-key",
+      hmacSecret: "secret-key-hmac",
       peerPublicKeys: { "tenant-a": producerKeys.publicKey },
       enabled: true,
     });
@@ -326,8 +328,8 @@ describe("FederationBus", () => {
   });
 
   it("maintains backward-compatible HMAC fallback when asymmetric keys are absent", async () => {
-    const producer = new FederationBus({ tenantId: "tenant-a", secret: "hmac-secret", enabled: true });
-    const consumer = new FederationBus({ tenantId: "tenant-b", secret: "hmac-secret", enabled: true });
+    const producer = new FederationBus({ tenantId: "tenant-a", secret: "hmac-secret", hmacSecret: "hmac-secret-hmac", enabled: true });
+    const consumer = new FederationBus({ tenantId: "tenant-b", secret: "hmac-secret", hmacSecret: "hmac-secret-hmac", enabled: true });
 
     const { event } = await producer.publish({
       type: "telemetry_sync",
@@ -342,5 +344,53 @@ describe("FederationBus", () => {
     expect(event?.signatureAlgorithm).toBe("hmac-sha256");
     const ingested = await consumer.ingest(event as FederationEvent);
     expect(ingested).toBe(true);
+  });
+  describe("HMAC key separation (FEDERATION_HMAC_SECRET)", () => {
+    const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
+
+    it("rejects an HMAC event signed with the bearer token instead of the HMAC key", async () => {
+      // The attacker only knows the bearer token that deliver() sends to every peer.
+      const forger = new FederationBus({ tenantId: "tenant-a", hmacSecret: "bearer-token", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        secret: "bearer-token",
+        hmacSecret: "real-hmac-key",
+        enabled: true,
+      });
+      const { event } = await forger.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+
+    it("rejects HMAC events for a tenant that has a registered public key", async () => {
+      const keys = generateFederationKeyPair();
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        hmacSecret: "shared-hmac",
+        peerPublicKeys: { "tenant-a": keys.publicKey },
+        enabled: true,
+      });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+      expect(event?.signatureAlgorithm).toBe("hmac-sha256");
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+
+    it("refuses to sign when neither a private key nor the HMAC key is configured", async () => {
+      const bus = new FederationBus({ tenantId: "tenant-a", secret: "bearer-only", enabled: true });
+
+      await expect(bus.publish({ type: "telemetry_sync", payload })).rejects.toThrow(
+        /FEDERATION_PRIVATE_KEY or FEDERATION_HMAC_SECRET/,
+      );
+    });
+
+    it("rejects HMAC events when the consumer has no HMAC key", async () => {
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({ tenantId: "tenant-b", secret: "bearer", enabled: true });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
   });
 });

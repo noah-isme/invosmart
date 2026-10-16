@@ -22,7 +22,7 @@ describe("Empirical Challenge Suite — Milestone M3 Encryption & Bus Stress", (
 
   // 2. High-Frequency Signing & Verification Throughput Benchmark
   it("EMPIRICAL: Compare RSA vs HMAC Signing & Verification Throughput", async () => {
-    const hmacBus = new FederationBus({ tenantId: "tenant-hmac", secret: "secret-123", enabled: true });
+    const hmacBus = new FederationBus({ tenantId: "tenant-hmac", secret: "secret-123", hmacSecret: "secret-123-hmac", enabled: true });
     const rsaKeys = generateFederationKeyPair();
     const rsaBusA = new FederationBus({
       tenantId: "tenant-rsa-a",
@@ -241,12 +241,13 @@ describe("Empirical Challenge Suite — Milestone M3 Encryption & Bus Stress", (
   // 6. Seamless HMAC Fallback Matrix
   it("EMPIRICAL: HMAC Fallback behavior when asymmetric keys are omitted or missing", async () => {
     // Producer has HMAC secret only, no RSA key
-    const producerHMAC = new FederationBus({ tenantId: "prod-hmac", secret: "shared-secret", enabled: true });
+    const producerHMAC = new FederationBus({ tenantId: "prod-hmac", secret: "shared-secret", hmacSecret: "shared-secret-hmac", enabled: true });
     // Consumer has HMAC secret AND RSA keys
     const rsaKeys = generateFederationKeyPair();
     const consumerHybrid = new FederationBus({
       tenantId: "cons-hybrid",
       secret: "shared-secret",
+      hmacSecret: "shared-secret-hmac",
       privateKey: rsaKeys.privateKey,
       publicKey: rsaKeys.publicKey,
       enabled: true,
