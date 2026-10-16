@@ -1,0 +1,7 @@
+# Owners review changes to documentation, security policy, environment
+# reference, agent instructions and the database schema.
+/docs/          @noah-isme
+/SECURITY.md    @noah-isme
+/.env.example   @noah-isme
+/AGENTS.md      @noah-isme
+/prisma/        @noah-isme

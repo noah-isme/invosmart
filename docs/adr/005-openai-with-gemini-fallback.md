@@ -1,7 +1,7 @@
 # 5. OpenAI with Gemini Fallback
 
 ## Status
-Accepted
+Superseded by [ADR 012](012-gemini-first-ai-provider.md)
 
 ## Context
 AI is a core pillar of the InvoSmart platform, powering critical features such as automated invoice generation, OCR receipt scanning, UI theme suggestions, and optimization explanations. We need an AI pipeline that balances extremely high quality, cost-effectiveness, and maximum uptime.

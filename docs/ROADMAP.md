@@ -1,5 +1,7 @@
 # InvoSmart Roadmap & TODOs
 
+> This is the **single status tracker** for phases and features. Other docs (AGENTS.md, archived plans) link here instead of keeping their own checklists.
+
 **Current Version:** v1.2.1-dev (August 2026)
 
 This document outlines the strategic roadmap and upcoming features for InvoSmart. It is divided into three main phases: Near-term, Mid-term, and Long-term.

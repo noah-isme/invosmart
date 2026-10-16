@@ -84,59 +84,11 @@ npm run dev      # → http://localhost:1234
 
 ## 🔐 Environment Variables
 
-Ensure the following environment variables are correctly configured in your `.env` file:
+[`.env.example`](./.env.example) is the single, commented reference for every variable the app reads: what each does, whether it is required, and per-environment notes. Copy it to `.env` and fill in what you need. CI runs `npm run docs:env-check`, which fails when code reads a variable that `.env.example` does not list.
 
-### App
-- `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET`
-- `CRON_SECRET` (required in production for scheduled uptime checks)
-- `NEXT_PUBLIC_APP_VERSION`
-
-### Platform Admin
-- `ADMIN_USER_IDS` (comma-separated `User.id` values that may use DevTools, `/app/admin` global pages, and global admin APIs; empty means nobody outside `next dev`)
-- `ADMIN_EMAILS` / `NEXT_PUBLIC_ADMIN_EMAILS` are **deprecated and ignored** because email addresses are not verified at registration. See [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators).
-
-### Observability
-- `ENABLE_TELEMETRY`
-- `NEXT_PUBLIC_ENABLE_TELEMETRY`
-
-### Analytics
-- `NEXT_PUBLIC_POSTHOG_KEY`
-- `POSTHOG_API_KEY`
-- `SENTRY_DSN`
-
-### OAuth
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-
-### Database
-- `DATABASE_URL`
-
-### AI
-- `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
-
-### AI Agents
-- `ENABLE_AI_OPTIMIZER`
-- `ENABLE_AI_LEARNING`
-- `ENABLE_AI_GOVERNANCE`
-- `ENABLE_AI_AUTONOMY`
-- `ENABLE_AI_FEDERATION`
-- `AI_SA_MAX_AUTOPUBLISH_PER_DAY`
-
-### Media
-- `CLOUDINARY_URL`
-
-### Deployment
-- `VERCEL_TOKEN`
-- `RESEND_WEBHOOK_SECRET`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
-- `STRIPE_WEBHOOK_SECRET`
-- `MIDTRANS_SERVER_KEY`
-
-### Test-only
-- `INVOSMART_E2E_PROVIDER_BASE_URL`: **test-only, never set in any deployed environment.** Redirects the server-side Stripe and Midtrans Snap clients to the Playwright provider stub (`lib/payments/e2e-provider-base.ts`). Accepts loopback `http` URLs only (`127.0.0.1`, `localhost`, `[::1]`); the app refuses to start when it is set together with `VERCEL`/`VERCEL_ENV`, and `npm run release:certify` rejects it. Leave it unset outside the e2e suite.
+- **Platform admins** are configured with `ADMIN_USER_IDS` (user ids, not emails). See [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators).
+- **Staging / production values** and secret handling: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) and [SECURITY.md](./SECURITY.md).
+- ⚠️ `INVOSMART_E2E_PROVIDER_BASE_URL` is **test-only; never set it in a deployed environment** ([docs/E2E_TESTING.md](./docs/E2E_TESTING.md)).
 
 ---
 
@@ -145,34 +97,33 @@ Ensure the following environment variables are correctly configured in your `.en
 ```text
 invosmart/
 ├── app/                  # Next.js App Router pages & API routes
-│   ├── api/             # REST API endpoints
-│   ├── app/             # Authenticated app pages
+│   ├── api/             # Route handlers (see API Reference below)
+│   ├── app/             # Authenticated app pages (dashboard, invoices, clients, workspaces, admin, settings)
 │   ├── auth/            # Login/register pages
-│   ├── devtools/        # AI monitoring dashboards
-│   └── receipts/        # Receipt verification
-├── components/          # React UI components
-│   ├── auth/           # Auth components
-│   ├── invoices/       # Invoice form components
-│   ├── layout/         # Shell, sidebar, topbar
-│   ├── telemetry/      # Analytics provider
-│   └── ui/             # Reusable UI primitives
-├── context/            # React contexts (theme, toast, AI)
-├── hooks/              # Custom React hooks
-├── lib/                # Core business logic
-│   ├── ai/            # AI agent modules (20+ files)
-│   ├── cache/         # Redis/memory cache
-│   ├── federation/    # Cross-tenant FDP protocol
-│   ├── i18n/          # Internationalization (en, id)
-│   ├── monitoring/    # Uptime health checks
-│   ├── receipts/      # Receipt service
-│   └── stats/         # Statistical utilities
-├── middleware/         # Request middleware
-├── prisma/            # Database schema & seeds
-├── server/            # Server-side auth config
-├── types/             # TypeScript declarations
-├── test/              # Test files
-├── docs/              # Documentation
-└── public/            # Static assets
+│   ├── devtools/        # AI monitoring dashboards (platform admins)
+│   ├── receipts/        # Public receipt verification
+│   └── share/           # Public signed invoice links
+├── components/          # React UI components (auth, invoices, layout, payments, telemetry, ui)
+├── context/             # React contexts (theme, toast, AI optimizer)
+├── emails/              # React Email templates
+├── hooks/               # Custom React hooks
+├── lib/                 # Core business logic
+│   ├── ai/              # AI agent modules (docs/ai/)
+│   ├── api-v1/          # Customer API auth, rate limits, idempotency
+│   ├── audit/           # Audit logging
+│   ├── federation/      # Cross-tenant FDP protocol
+│   ├── payments/        # Stripe / Midtrans checkout & settlement
+│   ├── security/        # CSRF, CSP
+│   ├── team/            # Workspaces, reminders, Slack delivery
+│   └── …                # cache, email, i18n, invoices, monitoring, receipts, stats
+├── middleware/          # Request middleware helpers
+├── prisma/              # Database schema, migrations & seeds
+├── scripts/             # Release, e2e and docs tooling
+├── server/              # NextAuth configuration
+├── test/                # Integration, e2e (Playwright) and extra unit tests
+├── types/               # TypeScript declarations
+├── docs/                # Documentation (index: docs/README.md)
+└── public/              # Static assets
 ```
 
 ---
@@ -202,29 +153,22 @@ invosmart/
 
 ## 🌐 API Reference
 
-| Domain | Endpoint | Method | Description |
-|--------|----------|--------|-------------|
-| **Auth** | `/api/auth/[...nextauth]` | GET/POST | NextAuth endpoints |
-| **Invoices** | `/api/invoices` | GET/POST | List or create invoices |
-| | `/api/invoices/[id]` | GET/PUT/DELETE | Invoice CRUD |
-| | `/api/invoices/[id]/send-email` | POST | Send an invoice with a signed payment link |
-| | `/api/invoices/export` | GET | Export invoices as CSV/XLSX |
-| | `/api/invoices/templates` | GET/POST | Invoice template management |
-| | `/api/invoices/templates/[id]` | PUT/DELETE | Template CRUD & instantiate |
-| **Payments** | `/api/payments/midtrans/create` | POST | Create or reuse an idempotent Midtrans checkout |
-| | `/api/payments/stripe/create-session` | POST | Create or reuse an idempotent Stripe checkout |
-| | `/api/payments/[attemptId]` | GET | Read an owned payment attempt status |
-| | `/api/payments/midtrans/notification` | POST | Verify and reconcile Midtrans events |
-| | `/api/payments/stripe/webhook` | POST | Verify and reconcile Stripe events |
-| **Webhooks** | `/api/webhooks/resend` | POST | Verify and persist Resend delivery events |
-| **AI** | `/api/ai/composer` | POST | Natural language to invoice |
-| | `/api/ai/scanner` | POST | Receipt image parsing |
-| **Admin** | `/api/admin/feature-flags` | GET/POST | Feature flag management |
-| | `/api/admin/uptime` | GET | Uptime monitoring status |
-| **User** | `/api/user/locale` | GET/PATCH | User locale preference |
-| **Cron** | `/api/cron/uptime` | GET | Uptime check cron trigger |
-| **Health** | `/api/health` | GET | Application health check |
-| **Telemetry** | `/api/telemetry` | POST | Capture custom analytics |
+Route handlers live under `app/api/`. This is an index by domain; the linked docs are the contracts.
+
+| Domain | Route prefixes | Reference |
+|--------|----------------|-----------|
+| **Auth** | `/api/auth/[...nextauth]`, `/api/auth/register` | [SECURITY.md](./SECURITY.md) |
+| **Invoices** | `/api/invoices`, `/api/invoices/[id]` (+ `/pdf`, `/send-email`), `/api/invoices/export`, `/api/invoices/templates/*`, `/api/invoices/ai`, `/api/clients/*` | session API, workspace-scoped |
+| **Payments** | `/api/payments`, `/api/payments/[attemptId]`, `/api/payments/{stripe,midtrans}/*` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
+| **Workspaces & team** | `/api/workspaces/*` (members, invitations, API keys, notifications, reminder rules), `/api/workspace-invitations/[token]/accept` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |
+| **Customer API v1** | `/api/v1/invoices/*`, `/api/v1/clients/*`, `/api/openapi.json` | [docs/API.md](./docs/API.md) |
+| **Receipts** | `/api/receipts/*` | |
+| **AI / optimizer** | `/api/ai/*`, `/api/ai-optimizer/*`, `/api/opt/*`, `/api/insight/revenue`, `/api/federation/status` | [docs/ai/](./docs/ai/) |
+| **Admin / platform** | `/api/admin/*` (feature flags, uptime, audit logs), `/api/devtools/*`, `/api/dev/perf/summary` | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md#platform-administrators) |
+| **User settings** | `/api/user/{locale,theme,branding}` | |
+| **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
+| **Webhooks** | `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`, `/api/webhooks/resend` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
+| **Health** | `/api/health` | |
 
 ---
 
@@ -242,7 +186,8 @@ InvoSmart uses [NextAuth.js](https://next-auth.js.org/) for robust and secure au
 The core intelligence of InvoSmart is driven by a sophisticated 6-agent AI architecture designed to optimize, learn, govern, and federate tasks autonomously. 
 For a deep dive into the AI mechanics, refer to the following documentation:
 - [Architecture Details](docs/ARCHITECTURE.md)
-- [Agent Specifications](AGENTS.md)
+- [AI subsystem docs](docs/ai/)
+- [Agent & contributor instructions](AGENTS.md)
 
 ---
 
@@ -272,37 +217,39 @@ Architecture, environment, tiers, CI budgets, how to add a scenario and the know
 
 ## 🚀 Deployment
 
-InvoSmart is optimized for deployment on Vercel:
-- **Pipeline**: GitHub Actions triggers formatting, linting, and tests on PRs.
-- **Deployment**: Seamless Vercel integration handles preview deployments and production builds.
-- **Setup**: Ensure all necessary environment variables are loaded into the Vercel project settings prior to deployment.
+InvoSmart deploys to Vercel from GitHub Actions ([`.github/workflows/release.yml`](./.github/workflows/release.yml)):
+- **Pushes to `main`, PRs to `main` and `v*` tags** run `build-and-test` (release check, Prisma validate, lint, `docs:env-check`, typecheck, unit tests, DB integration tests, build) and the `e2e-smoke` Playwright tier. The full e2e tier runs nightly ([`e2e-full.yml`](./.github/workflows/e2e-full.yml)).
+- **A `v*` tag** additionally runs `deploy` (`vercel deploy --prod`) and then the `@staging` tier.
+- **Database migrations are not run by the pipeline.** Apply them with `npx prisma migrate deploy` before deploying schema-dependent code.
+- **Crons** (`vercel.json`): `/api/cron/uptime`, `/api/cron/reminders`, `/api/cron/reminder-delivery`, every 5 minutes.
+
+Release order, rollback and verification: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Staging certification: [docs/runbooks/release-certification.md](./docs/runbooks/release-certification.md).
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please review our standard PR process:
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/amazing-feature`).
-3. Commit your changes.
-4. Push to the branch.
-5. Open a Pull Request.
-
-Make sure to run `npm run lint` and `npm run test` before submitting!
+1. Branch from `main` (`feat/…`, `fix/…`, `docs/…`, `test/…`) and use [Conventional Commits](https://www.conventionalcommits.org/) (semantic-release reads them).
+2. Before pushing, run the same gates CI runs:
+   ```bash
+   npm run lint && npm run typecheck && npm run test && npm run docs:env-check
+   ```
+   Run `npm run test:integration` / `npm run test:e2e:smoke` when you touch the database or user flows.
+3. Open a PR to `main` and fill in the [PR template](./.github/pull_request_template.md), including which docs you updated (see "Saat mengubah X, perbarui Y" in [AGENTS.md](./AGENTS.md)).
+4. `build-and-test` and `e2e-smoke` must be green before merge. Docs and security-sensitive paths are owned per [CODEOWNERS](./.github/CODEOWNERS).
 
 ---
 
 ## 📚 Documentation Index
 
-Explore our comprehensive documentation suite:
+The full index is [docs/README.md](docs/README.md). Start with:
 
-- 📄 [Product Requirements Document (PRD)](docs/PRD.md)
 - 🏗️ [Architecture Overview](docs/ARCHITECTURE.md)
-- 🎨 [Design Specifications](docs/DESIGN.md)
-- 🗺️ [Project Roadmap](docs/ROADMAP.md)
-- ⚖️ [Architecture Decision Records (ADRs)](docs/adr/)
-- 🤖 [AI Agents Guide](AGENTS.md)
-- 🔄 [Changelog](CHANGELOG.md)
+- 🚀 [Deployment](docs/DEPLOYMENT.md)
+- 🔒 [Security & privacy](SECURITY.md)
+- 👥 [Workspaces & RBAC](docs/WORKSPACE_RBAC.md)
+- 🧪 [E2E testing](docs/E2E_TESTING.md)
+- 🤖 [Agent & contributor instructions](AGENTS.md)
 
 ---
 

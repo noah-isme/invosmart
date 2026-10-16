@@ -6,7 +6,7 @@ InvoSmart uses a premium, dark-first glassmorphism design system inspired by edi
 
 ## Color System
 
-The color system relies on CSS variables for a seamless dark-to-light theme transition. The primary mode is dark.
+The color system relies on CSS variables (defined in `app/globals.css`) for a seamless dark-to-light theme transition. The primary mode is dark. Values are space-separated RGB channels so they can be used as `rgb(var(--color-primary))` or `rgba(var(--color-primary) / 0.35)`.
 
 ### CSS Variables
 
@@ -38,8 +38,8 @@ The color system relies on CSS variables for a seamless dark-to-light theme tran
 
 ## Typography
 
-- **Primary Font:** Plus Jakarta Sans (loaded as `--font-geist-sans`)
-- **Monospace Font:** Geist Mono
+- **Primary Font:** Plus Jakarta Sans, loaded with `next/font/google` in `app/layout.tsx`. It is exposed under the legacy variable name `--font-geist-sans`, which `app/globals.css` applies to `body` (`font-family: var(--font-geist-sans), "Inter", system-ui, sans-serif`).
+- **Monospace Font:** Geist Mono (`--font-geist-mono`, also from `app/layout.tsx`)
 - **Headings:** `font-weight: 700`
 - **Body Text:** `font-weight: 400`, `line-height: 1.4`
 - **Global Letter Spacing:** `-0.015em` (for a tighter, more modern look)

@@ -1,7 +1,7 @@
 # 2. Prisma ORM Multi-DB Strategy
 
 ## Status
-Accepted
+Superseded by [ADR 011](011-postgresql-only.md)
 
 ## Context
 The application requires type-safe database access and easy schema management to ensure developer velocity and data integrity. Furthermore, we need a local development environment that requires zero configuration to streamline onboarding and daily development workflows.
