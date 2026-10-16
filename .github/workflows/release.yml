@@ -173,14 +173,17 @@ jobs:
   # here instead of on a tag trigger. GITHUB_TOKEN can push the release
   # commit because main is unprotected; branch protection would need a
   # bypass for github-actions or a PAT (docs/DEPLOYMENT.md).
+  # .releaserc.json turns off the GitHub plugin's issue/PR comments and
+  # labels: the tag is pushed before that plugin runs, so a failure there
+  # would leave a tagged release that never deploys. Only `contents: write`
+  # is needed. If a release is tagged but `deploy` does not run, deploy the
+  # tag with workflow_dispatch `deploy_ref` (docs/DEPLOYMENT.md).
   release:
     needs: [build-and-test, e2e-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
     concurrency:
       group: release
       cancel-in-progress: false
@@ -205,7 +208,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! git describe --tags --match 'v*' --abbrev=0 >/dev/null 2>&1; then
+          if ! git describe --tags --match 'v[0-9]*' --abbrev=0 >/dev/null 2>&1; then
             echo "published=false" >> "$GITHUB_OUTPUT"
             echo "::warning::no v* base tag reachable from HEAD, skipping release"
             exit 0
@@ -213,7 +216,7 @@ jobs:
           npx --no-install semantic-release
           # @semantic-release/git commits locally and tags that commit, so HEAD
           # carries a v* tag exactly when a release was published.
-          tag="$(git tag --points-at HEAD --list 'v*' | head -n 1)"
+          tag="$(git tag --points-at HEAD --list 'v[0-9]*' | head -n 1)"
           if [ -n "$tag" ]; then
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "version=${tag}" >> "$GITHUB_OUTPUT"
