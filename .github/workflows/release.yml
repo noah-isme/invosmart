@@ -53,6 +53,8 @@ jobs:
         run: npm run docs:route-check
       - name: Check relative links in Markdown docs
         run: npm run docs:link-check
+      - name: Doc check script tests
+        run: npm run test:doc-checks
       - name: Typecheck
         run: npm run typecheck
       - name: Typecheck e2e sources
