@@ -402,7 +402,19 @@ export class FederationBus {
   subscribe<TType extends FederationEventType>(type: TType, listener: Listener<TType>) {
     const wrapped = (event: FederationEvent) => {
       if (event.type !== type) return;
-      void listener(event as FederationEvent<TType>);
+      // Listeners run detached from publish()/ingest(); a failing one must not
+      // throw into the emitter or become an unhandled rejection.
+      const report = (error: unknown) => {
+        console.error("[federation] subscriber failed", {
+          type,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      };
+      try {
+        void Promise.resolve(listener(event as FederationEvent<TType>)).catch(report);
+      } catch (error) {
+        report(error);
+      }
     };
     this.emitter.on(type, wrapped);
 

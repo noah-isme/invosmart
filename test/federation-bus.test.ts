@@ -627,3 +627,43 @@ describe("FederationBus wire round trip", () => {
     ).toBe(false);
   });
 });
+
+describe("FederationBus subscribers", () => {
+  it("logs a failing subscriber instead of throwing or leaving an unhandled rejection", async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const bus = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      bus.subscribe("telemetry_sync", async () => {
+        throw new Error("async listener failed");
+      });
+      bus.subscribe("telemetry_sync", () => {
+        throw new Error("sync listener failed");
+      });
+      const after = vi.fn();
+      bus.subscribe("telemetry_sync", after);
+
+      await bus.publish({
+        type: "telemetry_sync",
+        payload: { tenantId: "tenant-a", trustScore: 50, priorities: [], sanitized: true },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(after).toHaveBeenCalledTimes(1);
+      expect(rejections).toEqual([]);
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[federation] subscriber failed",
+        expect.objectContaining({ type: "telemetry_sync", message: "async listener failed" }),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[federation] subscriber failed",
+        expect.objectContaining({ message: "sync listener failed" }),
+      );
+    } finally {
+      process.off("unhandledRejection", onRejection);
+      errorSpy.mockRestore();
+    }
+  });
+});

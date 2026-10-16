@@ -83,9 +83,15 @@ marked process-local are a known limitation.
 | `handleTelemetry` → `evaluateGlobalNetwork` | Local trust and model history entries | Process-local |
 | `handleTelemetry` → `evaluateGlobalNetwork` | Publishes `trust_aggregate`, `priority_share` and `model_update` to the configured peers | Sent over HTTP (peers record them) |
 | `handleTelemetry` → `evaluateGlobalNetwork` | `insight_report` MAP event via `dispatchEvent` (Redis stream and an `AgentEventLog` row), only when orchestration is enabled | **Persisted** when orchestration is on |
-| `handlePriorityShare` (`priority_share`) | Same as telemetry: replaces the sender's priorities in the in-memory snapshot, then `evaluateGlobalNetwork` | Mixed, as above |
+| `handlePriorityShare` (`priority_share`) | Replaces the sender's priorities in the in-memory snapshot; never runs `evaluateGlobalNetwork` | Process-local |
 | `handleTrustAggregate` (`trust_aggregate`) | Prepends to the in-memory trust history and recomputes the latest insight | Process-local |
 | `handleModelUpdate` (`model_update`) | Prepends to the in-memory model history | Process-local |
+
+Only a peer's `telemetry_sync` starts a cycle. `trust_aggregate`, `priority_share` and `model_update` are the outputs of a
+peer's cycle, so receiving them never publishes anything; otherwise two peers would answer each other's
+`priority_share` forever. A cycle whose snapshots carry no priorities publishes only `trust_aggregate`
+(`priority_share` needs at least one priority, and an empty `model_update` would apply nothing). A subscriber that
+throws or rejects is logged (`[federation] subscriber failed`) and never surfaces as an unhandled rejection.
 
 No handler writes `AgentPriority`: received priorities only feed the aggregate stored in `FederationMetrics`. On a
 serverless deployment each instance starts with an empty snapshot map, so an aggregate computed after a cold start
