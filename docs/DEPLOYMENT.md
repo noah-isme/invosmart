@@ -149,7 +149,9 @@ hand in production. Instead:
 - Leave additive changes in place. The previous application version ignores
   new tables and columns, so an app-only rollback is enough.
 - Fix a bad migration forward with a new migration.
-- If data was damaged, restore from the provider's backups.
+- If data was damaged, restore from the provider's backups. See
+  [runbooks/backup-restore.md](runbooks/backup-restore.md) for the restore
+  and verification steps.
 
 > **Open decision:** the backup schedule, retention and a tested restore
 > procedure for the production database are not documented. They depend on
@@ -181,6 +183,11 @@ requires in production; without `CRON_SECRET` they return `503`.
 
 Vercel shows cron invocations and their status codes in the project's
 **Cron Jobs** page.
+
+If reminders are not arriving, rows are stuck in `PROCESSING` or deliveries
+keep failing, follow [runbooks/reminder-delivery.md](runbooks/reminder-delivery.md).
+For what each failure signal feeds into, see
+[OBSERVABILITY.md](OBSERVABILITY.md).
 
 ## After every production deploy
 
