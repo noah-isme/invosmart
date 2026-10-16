@@ -2,7 +2,10 @@
 // AUTO-INT-02: a fresh AutonomyLoopState row is created paused and the cron skips.
 // AUTO-INT-03: once resumed, the first call runs one tick and persists nextRunAt
 // and the scaler state, an immediate second call answers not_due, and
-// ?force=1 runs again (fed the stored state). runLoop is mocked: this layer
+// ?force=1 runs again (fed the stored state).
+// AUTO-INT-04: the lease claim rechecks paused and the due time in SQL, so a
+// row paused (or already advanced) after it was read is not ticked.
+// runLoop is mocked: this layer
 // checks the scheduler's persistence, not the agents.
 // @covers: /api/cron/autonomy (route handler called in-process; scripts/e2e-coverage-check.mjs)
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,5 +112,28 @@ describe("/api/cron/autonomy", () => {
       scaling: { concurrency: 2, intervalMs: 2 * MIN },
       previousTelemetry: telemetry,
     });
+  });
+
+  it("AUTO-INT-04 the lease claim does not tick a row paused or advanced after it was read", async () => {
+    const stored = await db.autonomyLoopState.create({ data: { id: "singleton", paused: true } });
+    // The read (upsert) returns a stale copy that still looks resumed and due.
+    const upsert = vi.spyOn(db.autonomyLoopState, "upsert").mockResolvedValue({ ...stored, paused: false });
+    try {
+      const paused = await call();
+      expect(await paused.json()).toEqual({ skipped: "locked" });
+
+      await db.autonomyLoopState.update({
+        where: { id: "singleton" },
+        data: { paused: false, nextRunAt: new Date(Date.now() + 10 * MIN) },
+      });
+      const notDue = await call();
+      expect(await notDue.json()).toEqual({ skipped: "locked" });
+    } finally {
+      upsert.mockRestore();
+    }
+
+    expect(runLoopMock).not.toHaveBeenCalled();
+    const row = await db.autonomyLoopState.findUniqueOrThrow({ where: { id: "singleton" } });
+    expect(row.claimedUntil).toBeNull();
   });
 });

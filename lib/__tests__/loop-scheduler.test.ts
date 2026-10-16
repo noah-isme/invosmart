@@ -129,10 +129,41 @@ describe("runScheduledTick", () => {
     autonomyLoopState.updateMany.mockResolvedValue({ count: 0 });
     await expect(tick()).resolves.toEqual({ skipped: "locked" });
     expect(autonomyLoopState.updateMany).toHaveBeenCalledWith({
-      where: { id: "singleton", OR: [{ claimedUntil: null }, { claimedUntil: { lt: NOW } }] },
+      where: {
+        id: "singleton",
+        paused: false,
+        AND: [
+          { OR: [{ claimedUntil: null }, { claimedUntil: { lt: NOW } }] },
+          { OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date(NOW.getTime() + 30_000) } }] },
+        ],
+      },
       data: { claimedUntil: new Date(NOW.getTime() + 4 * MIN) },
     });
     expect(runLoopMock).not.toHaveBeenCalled();
+  });
+
+  it("does not run when the row was paused or moved between the read and the claim", async () => {
+    // The read saw a resumed, due row; the conditional claim (paused: false and
+    // the due test) matches nothing because the row changed in between.
+    autonomyLoopState.updateMany.mockResolvedValue({ count: 0 });
+    await expect(tick()).resolves.toEqual({ skipped: "locked" });
+    const { where } = autonomyLoopState.updateMany.mock.calls[0][0];
+    expect(where.paused).toBe(false);
+    expect(where.AND).toContainEqual({
+      OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date(NOW.getTime() + 30_000) } }],
+    });
+    expect(runLoopMock).not.toHaveBeenCalled();
+  });
+
+  it("a forced claim still requires the row to be resumed but skips the due test", async () => {
+    autonomyLoopState.upsert.mockResolvedValue(row({ nextRunAt: new Date(NOW.getTime() + 10 * MIN) }));
+    await tick(true);
+    const { where } = autonomyLoopState.updateMany.mock.calls[0][0];
+    expect(where).toEqual({
+      id: "singleton",
+      paused: false,
+      AND: [{ OR: [{ claimedUntil: null }, { claimedUntil: { lt: NOW } }] }],
+    });
   });
 
   it("passes the stored scaler state into runLoop and persists the result with a 5-minute floor", async () => {

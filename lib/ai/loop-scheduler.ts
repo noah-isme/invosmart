@@ -71,8 +71,20 @@ export async function runScheduledTick({
     force || row.nextRunAt == null || row.nextRunAt.getTime() - DUE_TOLERANCE_MS <= now.getTime();
   if (!due) return { skipped: "not_due", nextRunAt: row.nextRunAt!.toISOString() };
 
+  // The claim rechecks paused and the due test in the same conditional
+  // update: a pause, or another tick that ran and moved nextRunAt, between the
+  // read above and this claim must not let a tick through.
   const claimed = await db.autonomyLoopState.updateMany({
-    where: { id: row.id, OR: [{ claimedUntil: null }, { claimedUntil: { lt: now } }] },
+    where: {
+      id: row.id,
+      paused: false,
+      AND: [
+        { OR: [{ claimedUntil: null }, { claimedUntil: { lt: now } }] },
+        ...(force
+          ? []
+          : [{ OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date(now.getTime() + DUE_TOLERANCE_MS) } }] }]),
+      ],
+    },
     data: { claimedUntil: new Date(now.getTime() + LEASE_MS) },
   });
   if (claimed.count === 0) return { skipped: "locked" };
