@@ -84,7 +84,7 @@ npx prisma migrate status
 The baseline PostgreSQL migration is located at:
 `prisma/migrations/20260811000000_init_postgresql_schema/migration.sql`
 
-This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 15 tables and 4 enums; `prisma/schema.prisma` currently defines **33 models and 12 enums**.
+This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 16 tables and 4 enums; `prisma/schema.prisma` currently defines **34 models and 12 enums**.
 
 | Migration | Tables added | Enums added |
 |---|---|---|
@@ -98,6 +98,7 @@ This migration creates the original 18 tables and 8 PostgreSQL enum types (the P
 | `20260814110000_api_keys` | 1 | 0 |
 | `20260827070000_add_performance_indexes` | 0 (indexes) | 0 |
 | `20261016170000_federation_inbound_events` | 1 | 0 |
+| `20261016180000_cron_lease` | 1 | 0 |
 
 ### 3.5 Payment Lifecycle Migration
 
@@ -129,7 +130,7 @@ timestamps support the versioned customer API without exposing raw secrets.
 | **Workspace with legacy user fallback** | `organizationId` is **nullable** (`onDelete: SetNull`) and `userId` is required. While `WORKSPACE_AUTH_MODE=compat`, rows with no organization are scoped to their `userId` (the `LEGACY` role in `lib/workspaces.ts`). Under `enforce`, only membership grants access. | `Invoice`, `Client`, `InvoiceTemplate` |
 | **Inherited from parent** | No ownership column of their own. Access follows the parent row, and they are deleted with it (`onDelete: Cascade`). | `Payment`, `PaymentAttempt`, `PaymentEvent` (via `Invoice`); `Receipt`, `ReceiptAuditLog` (via `Payment`); `InvoiceReminderDelivery` (via `InvoiceReminderOccurrence`) |
 | **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId`, `FederationInboundEvent.tenantId` |
-| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
+| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `CronLease`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
 
 Money columns (`subtotal`, `tax`, `total`, `amount`, `paidAmount`, `refundedAmount`) are integers in the currency's major unit (IDR has no minor unit). The currency is stored next to them, and the default is `IDR`.
 
@@ -228,6 +229,7 @@ Idempotency keys and rate-limit windows for `/api/v1` are kept in Upstash Redis,
 | `AuditLog` | The general audit trail: invoice, auth, workspace, payment, reminder and AI auto-action events. Columns: `tenantId`, `userId`, `action`, `entity`, `entityId`, `details` (JSONB), `ipAddress`. Written by `logAuditEvent()` in `lib/audit/auditLogger.ts`. | Tenant-tagged (`tenantId`). Users are attached with `SetNull` on delete. |
 | `FeatureFlag` | Runtime toggles. `targetTenants` / `targetUsers` are JSON allowlists (`lib/feature-flags.ts`). | Global |
 | `UptimeCheck` | Results from `/api/cron/uptime`: status code, latency, `UP`/`DOWN`. | Global |
+| `CronLease` | One row per named scheduled job (`name` is the key, e.g. `retention`). A cron claims it with a conditional update that sets `claimedUntil` in the future only when it is null or past, so an overlapping invocation skips; it clears `claimedUntil` and sets `lastRunAt` when done. A crashed run blocks the next one only until `claimedUntil` passes. | Global |
 
 ### 4.10 AI agents
 

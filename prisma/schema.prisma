@@ -735,6 +735,16 @@ model FeatureFlag {
   @@index([enabled])
 }
 
+/// A named lease for scheduled jobs, so overlapping cron invocations skip
+/// instead of running twice. Claimed by setting claimedUntil in the future
+/// with a conditional update; released by clearing it.
+model CronLease {
+  name         String    @id
+  claimedUntil DateTime?
+  lastRunAt    DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
 model UptimeCheck {
   id         String   @id @default(cuid())
   url        String
