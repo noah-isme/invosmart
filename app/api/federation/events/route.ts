@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
 
 import { getFederationAgent } from "@/lib/ai/federationAgent";
 import { requireFederationBearer } from "@/lib/federation/auth";
@@ -76,7 +77,9 @@ export async function POST(request: NextRequest) {
     if (message === "Duplicate federation event") {
       return json({ accepted: false, duplicate: true }, 200);
     }
-    if (DECRYPT_ERROR.test(message)) {
+    // An encrypted payload that does not decrypt, or whose plaintext does not
+    // match the schema of its event type.
+    if (DECRYPT_ERROR.test(message) || error instanceof ZodError) {
       return json({ error: "Invalid federation event" }, 400);
     }
     console.error("[federation] inbound event failed", { message });

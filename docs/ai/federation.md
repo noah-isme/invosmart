@@ -67,8 +67,10 @@ PII, or session metadata are stripped automatically.
 
 `POST /api/federation/events` (`app/api/federation/events/route.ts`) checks the peer bearer, the body size and the FDP
 schema, then calls `getFederationAgent()` so the agent's subscribers exist in this process, and hands the event to
-`FederationBus.ingest()`. Ingest verifies the signature, rejects events outside a 5-minute clock window, records the
-event in `FederationInboundEvent` (the unique signature hash rejects replays) and emits it to the subscribers. The
+`FederationBus.ingest()`. Ingest verifies the signature, rejects events outside a 5-minute clock window, decrypts an
+encrypted payload and validates it against the schema of its event type, records the event in `FederationInboundEvent`
+(the unique signature hash rejects replays) and emits it to the subscribers. The row is written only once the payload
+has decrypted and validated, so a failed event leaves no `accepted=true` row. The
 full HTTP contract is in [docs/INTEGRATIONS.md](../INTEGRATIONS.md#federation-peers).
 
 The route verifies, records the event in `FederationInboundEvent`, and hands it to the FederationAgent handlers; effects

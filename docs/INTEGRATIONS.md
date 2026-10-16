@@ -328,6 +328,7 @@ Leave it unset to disable.
   | JSON and FDP schema; the `payload` is validated with the schema of the event `type` | `400` (the body is not echoed) |
   | Signature (RSA-SHA256 with the sender's registered key, or HMAC-SHA256 with `FEDERATION_HMAC_SECRET`) | `401 {error:"Invalid federation signature"}` |
   | Event `timestamp` within 5 minutes of local time | `401 {error:"Stale federation event"}` |
+  | Encrypted payload decrypts and matches the schema of its `type` | `400 {error:"Invalid federation event"}` (nothing recorded) |
   | Not seen before (unique SHA-256 of the signature in `FederationInboundEvent`) | `200 {accepted:false, duplicate:true}` |
 
   Otherwise the answer is `202 {accepted:true}`, or `202 {accepted:false}`

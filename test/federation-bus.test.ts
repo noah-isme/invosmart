@@ -311,6 +311,8 @@ describe("FederationBus", () => {
     corruptedEvent.signature = signer.sign(producerKeys.privateKey, "hex");
 
     await expect(consumer.ingest(corruptedEvent)).rejects.toThrow(/Payload decryption failed/);
+    // A failed decryption leaves no accepted replay row behind.
+    expect(inbound.rows).toEqual([]);
   });
 
   it("handles missing private key when ingesting encrypted events", async () => {
@@ -625,6 +627,37 @@ describe("FederationBus wire round trip", () => {
     expect(
       federationEventSchema.safeParse({ ...base, type: "priority_share", payload: payloads.telemetry_sync }).success,
     ).toBe(false);
+  });
+
+  it("validates a decrypted payload against its event type and keeps replay protection", async () => {
+    const producerKeys = generateFederationKeyPair();
+    const consumerKeys = generateFederationKeyPair();
+    const producer = new FederationBus({
+      tenantId: "tenant-a",
+      privateKey: producerKeys.privateKey,
+      publicKey: producerKeys.publicKey,
+      enabled: true,
+    });
+    const consumer = new FederationBus({
+      tenantId: "tenant-b",
+      privateKey: consumerKeys.privateKey,
+      publicKey: consumerKeys.publicKey,
+      peerPublicKeys: { "tenant-a": producerKeys.publicKey },
+      enabled: true,
+    });
+    const listener = vi.fn();
+    consumer.subscribe("model_update", listener);
+
+    const { event } = await producer.publish({
+      type: "model_update",
+      recipientPublicKey: consumerKeys.publicKey,
+      payload: payloads.model_update,
+    });
+
+    await expect(consumer.ingest(event as FederationEvent)).resolves.toBe(true);
+    expect(listener.mock.calls[0][0].payload).toEqual(payloads.model_update);
+    expect(inbound.rows).toEqual([expect.objectContaining({ type: "model_update", accepted: true })]);
+    await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Duplicate federation event/);
   });
 });
 

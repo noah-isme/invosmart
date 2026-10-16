@@ -10,6 +10,7 @@ import {
   type FederationEventType,
   type SignatureAlgorithm,
   federationEventSchema,
+  parseFederationPayload,
   validateFederationEvent,
 } from "@/lib/federation/protocol";
 
@@ -473,12 +474,15 @@ export class FederationBus {
   /**
    * Verifies and delivers an inbound event to local subscribers.
    *
-   * Order: schema -> signature -> freshness -> echo check -> replay insert ->
-   * decrypt -> record/emit. Every event that passes the signature and the
-   * freshness window is written to FederationInboundEvent (echoes of this
-   * instance's own events with accepted=false); the unique signatureHash makes
-   * a second copy of the same signed event fail with "Duplicate federation
-   * event", even when it carries a fresh `id` (the id is not signed).
+   * Order: schema -> signature -> freshness -> echo check -> decrypt and
+   * validate the payload -> replay insert -> record/emit. Every event that
+   * passes the signature and the freshness window and is about to be emitted
+   * is written to FederationInboundEvent with accepted=true (echoes of this
+   * instance's own events with accepted=false). The row is written only after
+   * the payload decrypted and validated, so a failed event never leaves an
+   * accepted row behind; the unique signatureHash makes a second copy of an
+   * accepted (or echoed) signed event fail with "Duplicate federation event",
+   * even when it carries a fresh `id` (the id is not signed).
    *
    * Returns true when the event was emitted, false for disabled buses and
    * own-tenant echoes.
@@ -486,7 +490,7 @@ export class FederationBus {
   async ingest(event: FederationEvent) {
     if (!this.isEnabled) return false;
 
-    const parsed = federationEventSchema.parse(event);
+    const parsed = federationEventSchema.parse(event) as FederationEvent;
     if (!this.verifySignature(parsed)) {
       throw new Error("Invalid federation signature");
     }
@@ -498,6 +502,16 @@ export class FederationBus {
 
     // Echoes of our own events are recorded (accepted=false) but never emitted.
     const accepted = parsed.tenantId !== this.tenantId;
+
+    if (accepted && parsed.encryptedPayload && parsed.encryptedKey && parsed.iv) {
+      const decryptedPayload = this.decryptPayload(
+        parsed.encryptedPayload,
+        parsed.encryptedKey,
+        parsed.iv,
+      );
+      // The ciphertext is signed, but its plaintext is validated like any other payload.
+      parsed.payload = parseFederationPayload(parsed.type, decryptedPayload) as typeof parsed.payload;
+    }
 
     const store = this.inboundStore ?? db.federationInboundEvent;
     try {
@@ -525,15 +539,6 @@ export class FederationBus {
 
     if (!accepted) {
       return false;
-    }
-
-    if (parsed.encryptedPayload && parsed.encryptedKey && parsed.iv) {
-      const decryptedPayload = this.decryptPayload(
-        parsed.encryptedPayload,
-        parsed.encryptedKey,
-        parsed.iv,
-      );
-      parsed.payload = decryptedPayload as typeof parsed.payload;
     }
 
     this.recordEvent(parsed);
