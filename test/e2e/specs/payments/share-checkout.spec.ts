@@ -45,6 +45,13 @@ test.describe("payments: public share-link checkout", () => {
       expect((await response.allHeaders())["set-cookie"]).toBeUndefined();
       const sessionId = await payments.waitForCheckoutPage(page);
 
+      // Back from the provider: action=pay was dropped before leaving, so the
+      // share page does not start a second checkout and the button is usable.
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`/share/${invoice.id}\\?token=[^&]+$`));
+      await expect(page.getByRole("button", { name: "Pay now" })).toBeEnabled();
+      await page.waitForLoadState("networkidle");
+
       const calls = (await stub.requests("/v1/checkout/sessions")).filter((entry) => entry.method === "POST");
       expect(calls).toHaveLength(1);
       const session = parseStripeSessionForm(calls[0].body);

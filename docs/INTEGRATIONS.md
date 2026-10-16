@@ -84,6 +84,10 @@ a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-li
   `503 { retry: true }` with `Retry-After` until the next window. The page
   retries a `retry: true` answer up to 3 times, 1.5 s apart (at most 4
   requests per click; the route allows 20 per minute per IP).
+- **Back from the provider**: the page drops `action=pay` from the address
+  bar before leaving for the provider, so Back or a reload does not start
+  another checkout, and resets the button when the page is restored from the
+  back/forward cache.
 - **Return URLs**: Stripe `success_url`/`cancel_url` are the share URL plus
   `payment=success` or `payment=cancelled`, built from `NEXT_PUBLIC_APP_URL`,
   then `NEXTAUTH_URL`, then the request origin. Snap callbacks return to the
