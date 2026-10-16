@@ -42,6 +42,8 @@ npm run typecheck         # tsc --noEmit (aplikasi)
 npm run typecheck:e2e     # tsc untuk test/e2e dan playwright.config.ts
 npm run test              # Unit tests (Vitest)
 npm run docs:env-check    # setiap process.env yang dibaca kode tercantum di .env.example
+npm run docs:route-check  # setiap prefiks app/api/<nama> tercantum di indeks rute (README.md, docs/README.md, docs/API.md)
+npm run docs:link-check   # setiap tautan relatif di berkas Markdown mengarah ke berkas yang ada
 npm run build             # Build produksi Next.js
 ```
 
@@ -68,7 +70,7 @@ Arsitektur, variabel lingkungan, tier, dan cara menambah skenario: [docs/E2E_TES
 | Jika Anda… | Perbarui |
 |---|---|
 | Menambah atau mengganti nama variabel lingkungan | `.env.example` (dengan komentar; `npm run docs:env-check` akan gagal jika lupa) |
-| Menambah grup rute API baru | Indeks API di `README.md` dan [docs/README.md](./docs/README.md); untuk `/api/v1` juga [docs/API.md](./docs/API.md) dan `lib/openapi.ts` |
+| Menambah grup rute API baru | Indeks API di `README.md` dan [docs/README.md](./docs/README.md); untuk `/api/v1` juga [docs/API.md](./docs/API.md) dan `lib/openapi.ts` (`npm run docs:route-check` akan gagal jika lupa) |
 | Menambah migrasi Prisma | Model data di [docs/DATABASE.md](./docs/DATABASE.md) |
 | Menambah penyedia eksternal atau webhook | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
 | Mengubah peran atau izin | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |

@@ -60,6 +60,14 @@ Every maintained document, one line each. If you add a doc, add it here. If two 
 - [archive/PROJECT.md](./archive/PROJECT.md): Phase 1 milestone plan (superseded by ROADMAP.md).
 - [archive/TEST_INFRA.md](./archive/TEST_INFRA.md): Phase 1 integration test plan (superseded by E2E_TESTING.md).
 
+## Doc checks
+
+Three scripts keep the docs honest; CI runs all three in `build-and-test`:
+
+- `npm run docs:env-check`: every `process.env` name read by app code is in `.env.example`.
+- `npm run docs:route-check`: every top-level `app/api/<name>` with a route handler appears as `/api/<name>` in `README.md`, this file or `API.md`.
+- `npm run docs:link-check`: every relative Markdown link resolves to an existing file or directory (skips `docs/audits/`, `.plans/`, `graphify-out/`, `node_modules/`).
+
 ## Audits
 
 - [audits/](./audits/): dated documentation audits. Point-in-time snapshots: paths in them may have moved since.

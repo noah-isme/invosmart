@@ -47,6 +47,10 @@ jobs:
           ENABLE_TELEMETRY: "false"
       - name: Check env vars are documented in .env.example
         run: npm run docs:env-check
+      - name: Check API route prefixes are in the route index
+        run: npm run docs:route-check
+      - name: Check relative links in Markdown docs
+        run: npm run docs:link-check
       - name: Typecheck
         run: npm run typecheck
       - name: Typecheck e2e sources

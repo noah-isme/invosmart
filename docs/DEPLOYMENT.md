@@ -57,7 +57,7 @@ runs the full Playwright tier; it does not deploy.
 2. `npm run release:check`
 3. `prisma validate`
 4. `npm run lint`
-5. `npm run docs:env-check`
+5. `npm run docs:env-check`, `npm run docs:route-check`, `npm run docs:link-check`
 6. `npm run typecheck` and `npm run typecheck:e2e`
 7. `npm run test`
 8. `npm run test:integration` (PGlite)
