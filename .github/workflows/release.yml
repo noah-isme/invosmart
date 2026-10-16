@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
@@ -16,6 +14,10 @@ on:
         required: true
         default: false
         type: boolean
+
+# Read-only by default; only the `release` job gets write access.
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -88,15 +90,6 @@ jobs:
             QA-report
             test-results
           if-no-files-found: warn
-      # Releases are disabled until Phase 8 of .plans/tech-stack-upgrade.md settles the
-      # base version and grants write permissions. Restore the main-branch condition then.
-      - name: Semantic Release
-        if: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEXT_PUBLIC_ENABLE_TELEMETRY: "false"
-          ENABLE_TELEMETRY: "false"
-        run: npx semantic-release
 
   # Local-DB smoke tier: in-memory PGlite, provider stub and `next start` on an
   # e2e build, all started by playwright.config.ts (webServer). Includes the
@@ -165,9 +158,65 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-  deploy:
-    if: startsWith(github.ref, 'refs/tags/v')
+  # semantic-release on pushes to main, after both gates. It publishes
+  # vX.Y.Z (release commit with the bumped package.json and CHANGELOG.md, the
+  # tag and a GitHub Release) only when feat/fix/breaking commits landed since
+  # the last v* tag; `published` and `version` tell deploy whether to run.
+  # Tags pushed with GITHUB_TOKEN start no workflow, so deploy is chained
+  # here instead of on a tag trigger. GITHUB_TOKEN can push the release
+  # commit because main is unprotected; branch protection would need a
+  # bypass for github-actions or a PAT (docs/DEPLOYMENT.md).
+  release:
     needs: [build-and-test, e2e-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      version: ${{ steps.publish.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      # Without a reachable v* base tag semantic-release would publish v1.0.0,
+      # so the run is a no-op until the seed tag exists.
+      - name: Semantic Release
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git describe --tags --match 'v*' --abbrev=0 >/dev/null 2>&1; then
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::no v* base tag reachable from HEAD, skipping release"
+            exit 0
+          fi
+          npx --no-install semantic-release
+          # @semantic-release/git commits locally and tags that commit, so HEAD
+          # carries a v* tag exactly when a release was published.
+          tag="$(git tag --points-at HEAD --list 'v*' | head -n 1)"
+          if [ -n "$tag" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "version=${tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: release
+    if: needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
     # Holds PRODUCTION_DATABASE_URL. The environment and its secret are created
     # by the repository owner (docs/DEPLOYMENT.md "Database migrations"); no
@@ -182,7 +231,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
     steps:
+      # The release commit: it carries the bumped package.json and CHANGELOG.md.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.version }}
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -234,8 +286,9 @@ jobs:
   # @staging specs write data (workspaces, invoices, Slack endpoints) and need
   # sandbox provider keys. (Open question for the owner: see Atlas report.)
   post-deploy-tests:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: deploy
+    # `release` is listed so needs.release.outputs is readable here.
+    needs: [release, deploy]
+    if: needs.release.outputs.published == 'true'
     environment: staging
     runs-on: ubuntu-latest
     timeout-minutes: 20
