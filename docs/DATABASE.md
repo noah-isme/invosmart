@@ -130,7 +130,7 @@ timestamps support the versioned customer API without exposing raw secrets.
 | **Workspace with legacy user fallback** | `organizationId` is **nullable** (`onDelete: SetNull`) and `userId` is required. While `WORKSPACE_AUTH_MODE=compat`, rows with no organization are scoped to their `userId` (the `LEGACY` role in `lib/workspaces.ts`). Under `enforce`, only membership grants access. | `Invoice`, `Client`, `InvoiceTemplate` |
 | **Inherited from parent** | No ownership column of their own. Access follows the parent row, and they are deleted with it (`onDelete: Cascade`). | `Payment`, `PaymentAttempt`, `PaymentEvent` (via `Invoice`); `Receipt`, `ReceiptAuditLog` (via `Payment`); `InvoiceReminderDelivery` (via `InvoiceReminderOccurrence`) |
 | **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId`, `FederationInboundEvent.tenantId` |
-| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `CronLease`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
+| **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `CronLease`, `AutonomyLoopState`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
 
 Money columns (`subtotal`, `tax`, `total`, `amount`, `paidAmount`, `refundedAmount`) are integers in the currency's major unit (IDR has no minor unit). The currency is stored next to them, and the default is `IDR`.
 
@@ -243,6 +243,7 @@ All of these are global platform telemetry, with no tenant column.
 | `AgentEventLog` | Persisted MAP events (`traceId`, type, source/target agent, priority, payload). The fallback for the Redis stream. | `eventType` string (see `lib/ai/protocol.ts`) |
 | `AgentPriority` | The current dynamic weight per agent. | — |
 | `RecoveryLog` | Rollback and re-evaluation actions by the recovery agent, with trust before/after. | — |
+| `AutonomyLoopState` | Single row (`id = "singleton"`) driving the autonomy loop from the `/api/cron/autonomy` cron (ADR 016): `paused` (defaults to `true`; a platform admin resumes it in DevTools), `nextRunAt`, `lastRunAt`, the scaler state carried between serverless invocations (`lastIntervalMs`, `lastConcurrency`, `lastTelemetry`), `lastSummary`, `lastResult` (scaling and recovery), and a `claimedUntil` lease so overlapping cron invocations skip. | — |
 
 ### 4.11 Content optimization
 

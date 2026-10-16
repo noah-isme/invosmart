@@ -745,6 +745,23 @@ model CronLease {
   updatedAt    DateTime  @updatedAt
 }
 
+/// Singleton row (id "singleton") holding the cron-driven autonomy loop schedule
+/// and the scaler state that used to live in process memory (ADR 016).
+/// Starts paused: a platform admin resumes it from DevTools.
+model AutonomyLoopState {
+  id              String    @id @default("singleton")
+  paused          Boolean   @default(true)
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  lastIntervalMs  Int?
+  lastConcurrency Int?
+  lastTelemetry   Json?
+  lastSummary     String?
+  lastResult      Json?
+  claimedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
 model UptimeCheck {
   id         String   @id @default(cuid())
   url        String
