@@ -117,7 +117,11 @@ describe("/api/cron/autonomy", () => {
   it("AUTO-INT-04 the lease claim does not tick a row paused or advanced after it was read", async () => {
     const stored = await db.autonomyLoopState.create({ data: { id: "singleton", paused: true } });
     // The read (upsert) returns a stale copy that still looks resumed and due.
-    const upsert = vi.spyOn(db.autonomyLoopState, "upsert").mockResolvedValue({ ...stored, paused: false });
+    // Patched and restored by hand: vi.spyOn().mockRestore() on a Prisma model
+    // delegate leaves the method undefined.
+    const delegate = db.autonomyLoopState;
+    const originalUpsert = delegate.upsert;
+    delegate.upsert = (async () => ({ ...stored, paused: false })) as unknown as typeof delegate.upsert;
     try {
       const paused = await call();
       expect(await paused.json()).toEqual({ skipped: "locked" });
@@ -129,7 +133,7 @@ describe("/api/cron/autonomy", () => {
       const notDue = await call();
       expect(await notDue.json()).toEqual({ skipped: "locked" });
     } finally {
-      upsert.mockRestore();
+      delegate.upsert = originalUpsert;
     }
 
     expect(runLoopMock).not.toHaveBeenCalled();
