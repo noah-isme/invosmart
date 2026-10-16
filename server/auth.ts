@@ -206,7 +206,7 @@ const handleGoogleSignIn = async ({
 
 /**
  * AUTH_LOGIN_SUCCESS belongs to the user's active workspace (when they have
- * one), so the workspace-scoped audit API lists it. Never throws: the lookup
+ * one and are still a member), so the workspace-scoped audit API lists it. Never throws: the lookup
  * and the write are best-effort like every audit entry.
  */
 const logSignInSuccess = async (userId: string | null, email: string | null, provider: string) => {
@@ -214,7 +214,16 @@ const logSignInSuccess = async (userId: string | null, email: string | null, pro
   if (userId) {
     try {
       const row = await db.user.findUnique({ where: { id: userId }, select: { activeOrganizationId: true } });
-      tenantId = row?.activeOrganizationId ?? null;
+      const activeOrganizationId = row?.activeOrganizationId ?? null;
+      if (activeOrganizationId) {
+        // activeOrganizationId is not cleared when a member is removed, so only
+        // tenant the entry to a workspace the user still belongs to.
+        const membership = await db.membership.findUnique({
+          where: { organizationId_userId: { organizationId: activeOrganizationId, userId } },
+          select: { id: true },
+        });
+        tenantId = membership ? activeOrganizationId : null;
+      }
     } catch {
       // Fall back to an untenanted entry rather than losing the audit row.
     }

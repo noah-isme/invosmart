@@ -70,6 +70,22 @@ describe("AUD-INT-01 signIn audit entry", () => {
     );
     expect(entry).toMatchObject({ tenantId: null, entity: "Auth", userId: user.id });
   });
+
+  it("does not tenant the entry to a workspace the user was removed from", async () => {
+    const { organization } = await createUserWithWorkspace();
+    const removed = await createUser();
+    await db.membership.create({ data: { organizationId: organization.id, userId: removed.id, role: "MEMBER" } });
+    await db.user.update({ where: { id: removed.id }, data: { activeOrganizationId: organization.id } });
+    // Removing a member deletes the Membership but leaves activeOrganizationId behind.
+    await db.membership.delete({ where: { organizationId_userId: { organizationId: organization.id, userId: removed.id } } });
+
+    await fireSignIn(removed);
+    const entry = await waitFor(() =>
+      db.auditLog.findFirst({ where: { userId: removed.id, action: "AUTH_LOGIN_SUCCESS" } }),
+    );
+    expect(entry.tenantId).toBeNull();
+    expect(await db.auditLog.count({ where: { tenantId: organization.id, userId: removed.id } })).toBe(0);
+  });
 });
 
 describe("AUD-INT-02 registration audit entry", () => {
