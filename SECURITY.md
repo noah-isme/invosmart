@@ -123,7 +123,7 @@ There are two limiters; neither is global.
 
 | Limiter | Where | Limit | Store |
 |---|---|---|---|
-| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
+| `rateLimit(request, bucket)` in `lib/rate-limit.ts` | Selected session routes: auth register, invoices, clients, templates, export, PDF, AI routes, receipt scan, revenue insight; public `GET /api/health?db=1` (`health-db` bucket) | 10 requests per 60 s per client IP per bucket, `429` with `Retry-After` | Process memory, per serverless instance |
 | `consumeApiRateLimit` in `lib/api-v1/rate-limit.ts` | Every `/api/v1/*` request, before key validation | 120 requests per 60 s per API key (or per IP when the key is missing or invalid), `429` with rate-limit headers | Upstash Redis fixed window; falls back to process memory when Redis is not configured |
 
 Because the session limiter is in memory, the effective limit scales with the

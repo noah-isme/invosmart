@@ -119,7 +119,7 @@ flowchart LR
 ### Platform features
 - **i18n**: `en` and `id` locales (`lib/i18n/locales/`). The user's choice is stored in `User.locale` through `/api/user/locale`.
 - **Feature flags**: stored in the database and evaluated by `getFlag()`, with tenant and user targeting (`lib/feature-flags.ts`). Platform admins manage them in `/app/admin/feature-flags`.
-- **Uptime**: cron `/api/cron/uptime` checks `UPTIME_MONITORED_ENDPOINTS` and stores `UptimeCheck` rows. Failures are alerted through `dispatchWebhookAlert` to Slack/Discord (`lib/monitoring/uptime.ts`).
+- **Uptime**: cron `/api/cron/uptime` checks `UPTIME_MONITORED_ENDPOINTS` (default `/api/health?db=1` on the deployed host: `NEXT_PUBLIC_APP_URL`, `NEXTAUTH_URL` or `https://$VERCEL_URL`) and stores `UptimeCheck` rows. `/api/health` alone is a shallow liveness check; `?db=1` adds a rate-limited `SELECT 1` with a 2 s timeout and answers `503` when it fails. Failures are alerted through `dispatchWebhookAlert` to Slack/Discord (`lib/monitoring/uptime.ts`).
 - **Audit logging**: `logAuditEvent` writes to `AuditLog` for invoice, auth, security and AI auto-action events (`lib/audit/auditLogger.ts`).
 
 ### AI features

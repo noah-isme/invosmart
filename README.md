@@ -169,7 +169,7 @@ Route handlers live under `app/api/`. This is an index by domain; the linked doc
 | **User settings** | `/api/user/{locale,theme,branding}` | |
 | **Cron** | `/api/cron/{uptime,reminders,reminder-delivery}` (Vercel Cron, every 5 min, `CRON_SECRET`) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 | **Webhooks** | `/api/payments/stripe/webhook`, `/api/payments/midtrans/notification`, `/api/webhooks/resend` | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
-| **Health** | `/api/health` | |
+| **Health** | `/api/health` (shallow), `/api/health?db=1` (adds a database ping; the uptime cron's default probe) | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
 
 ---
 
