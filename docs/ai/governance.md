@@ -43,7 +43,7 @@
 | API      | read, modify            | 85% | Tidak, kecuali ≥90% |
 | DATA     | read                    | 90% | Tidak diizinkan     |
 
-- Rute kritis (`/auth`, `/admin`, `/app`, `/devtools`, `/api/internal`) selalu memerlukan review manual.
+- Rute kritis (`/auth`, `/admin`, `/app`, `/devtools`, `/api/internal`) selalu memerlukan review manual (`CRITICAL_ROUTE_PREFIXES` di `lib/ai/policy.ts`; `/api/internal` adalah prefiks yang dicadangkan, belum ada rute di bawahnya).
 - Pelanggaran kebijakan memicu event `ai_policy_violation` dan menolak auto-apply ketika governance aktif.
 - Semua rekomendasi dan penjelasan dicatat untuk audit yang dapat diverifikasi.
 
@@ -62,4 +62,4 @@
 
 ## Pengujian
 
-Lihat `test/explain-api.test.ts`, `test/policy-layer.test.ts`, `app/__tests__/audit-page.test.tsx`, dan `lib/__tests__/trust-score.test.ts` untuk cakupan test governance.
+Lihat `test/explain-api.test.ts`, `lib/__tests__/policy-layer.test.ts`, `app/__tests__/audit-page.test.tsx`, dan `lib/__tests__/trust-score.test.ts` untuk cakupan test governance.

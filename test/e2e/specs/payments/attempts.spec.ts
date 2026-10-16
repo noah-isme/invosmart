@@ -83,7 +83,7 @@ test.describe("payments: attempts and reporting", () => {
     "PAY-12 staging sandbox keys: Midtrans and Stripe checkouts record provider ids",
     { tag: "@staging", annotation: covers("/api/payments/midtrans/create", "/api/payments/stripe/create-session") },
     async ({ factory, api }) => {
-      // The full RUNBOOK "Payment provider contract" matrix (docs/RUNBOOK_RELEASE_CERTIFICATION.md)
+      // The full RUNBOOK "Payment provider contract" matrix (docs/runbooks/release-certification.md)
       // needs real sandbox webhooks; this spec covers the automated part: both
       // checkouts open against the sandbox providers and their ids are recorded.
       test.skip(process.env.E2E_TIER !== "staging", "Sandbox payment providers run on staging only (E2E_TIER=staging)");

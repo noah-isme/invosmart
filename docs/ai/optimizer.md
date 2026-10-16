@@ -36,7 +36,7 @@ PostHog & Sentry → fetchMetrics() → generateOptimizationRecommendations() �
 |--------------|---------|---------|---------|
 | LCP `/app/dashboard` | 3.9s | 3.3s | Hero section ditunda + prefetch data ringkasan |
 | INP `/app/invoices` | 290ms | 240ms | Memoisasi handler filter + cache respon API |
-| API latency `/api/invoices/summary` | 910ms | 640ms | Prefetch idle & caching client |
+| API latency `/api/invoices` | 910ms | 640ms | Prefetch idle & caching client (contoh historis; rute `/api/invoices/summary` sudah tidak ada) |
 
 \*Estimasi berdasarkan simulasi PostHog sampling 1 jam setelah deployment.
 

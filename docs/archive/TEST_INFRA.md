@@ -1,3 +1,5 @@
+> **Archived 2026-10-16:** historical test plan, superseded by [docs/E2E_TESTING.md](../E2E_TESTING.md). Not maintained.
+
 # E2E Test Infra: InvoSmart Phase 1 Near-Term Priority Implementation
 
 ## Test Philosophy

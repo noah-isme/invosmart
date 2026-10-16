@@ -1,3 +1,5 @@
+> **Archived 2026-10-16:** historical Phase 1 planning record, superseded by [docs/ROADMAP.md](../ROADMAP.md). Status and paths below are not maintained.
+
 # Project: InvoSmart Phase 1 Near-Term Priority Implementation
 
 ## Architecture
