@@ -21,7 +21,8 @@
 //   manage_workspace POST /api/workspaces/[id]/api-keys,
 //                    DELETE /api/workspaces/[id]/api-keys/[keyId],
 //                    POST /api/workspaces/[id]/notifications,
-//                    POST /api/workspaces/[id]/reminder-rules (denied -> 403)
+//                    POST /api/workspaces/[id]/reminder-rules,
+//                    GET /api/admin/audit-logs (canManageWorkspace; denied -> 403)
 //   platform admin   POST /api/admin/feature-flags (isPlatformAdmin, i.e.
 //                    ADMIN_USER_IDS; any workspace role -> 403)
 //   membership       POST /api/workspaces/switch to a workspace the caller is
@@ -128,7 +129,7 @@ const invoiceUpdateBody = (invoice: InvoiceRecord, notes: string) => ({
 // @covers: /api/clients, /api/clients/[id], /api/invoices/templates, /api/receipts/create, /api/invoices/export
 // @covers: /api/workspaces/[id]/invitations, /api/workspaces/[id]/members/[membershipId], /api/workspaces/[id]/api-keys
 // @covers: /api/workspaces/[id]/api-keys/[keyId], /api/workspaces/[id]/notifications, /api/workspaces/[id]/reminder-rules
-// @covers: /api/admin/feature-flags, /api/opt/local/start, /api/workspaces/switch
+// @covers: /api/admin/feature-flags, /api/opt/local/start, /api/workspaces/switch, /api/admin/audit-logs
 const OPERATIONS: Operation[] = [
   {
     name: "create invoice",
@@ -351,6 +352,13 @@ const EXTRA_OPERATIONS: Operation[] = [
       }),
   },
   {
+    name: "read audit log",
+    requires: "manage_workspace",
+    ok: 200,
+    route: "/api/admin/audit-logs",
+    run: ({ actor, rbacOrg }) => actor.api.get("/api/admin/audit-logs?limit=1", { organizationId: rbacOrg }),
+  },
+  {
     name: "switch to non-member workspace",
     requires: "non_member",
     ok: 200,
@@ -362,7 +370,7 @@ const EXTRA_OPERATIONS: Operation[] = [
 
 test.describe("WS-06 RBAC matrix", () => {
   test(
-    "WS-06 RBAC matrix: 4 roles x 18 operations plus start experiment and non-member switch match lib/workspaces.ts",
+    "WS-06 RBAC matrix: 4 roles x 18 operations plus start experiment, audit-log read and non-member switch match lib/workspaces.ts",
     {
       annotation: [
         ...covers(...new Set([...OPERATIONS, ...EXTRA_OPERATIONS].map((op) => op.route)), "/api/workspaces/[id]/notifications/[endpointId]", "/api/workspaces/[id]/reminder-rules/[ruleId]"),
@@ -463,7 +471,7 @@ test.describe("WS-06 RBAC matrix", () => {
         });
       }
 
-      expect(rows).toHaveLength(20);
+      expect(rows).toHaveLength(21);
       expect(OPERATIONS).toHaveLength(18);
     },
   );

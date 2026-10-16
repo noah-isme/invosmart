@@ -97,7 +97,7 @@ test.describe("audit logs", () => {
         {
           type: "note",
           description:
-            "/app/admin/audit-logs is platform-admin only and global since the admin-access fix; the page part runs as the platformAdmin persona, scoped with the Tenant ID filter. The API is workspace-scoped and needs only read access.",
+            "/app/admin/audit-logs is platform-admin only and global since the admin-access fix; the page part runs as the platformAdmin persona, scoped with the Tenant ID filter. The API is workspace-scoped and OWNER/ADMIN only (manage_workspace); newApiUser is the OWNER of its personal workspace.",
         },
       ],
     },
@@ -198,7 +198,7 @@ test.describe("audit logs", () => {
         {
           type: "note",
           description:
-            "No divergence: app/api/admin/audit-log/route.ts re-exports the plural GET and app/app/admin/audit-log/page.tsx re-exports the plural page. The divergence that does exist is between API and page: the API is workspace-scoped for any member with read access (VIEWER included), the pages are platform-admin only and list every tenant.",
+            "No divergence: app/api/admin/audit-log/route.ts re-exports the plural GET and app/app/admin/audit-log/page.tsx re-exports the plural page. The divergence that does exist is between API and page: the API is workspace-scoped and OWNER/ADMIN only (MEMBER and VIEWER get 403), the pages are platform-admin only and list every tenant.",
         },
       ],
     },
