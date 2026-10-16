@@ -552,3 +552,78 @@ describe("FederationBus", () => {
     });
   });
 });
+
+describe("FederationBus wire round trip", () => {
+  const priorities = [{ agent: "optimizer" as const, weight: 0.5, confidence: 0.5, rationale: "x" }];
+  const payloads = {
+    telemetry_sync: { tenantId: "tenant-a", trustScore: 50, priorities, sanitized: true },
+    priority_share: { tenantId: "tenant-a", cycleId: "c1", priorities, rationale: "r" },
+    trust_aggregate: {
+      tenantId: "tenant-a",
+      cycleId: "c1",
+      participants: 1,
+      averageTrust: 50,
+      highestTrust: null,
+      lowestTrust: null,
+      networkHealth: "healthy" as const,
+      aggregatedPriorities: priorities,
+      summary: "s",
+    },
+    model_update: {
+      tenantId: "tenant-a",
+      cycleId: "c1",
+      priorities,
+      trustScore: 50,
+      appliedAt: "2026-10-17T00:00:00.000Z",
+      notes: "n",
+    },
+  };
+
+  beforeEach(() => {
+    inbound.rows.length = 0;
+    inbound.create.mockClear();
+  });
+
+  for (const [type, payload] of Object.entries(payloads) as Array<[keyof typeof payloads, (typeof payloads)[keyof typeof payloads]]>) {
+    it(`${type}: the payload sent over the wire verifies and arrives unchanged`, async () => {
+      const wire: unknown[] = [];
+      const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+        wire.push(JSON.parse(String(init?.body)));
+        return new Response("{}", { status: 202 });
+      }) as unknown as typeof fetch;
+      const producer = new FederationBus({
+        tenantId: "tenant-a",
+        hmacSecret: "shared-hmac",
+        endpoints: ["https://tenant-b.example"],
+        enabled: true,
+        fetchImpl,
+      });
+      const consumer = new FederationBus({ tenantId: "tenant-b", hmacSecret: "shared-hmac", enabled: true });
+      const listener = vi.fn();
+      consumer.subscribe(type, listener);
+
+      await producer.publish({ type, payload } as Parameters<FederationBus["publish"]>[0]);
+
+      expect(wire).toHaveLength(1);
+      await expect(consumer.ingest(wire[0] as FederationEvent)).resolves.toBe(true);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][0].payload).toEqual(payload);
+    });
+  }
+
+  it("validates the payload with the schema of its event type, not the first that matches", () => {
+    const base = {
+      id: "evt-1",
+      tenantId: "tenant-a",
+      timestamp: new Date().toISOString(),
+      signature: "0123456789abcdef",
+    };
+    // A model_update payload also satisfies the telemetry_sync schema; it must keep its own fields.
+    const parsed = federationEventSchema.parse({ ...base, type: "model_update", payload: payloads.model_update });
+    expect(parsed.payload).toEqual(payloads.model_update);
+    // A telemetry_sync payload sent as priority_share is rejected.
+    expect(
+      federationEventSchema.safeParse({ ...base, type: "priority_share", payload: payloads.telemetry_sync }).success,
+    ).toBe(false);
+  });
+});

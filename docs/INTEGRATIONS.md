@@ -325,7 +325,7 @@ Leave it unset to disable.
   | Rate limit, `federation-events` bucket (10/min per IP per instance; tunable if a busy peer needs more) | `429` with `Retry-After` |
   | `Authorization: Bearer $FEDERATION_TOKEN_SECRET` (constant time) | `401`; `503` in production when the secret is unset |
   | Body at most 64 KB | `413` |
-  | JSON and FDP schema | `400` (the body is not echoed) |
+  | JSON and FDP schema; the `payload` is validated with the schema of the event `type` | `400` (the body is not echoed) |
   | Signature (RSA-SHA256 with the sender's registered key, or HMAC-SHA256 with `FEDERATION_HMAC_SECRET`) | `401 {error:"Invalid federation signature"}` |
   | Event `timestamp` within 5 minutes of local time | `401 {error:"Stale federation event"}` |
   | Not seen before (unique SHA-256 of the signature in `FederationInboundEvent`) | `200 {accepted:false, duplicate:true}` |

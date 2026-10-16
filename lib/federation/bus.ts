@@ -327,6 +327,11 @@ export class FederationBus {
     }
 
     const event = federationEventSchema.parse(rawEvent) as FederationEvent<TType>;
+    // Peers verify the signature over what is sent, so validation must not
+    // have changed a single field of what was signed.
+    if (this.getSignableString(event, event) !== signableString) {
+      throw new Error("Federation event changed during validation; refusing to send");
+    }
     return event;
   }
 
