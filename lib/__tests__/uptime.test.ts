@@ -53,6 +53,10 @@ describe("Milestone M6: Uptime Monitoring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    delete process.env.NEXTAUTH_URL;
+    delete process.env.VERCEL_URL;
+    delete process.env.UPTIME_MONITORED_ENDPOINTS;
   });
 
   afterEach(() => {
@@ -62,7 +66,7 @@ describe("Milestone M6: Uptime Monitoring", () => {
 
   describe("Health Check Endpoint (/api/health)", () => {
     it("returns HTTP 200 with status 'ok' and an ISO timestamp", async () => {
-      const response = await getHealth();
+      const response = await getHealth(new NextRequest("http://localhost:3000/api/health"));
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -83,6 +87,32 @@ describe("Milestone M6: Uptime Monitoring", () => {
         process.env.NEXTAUTH_URL = "http://localhost:3000";
         expect(resolveTargetUrl("/api/health")).toBe("http://localhost:3000/api/health");
         expect(resolveTargetUrl("api/invoices")).toBe("http://localhost:3000/api/invoices");
+      });
+
+      it("prefixes the scheme-less VERCEL_URL with https://", () => {
+        process.env.VERCEL_URL = "my-app.vercel.app";
+        expect(resolveTargetUrl("/api/health?db=1")).toBe("https://my-app.vercel.app/api/health?db=1");
+      });
+
+      it("prefers NEXT_PUBLIC_APP_URL, then NEXTAUTH_URL, over VERCEL_URL", () => {
+        process.env.VERCEL_URL = "my-app.vercel.app";
+        process.env.NEXTAUTH_URL = "https://auth.example.com/";
+        expect(resolveTargetUrl("/api/health?db=1")).toBe("https://auth.example.com/api/health?db=1");
+        process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
+        expect(resolveTargetUrl("/api/health?db=1")).toBe("https://app.example.com/api/health?db=1");
+      });
+
+      it("falls back to localhost only when no base URL is configured", () => {
+        expect(resolveTargetUrl("/api/health")).toBe("http://localhost:3000/api/health");
+      });
+    });
+
+    describe("DEFAULT_ENDPOINTS", () => {
+      it("contains only relative paths (the deep health check)", () => {
+        expect(DEFAULT_ENDPOINTS).toEqual(["/api/health?db=1"]);
+        for (const endpoint of DEFAULT_ENDPOINTS) {
+          expect(endpoint.startsWith("/")).toBe(true);
+        }
       });
     });
 
@@ -206,6 +236,39 @@ describe("Milestone M6: Uptime Monitoring", () => {
 
         expect(results.length).toBe(DEFAULT_ENDPOINTS.length);
         expect(mockFetch).toHaveBeenCalledTimes(DEFAULT_ENDPOINTS.length);
+      });
+
+      it("probes the resolved default on the deployed host, never localhost, when NEXTAUTH_URL is set", async () => {
+        process.env.NEXTAUTH_URL = "https://invosmart.example.com";
+        const mockFetch = vi.fn().mockResolvedValue({ status: 200, ok: true });
+        vi.stubGlobal("fetch", mockFetch);
+        uptimeCheckMock.create.mockResolvedValue({ id: "check_host", status: "UP" });
+
+        const results = await runUptimeChecks();
+
+        const fetched = mockFetch.mock.calls.map((call) => String(call[0]));
+        expect(fetched).toEqual(["https://invosmart.example.com/api/health?db=1"]);
+        expect(fetched.some((url) => url.includes("localhost"))).toBe(false);
+        // The configured (relative) value is stored, so history stays comparable.
+        expect(results[0].url).toBe("/api/health?db=1");
+        expect(uptimeCheckMock.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({ url: "/api/health?db=1" }),
+        });
+      });
+
+      it("reads UPTIME_MONITORED_ENDPOINTS, trimming and dropping empty entries", async () => {
+        process.env.NEXTAUTH_URL = "https://invosmart.example.com";
+        process.env.UPTIME_MONITORED_ENDPOINTS = " /api/health , ,https://status.example.com/ping,";
+        const mockFetch = vi.fn().mockResolvedValue({ status: 200, ok: true });
+        vi.stubGlobal("fetch", mockFetch);
+        uptimeCheckMock.create.mockResolvedValue({ id: "check_env", status: "UP" });
+
+        await runUptimeChecks();
+
+        expect(mockFetch.mock.calls.map((call) => String(call[0]))).toEqual([
+          "https://invosmart.example.com/api/health",
+          "https://status.example.com/ping",
+        ]);
       });
 
       it("executes uptime checks for specified list of endpoints", async () => {

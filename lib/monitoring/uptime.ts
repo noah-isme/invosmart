@@ -1,18 +1,26 @@
 import { db } from "@/lib/db";
 import { dispatchWebhookAlert } from "@/lib/ai/webhooks";
 
-export const DEFAULT_ENDPOINTS = [
-  "http://localhost:3000/api/health",
-  "http://localhost:3000/api/invoices",
-];
+// Relative paths are resolved against the deployed host (resolveTargetUrl).
+// The deep health check pings the database; /api/invoices is not probed
+// because it needs a session and a 401 would be counted as DOWN.
+export const DEFAULT_ENDPOINTS = ["/api/health?db=1"];
+
+/** The deployed app's origin: explicit app URL, then NextAuth URL, then the Vercel host. */
+function resolveBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
+  // VERCEL_URL is a bare host name without a scheme.
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
 
 export function resolveTargetUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || "http://localhost:3000";
-  const cleanBase = baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`;
-  return `${cleanBase.replace(/\/+$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+  const baseUrl = resolveBaseUrl().replace(/\/+$/, "");
+  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 export type UptimeCheckResult = {
@@ -110,12 +118,12 @@ export async function checkEndpoint(
 export async function runUptimeChecks(
   urls?: string[]
 ): Promise<UptimeCheckResult[]> {
+  const configured = (process.env.UPTIME_MONITORED_ENDPOINTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   const targetUrls =
-    urls && urls.length > 0
-      ? urls
-      : process.env.UPTIME_MONITORED_ENDPOINTS
-      ? process.env.UPTIME_MONITORED_ENDPOINTS.split(",").map((s) => s.trim())
-      : DEFAULT_ENDPOINTS;
+    urls && urls.length > 0 ? urls : configured.length > 0 ? configured : DEFAULT_ENDPOINTS;
 
   const results: UptimeCheckResult[] = [];
   for (const url of targetUrls) {
