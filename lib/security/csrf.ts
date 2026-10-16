@@ -43,6 +43,10 @@ export function getCsrfCookieName(): string {
  * - `/api/share/checkout` (public invoice share page) verifies the HMAC
  *   invoice share token from the request body (`verifyInvoiceShareToken` in
  *   lib/invoice-delivery.ts), which is bound to one invoice id and expires.
+ * - `/api/federation/events` (peer-to-peer federation ingest) checks the peer
+ *   bearer (FEDERATION_TOKEN_SECRET, lib/federation/auth.ts) and verifies the
+ *   event's RSA/HMAC signature before its only write (the replay log), and
+ *   refuses with 503 when federation is not configured.
  *
  * Any path added here MUST verify a signature before any side effect (DB
  * access included), fail closed when its secret is missing, and MUST NOT read
@@ -53,6 +57,7 @@ const CSRF_EXEMPT_WEBHOOK_SET: ReadonlySet<string> = new Set([
   "/api/payments/midtrans/notification",
   "/api/webhooks/resend",
   "/api/share/checkout",
+  "/api/federation/events",
 ]);
 
 /** Frozen copy of the allowlist, for documentation and tests. */

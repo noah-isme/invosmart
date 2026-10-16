@@ -88,7 +88,9 @@ Double-submit cookie, enforced in `middleware.ts` with helpers from
     signed provider webhooks `/api/payments/stripe/webhook`,
     `/api/payments/midtrans/notification`, `/api/webhooks/resend`, and the
     public share-link checkout `/api/share/checkout`, whose verified
-    signature is the HMAC invoice share token in the request body. Any path
+    signature is the HMAC invoice share token in the request body, and the
+    federation ingest `/api/federation/events` (peer bearer plus RSA/HMAC
+    event signature, see [Federation](#federation)). Any path
     added to this list must verify a signature before touching the database,
     fail closed when its secret is missing, and never read session cookies.
     The middleware does not issue the CSRF cookie on these responses.

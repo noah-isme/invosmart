@@ -104,9 +104,10 @@ describe("Signature-verified CSRF exemption (webhooks and share checkout)", () =
     "/api/payments/midtrans/notification",
     "/api/webhooks/resend",
     "/api/share/checkout",
+    "/api/federation/events",
   ];
 
-  it("lists exactly the three webhook paths plus the share checkout and is frozen", () => {
+  it("lists exactly the three webhook paths plus the share checkout and federation ingest, frozen", () => {
     expect([...CSRF_EXEMPT_WEBHOOK_PATHS]).toEqual(exempt);
     expect(Object.isFrozen(CSRF_EXEMPT_WEBHOOK_PATHS)).toBe(true);
   });
@@ -142,6 +143,10 @@ describe("Signature-verified CSRF exemption (webhooks and share checkout)", () =
       ["share checkout trailing slash", "/api/share/checkout/", "POST"],
       ["share checkout sub-path", "/api/share/checkout/x", "POST"],
       ["share prefix only", "/api/share", "POST"],
+      ["PUT on federation events", "/api/federation/events", "PUT"],
+      ["federation events trailing slash", "/api/federation/events/", "POST"],
+      ["federation events sub-path", "/api/federation/events/x", "POST"],
+      ["federation status", "/api/federation/status", "POST"],
     ])("still enforces CSRF for %s (%s %s)", async (_label, pathname, method) => {
       process.env.NODE_ENV = env;
       const res = handleCsrfAndResponse(
