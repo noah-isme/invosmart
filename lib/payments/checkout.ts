@@ -371,3 +371,9 @@ export function shareCheckoutIdempotencyKey(provider: CheckoutProvider, invoiceI
 function shareCheckoutWindow(nowMs: number): number {
   return Math.floor(nowMs / SHARE_ATTEMPT_WINDOW_MS);
 }
+
+/** Whole seconds until the share key window of `nowMs` ends (1–30). */
+export function secondsUntilNextShareWindow(nowMs: number): number {
+  const windowEnd = (shareCheckoutWindow(nowMs) + 1) * SHARE_ATTEMPT_WINDOW_MS;
+  return Math.max(1, Math.ceil((windowEnd - nowMs) / 1000));
+}

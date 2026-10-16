@@ -337,6 +337,29 @@ describe('POST /api/share/checkout', () => {
     expect(mocks.attempts[0].expiresAt?.getTime()).toBe(params.expires_at * 1000);
   });
 
+  it('answers 503 retry (not 409) when this window already has a failed attempt, and recovers in the next window', async () => {
+    const start = freezeClockAtWindowStart();
+    const body = validBody();
+    mocks.createSession.mockRejectedValueOnce(new Error('stripe exploded: sk_live_secret'));
+
+    expect((await POST(post(body))).status).toBe(500);
+    expect(mocks.attempts[0].status).toBe('FAILED');
+
+    vi.setSystemTime(start + 10_000);
+    const retry = await POST(post(body));
+    expect(retry.status).toBe(503);
+    expect(retry.headers.get('retry-after')).toBe('20');
+    const retryBody = await retry.json();
+    expect(retryBody).toEqual({ error: 'Payment could not be started. Please try again shortly.', retry: true });
+    expect(JSON.stringify(retryBody)).not.toMatch(/idempotency|stripe exploded|sk_live/i);
+    expect(mocks.createSession).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(start + 30_000);
+    const next = await POST(post(body));
+    expect(next.status).toBe(200);
+    expect(mocks.createSession).toHaveBeenCalledTimes(2);
+  });
+
   it('collapses 5 concurrent calls onto exactly one attempt through the P2002 fallback', async () => {
     const body = validBody();
     const responses = await Promise.all(Array.from({ length: 5 }, () => POST(post(body))));

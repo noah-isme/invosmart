@@ -65,7 +65,9 @@ async function requestCheckout(body: { invoiceId: string; token: string; provide
     });
     const data = (await response.json().catch(() => ({}))) as CheckoutResponse;
     if (response.ok) return data;
-    if (response.status === 409 && "retry" in data && data.retry && attempt < MAX_PREPARE_RETRIES) {
+    // 409 retry: the checkout is still being prepared. 503 retry: the
+    // provider call failed and the server accepts a new attempt shortly.
+    if ((response.status === 409 || response.status === 503) && "retry" in data && data.retry && attempt < MAX_PREPARE_RETRIES) {
       await sleep(RETRY_DELAY_MS);
       continue;
     }

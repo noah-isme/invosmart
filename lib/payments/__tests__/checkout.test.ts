@@ -8,6 +8,7 @@ import {
   checkoutCurrencyError,
   isMidtransCheckoutConfigured,
   pickShareCheckoutProvider,
+  secondsUntilNextShareWindow,
   shareCheckoutIdempotencyKey,
   shareCheckoutKeyPrefix,
   stripeSessionExpiresAt,
@@ -71,6 +72,15 @@ describe('shareCheckoutKeyPrefix', () => {
     const key = shareCheckoutIdempotencyKey('stripe', 'inv', 1_700_000_010_000);
     expect(key.startsWith(shareCheckoutKeyPrefix('stripe', 'inv'))).toBe(true);
     expect(key.startsWith(shareCheckoutKeyPrefix('midtrans', 'inv'))).toBe(false);
+  });
+});
+
+describe('secondsUntilNextShareWindow', () => {
+  it('counts whole seconds to the next 30 s window, at least 1', () => {
+    const base = 1_700_000_010_000;
+    expect(secondsUntilNextShareWindow(base)).toBe(30);
+    expect(secondsUntilNextShareWindow(base + 10_000)).toBe(20);
+    expect(secondsUntilNextShareWindow(base + 29_999)).toBe(1);
   });
 });
 

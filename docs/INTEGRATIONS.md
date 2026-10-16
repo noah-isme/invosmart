@@ -79,8 +79,10 @@ a session, authorised by the share token ([SECURITY.md](../SECURITY.md#public-li
   started from the app is never reused: its return URLs point into the app),
   so a reload after the window still gets the same checkout; a new attempt
   is created only once that one is no longer active. A request that finds
-  the attempt still waiting for the provider gets `409 { retry: true }` and
-  the page retries after a second.
+  the attempt still waiting for the provider gets `409 { retry: true }`; one
+  whose window attempt failed at the provider gets
+  `503 { retry: true }` with `Retry-After` until the next window. The page
+  retries a `retry: true` answer after a second.
 - **Return URLs**: Stripe `success_url`/`cancel_url` are the share URL plus
   `payment=success` or `payment=cancelled`, built from `NEXT_PUBLIC_APP_URL`,
   then `NEXTAUTH_URL`, then the request origin. Snap callbacks return to the

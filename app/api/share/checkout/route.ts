@@ -16,6 +16,7 @@ import {
   createStripeCheckout,
   findOrCreatePaymentAttempt,
   isMidtransCheckoutConfigured,
+  secondsUntilNextShareWindow,
   shareCheckoutIdempotencyKey,
   shareCheckoutKeyPrefix,
 } from '@/lib/payments/checkout';
@@ -117,7 +118,12 @@ export async function POST(request: NextRequest) {
       source: SOURCE,
     });
     if (result.kind === 'idempotency_conflict') {
-      return json({ error: 'Idempotency key has already been used' }, 409);
+      // This window's attempt is no longer active (its provider call failed);
+      // a new attempt can be created once the key window rolls over.
+      return NextResponse.json(
+        { error: 'Payment could not be started. Please try again shortly.', retry: true },
+        { status: 503, headers: { 'Retry-After': String(secondsUntilNextShareWindow(now.getTime())) } },
+      );
     }
 
     let attempt = result.attempt;
