@@ -84,7 +84,7 @@ npx prisma migrate status
 The baseline PostgreSQL migration is located at:
 `prisma/migrations/20260811000000_init_postgresql_schema/migration.sql`
 
-This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 14 tables and 4 enums; `prisma/schema.prisma` currently defines **32 models and 12 enums**.
+This migration creates the original 18 tables and 8 PostgreSQL enum types (the Phase 1 core, AI and audit models), with their indexes and foreign keys. Later migrations add the remaining 15 tables and 4 enums; `prisma/schema.prisma` currently defines **33 models and 12 enums**.
 
 | Migration | Tables added | Enums added |
 |---|---|---|
@@ -97,6 +97,7 @@ This migration creates the original 18 tables and 8 PostgreSQL enum types (the P
 | `20260814100000_invoice_reminder_deliveries` | 1 | 1 |
 | `20260814110000_api_keys` | 1 | 0 |
 | `20260827070000_add_performance_indexes` | 0 (indexes) | 0 |
+| `20261016170000_federation_inbound_events` | 1 | 0 |
 
 ### 3.5 Payment Lifecycle Migration
 
@@ -127,7 +128,7 @@ timestamps support the versioned customer API without exposing raw secrets.
 | **Workspace (required)** | `organizationId` is non-null with a cascading FK to `Organization`. Access is decided by `Membership`. | `Membership`, `WorkspaceInvitation`, `WorkspaceNotificationEndpoint`, `InvoiceReminderRule`, `InvoiceReminderOccurrence`, `ApiKey` |
 | **Workspace with legacy user fallback** | `organizationId` is **nullable** (`onDelete: SetNull`) and `userId` is required. While `WORKSPACE_AUTH_MODE=compat`, rows with no organization are scoped to their `userId` (the `LEGACY` role in `lib/workspaces.ts`). Under `enforce`, only membership grants access. | `Invoice`, `Client`, `InvoiceTemplate` |
 | **Inherited from parent** | No ownership column of their own. Access follows the parent row, and they are deleted with it (`onDelete: Cascade`). | `Payment`, `PaymentAttempt`, `PaymentEvent` (via `Invoice`); `Receipt`, `ReceiptAuditLog` (via `Payment`); `InvoiceReminderDelivery` (via `InvoiceReminderOccurrence`) |
-| **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId` |
+| **Tenant-tagged, no FK** | A free-form tenant string or nullable `organizationId` without a foreign key. Readers must filter on it. | `AuditLog.tenantId`, `ContentExperiment`, `AiAutoAction`, `GlobalContentSignal`, `FederationMetrics.tenantId`, `FederationInboundEvent.tenantId` |
 | **Global / platform** | Not tenant data. Only platform admins can read or change it (see [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md#platform-administrators)). | `User` (identity), `FeatureFlag`, `UptimeCheck`, `OptimizationLog`, `ExplanationLog`, `LearningProfile`, `AgentEventLog`, `AgentPriority`, `RecoveryLog` |
 
 Money columns (`subtotal`, `tax`, `total`, `amount`, `paidAmount`, `refundedAmount`) are integers in the currency's major unit (IDR has no minor unit). The currency is stored next to them, and the default is `IDR`.
@@ -256,6 +257,7 @@ All of these are global platform telemetry, with no tenant column.
 | Model | Purpose | Ownership |
 |---|---|---|
 | `FederationMetrics` | Aggregate trust statistics and agent priorities per federation cycle. `@@unique([cycleId, tenantId])`. See the federation docs under `docs/ai/`. | Tenant-tagged (`tenantId` string) |
+| `FederationInboundEvent` | One row per event received on `POST /api/federation/events` that passed signature verification and the 5-minute freshness window: `eventId`, sender `tenantId`, `type`, `signatureAlgorithm`, `eventTimestamp`, `receivedAt`, and `accepted` (`false` for echoes of this instance's own events). `signatureHash` (SHA-256 of the signature) is `@unique` and is the replay key, because the signature does not cover the event `id`. No retention purge yet; the table grows by one row per verified event. | Tenant-tagged (`tenantId` string, the sender) |
 
 ### 4.13 Lifecycles
 

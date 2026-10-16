@@ -387,6 +387,26 @@ model FederationMetrics {
   @@unique([cycleId, tenantId])
 }
 
+/// One row per inbound federation event that passed signature verification
+/// and the freshness window. signatureHash (SHA-256 of the signature) is the
+/// replay key: the signature covers type/tenantId/timestamp/payload but not
+/// `id`, so a replay with a fresh id still collides here.
+model FederationInboundEvent {
+  id                 String   @id @default(cuid())
+  eventId            String
+  tenantId           String
+  type               String
+  signatureAlgorithm String
+  signatureHash      String   @unique
+  eventTimestamp     DateTime
+  receivedAt         DateTime @default(now())
+  accepted           Boolean
+
+  @@index([eventId])
+  @@index([tenantId, receivedAt])
+  @@index([receivedAt])
+}
+
 enum ExperimentAxis {
   HOOK
   CAPTION
