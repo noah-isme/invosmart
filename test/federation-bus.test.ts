@@ -3,12 +3,30 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { FederationBus, generateFederationKeyPair } from "@/lib/federation/bus";
 import type { FederationEvent } from "@/lib/federation/protocol";
 
+// In-memory stand-in for db.federationInboundEvent with the unique
+// signatureHash constraint (P2002 on a second insert).
+const inbound = vi.hoisted(() => {
+  const rows: Array<Record<string, unknown>> = [];
+  const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+    if (rows.some((row) => row.signatureHash === data.signatureHash)) {
+      throw Object.assign(new Error("Unique constraint failed on signatureHash"), { code: "P2002" });
+    }
+    rows.push(data);
+    return data;
+  });
+  return { rows, create };
+});
+
+vi.mock("@/lib/db", () => ({ db: { federationInboundEvent: { create: inbound.create } } }));
+
 describe("FederationBus", () => {
   const secret = "secret-key";
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     fetchMock = vi.fn();
+    inbound.rows.length = 0;
+    inbound.create.mockClear();
   });
 
   it("publishes events and notifies subscribers", async () => {
@@ -391,6 +409,122 @@ describe("FederationBus", () => {
       const { event } = await producer.publish({ type: "telemetry_sync", payload });
 
       await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+    });
+  });
+  describe("freshness and replay guard", () => {
+    const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
+    const pair = () => ({
+      producer: new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true }),
+      consumer: new FederationBus({ tenantId: "tenant-b", hmacSecret: "shared-hmac", enabled: true }),
+    });
+
+    it("rejects an event older than the 5-minute window", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload,
+        timestamp: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
+      });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Stale federation event/);
+      expect(listener).not.toHaveBeenCalled();
+      expect(inbound.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects an event from more than 5 minutes in the future", async () => {
+      const { producer, consumer } = pair();
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload,
+        timestamp: new Date(Date.now() + 6 * 60 * 1000).toISOString(),
+      });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Stale federation event/);
+    });
+
+    it("records an accepted event and rejects the same event a second time", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).resolves.toBe(true);
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Duplicate federation event/);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(inbound.rows).toHaveLength(1);
+      expect(inbound.rows[0]).toMatchObject({
+        eventId: event?.id,
+        tenantId: "tenant-a",
+        type: "telemetry_sync",
+        signatureAlgorithm: "hmac-sha256",
+        accepted: true,
+      });
+      expect(inbound.rows[0].signatureHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("rejects the same signed event re-sent with a new id (the id is not signed)", async () => {
+      const { producer, consumer } = pair();
+      const listener = vi.fn();
+      consumer.subscribe("telemetry_sync", listener);
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      const replay = { ...(event as FederationEvent), id: "a-brand-new-id" };
+      await expect(consumer.ingest(replay)).rejects.toThrow(/Duplicate federation event/);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats an upper-case hex copy of the signature as the same event", async () => {
+      const { producer, consumer } = pair();
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      const variant = { ...(event as FederationEvent), signature: event!.signature.toUpperCase() };
+      await expect(consumer.ingest(variant)).rejects.toThrow(/Duplicate federation event/);
+    });
+
+    it("records an own-tenant echo with accepted=false and does not emit it", async () => {
+      const bus = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const { event } = await bus.publish({ type: "telemetry_sync", payload });
+      const listener = vi.fn();
+      bus.subscribe("telemetry_sync", listener);
+
+      await expect(bus.ingest(event as FederationEvent)).resolves.toBe(false);
+      expect(listener).not.toHaveBeenCalled();
+      expect(inbound.rows).toEqual([expect.objectContaining({ tenantId: "tenant-a", accepted: false })]);
+    });
+
+    it("rejects a forged HMAC event before any database write", async () => {
+      const forger = new FederationBus({ tenantId: "tenant-a", hmacSecret: "bearer-token", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        secret: "bearer-token",
+        hmacSecret: "shared-hmac",
+        enabled: true,
+      });
+      const { event } = await forger.publish({ type: "telemetry_sync", payload });
+
+      await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
+      expect(inbound.create).not.toHaveBeenCalled();
+    });
+
+    it("uses an injected inbound store instead of the database when given one", async () => {
+      const create = vi.fn().mockResolvedValue({});
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const consumer = new FederationBus({
+        tenantId: "tenant-b",
+        hmacSecret: "shared-hmac",
+        enabled: true,
+        inboundStore: { create },
+      });
+      const { event } = await producer.publish({ type: "telemetry_sync", payload });
+
+      await consumer.ingest(event as FederationEvent);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(inbound.create).not.toHaveBeenCalled();
     });
   });
 });

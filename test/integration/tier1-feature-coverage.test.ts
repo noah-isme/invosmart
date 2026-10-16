@@ -94,6 +94,10 @@ vi.mock("@/lib/db", () => ({
       create: recoveryLogCreateMock,
       findMany: recoveryLogFindManyMock,
     },
+    // FederationBus.ingest() records every verified event (replay log).
+    federationInboundEvent: {
+      create: vi.fn().mockResolvedValue({}),
+    },
   },
 }));
 

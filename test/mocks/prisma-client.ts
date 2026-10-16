@@ -162,6 +162,15 @@ class AuditLogDelegate {
   deleteMany = vi.fn();
 }
 
+class FederationInboundEventDelegate {
+  create = vi.fn();
+  count = vi.fn();
+  findMany = vi.fn();
+  findFirst = vi.fn();
+  findUnique = vi.fn();
+  deleteMany = vi.fn();
+}
+
 export class PrismaClient {
   // Interactive transactions run the callback against this same client.
   $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(this));
@@ -175,4 +184,5 @@ export class PrismaClient {
   invoiceTemplate = new InvoiceTemplateDelegate();
   featureFlag = new FeatureFlagDelegate();
   uptimeCheck = new UptimeCheckDelegate();
+  federationInboundEvent = new FederationInboundEventDelegate();
 }
