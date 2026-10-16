@@ -1,88 +1,25 @@
-# Panduan Pengerjaan Proyek: Sistem Agen AI InvoSmart
+# Panduan Pengerjaan Proyek: InvoSmart
 
-Dokumen ini merangkum arsitektur agen, cara kerja protokol kolaborasi multi-agen, alur eksekusi otonom, serta panduan pengerjaan proyek bagi pengembang yang bekerja pada sistem agen AI InvoSmart.
+Instruksi untuk developer dan agen AI (Claude Code, Codex, Cursor) yang bekerja di repo ini: perintah, struktur, konvensi, dan cara memverifikasi pekerjaan. Detail arsitektur ada di [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md); indeks semua dokumen ada di [docs/README.md](./docs/README.md).
 
 ---
 
-## 1. Daftar Agen & Peran Aktual
+## 1. Ringkasan Sistem Agen AI
 
-InvoSmart mengintegrasikan enam agen AI utama yang berjalan secara terdistribusi dan dikoordinasikan oleh Orchestrator:
+InvoSmart memiliki enam agen AI yang dikoordinasikan oleh Orchestrator ([lib/ai/orchestrator.ts](./lib/ai/orchestrator.ts)) melalui **Multi-Agent Protocol (MAP)** dengan skema Zod di [lib/ai/protocol.ts](./lib/ai/protocol.ts). Dokumentasi lengkap: [docs/ai/](./docs/ai/) (orkestrasi, loop otonom, optimizer, learning, governance, federation).
 
-| Nama Agen | Peran & Deskripsi | Berkas Kode Utama |
+| Agen | Peran | Berkas utama |
 |---|---|---|
-| **Optimizer Agent** | Mengambil metrik (PostHog/Sentry) dan menghasilkan rekomendasi optimasi visual, API, dan performa serta mengoptimalkan varian konten. | [lib/ai/optimizer.ts](./lib/ai/optimizer.ts)<br>[lib/ai/content-local-optimizer.ts](./lib/ai/content-local-optimizer.ts) |
-| **Learning Agent** | Mengevaluasi dampak rekomendasi setelah diterapkan, melakukan kalkulasi composite impact, dan memperbarui bobot kepercayaan (*confidence weight*). | [lib/ai/learning.ts](./lib/ai/learning.ts) |
-| **Governance Agent** | Menjaga keamanan sistem dengan membatasi *auto-apply* pada rute kritis, memantau skor kepercayaan AI, dan menghasilkan log penjelasan keputusan. | [lib/ai/policy.ts](./lib/ai/policy.ts)<br>[lib/ai/trustScore.ts](./lib/ai/trustScore.ts) |
-| **Insight Agent** | Melakukan analisis korelasi lintas metrik performa aplikasi untuk memberikan rekomendasi optimasi yang lebih akurat. | [lib/ai/insightAgent.ts](./lib/ai/insightAgent.ts)<br>[lib/ai/globalInsight.ts](./lib/ai/globalInsight.ts) |
-| **Recovery Agent** | Memantau anomali performa secara berkala (regresi >10%) dan melakukan *rollback* otomatis jika ada penurunan performa yang disebabkan oleh aksi AI. | [lib/ai/recoveryAgent.ts](./lib/ai/recoveryAgent.ts)<br>[lib/ai/rollback.ts](./lib/ai/rollback.ts) |
-| **Federation Agent** | Menghubungkan telemetri anonim lintas tenant melalui protokol FDP yang ditandatangani untuk konsensus bobot agen dan analisis kesehatan jaringan global. | [lib/ai/federationAgent.ts](./lib/ai/federationAgent.ts) |
+| Optimizer | Rekomendasi optimasi dari metrik PostHog/Sentry; varian konten (LinUCB) | `lib/ai/optimizer.ts`, `lib/ai/content-local-optimizer.ts` |
+| Learning | Evaluasi dampak rekomendasi, pembaruan bobot kepercayaan | `lib/ai/learning.ts` |
+| Governance | Membatasi auto-apply pada rute kritis, trust score, log penjelasan | `lib/ai/policy.ts`, `lib/ai/trustScore.ts` |
+| Insight | Analisis korelasi lintas metrik | `lib/ai/insightAgent.ts`, `lib/ai/globalInsight.ts` |
+| Recovery | Deteksi regresi (>10% trust, >15% error rate) dan rollback otomatis | `lib/ai/recoveryAgent.ts`, `lib/ai/rollback.ts` |
+| Federation | Telemetri anonim lintas tenant via protokol FDP yang ditandatangani | `lib/ai/federationAgent.ts`, `lib/federation/bus.ts` |
 
----
+Resolusi konflik prioritas (`agentPriority` di `lib/ai/protocol.ts`): **Governance (90) > Recovery (85) > Optimizer (75) > Learning (60) > Insight (45) > Federation (35)**.
 
-## 2. Protokol MAP & Komunikasi Agen
-
-Semua agen berkomunikasi secara tidak langsung melalui broker pesan sentral di [lib/ai/orchestrator.ts](./lib/ai/orchestrator.ts) menggunakan **Multi-Agent Protocol (MAP)**.
-
-### Skema Event MAP (Zod)
-Setiap pesan divalidasi menggunakan skema Zod di [lib/ai/protocol.ts](./lib/ai/protocol.ts):
-```typescript
-export const agentRoleSchema = z.enum(['optimizer', 'learning', 'governance', 'insight', 'recovery', 'federation']);
-export const mapEventTypeSchema = z.enum(['recommendation', 'evaluation', 'policy_update', 'insight_report', 'recovery_action']);
-
-export const agentPriority: Record<AgentRole, number> = {
-  governance: 90,
-  recovery: 85,
-  optimizer: 75,
-  learning: 60,
-  insight: 45,
-  federation: 35,
-};
-```
-
-Setiap event memiliki struktur dasar:
-```typescript
-{
-  traceId: string,
-  type: 'recommendation' | 'evaluation' | 'policy_update' | 'insight_report' | 'recovery_action',
-  source: AgentRole,
-  target?: AgentRole,
-  priority: number (1-100),
-  timestamp: ISO8601 string,
-  payload: { summary, context, ... }
-}
-```
-
-### Resolusi Konflik Prioritas
-Jika terjadi konflik instruksi antara agen, Orchestrator memutus keputusan berdasarkan bobot prioritas dinamis:
-$$\text{Priority Order: } \text{Governance (90)} > \text{Recovery (85)} > \text{Optimizer (75)} > \text{Learning (60)} > \text{Insight (45)} > \text{Federation (35)}$$
-
----
-
-## 3. Siklus Loop Otonom (Autonomous Loop)
-
-Modul [lib/ai/loop.ts](./lib/ai/loop.ts) menjalankan alur iteratif `runLoop()` sebagai berikut:
-
-```
-Telemetry Ingestion (PostHog/Sentry) 
-                 ▼
-Dynamic Prioritization (Update Agent Weights)
-                 ▼
-Adaptive Scaling (Adjust Concurrency & Interval)
-                 ▼
-Recovery Sweep (Verify regression & run Rollback)
-                 ▼
-Event Dispatching (Update DB & Redis Streams)
-```
-
-1. **Sampling Metrik**: Membaca metrik performa p95 LCP, INP, dan latensi API. Setiap telemetri melacak `regressionDetected`, `recoveryAction`, dan `rollbackCount` untuk trend analysis.
-2. **Prioritization**: Memperbarui bobot agen di tabel `AgentPriority` berbasis beban kerja sistem melalui `PrioritySignal`.
-3. **Scaling**: Modul [lib/ai/scaler.ts](./lib/ai/scaler.ts) menghitung frekuensi interval baru agar sistem hemat daya saat idle dan agresif saat sibuk berdasarkan latency, backlog, dan trust score.
-4. **Recovery Sweep**: `RecoveryAgent` memverifikasi apakah ada optimasi bermasalah dengan menganalisis regresi kepercayaan (>10%) atau error rate (>15%), lalu memicu action (noop/rollback/reevaluate). Recovery event didispatch ke stream agar agen lain dapat bereaksi.
-5. **Event Dispatching**: Semua events (recommendation, evaluation, policy_update, insight_report, recovery_action) dipersistensi ke DB dan Redis stream untuk audit trail dan cross-agent visibility.
-
----
-
-## 4. Instruksi Pengembangan bagi Developer
+Loop otonom (`runLoop()` di [lib/ai/loop.ts](./lib/ai/loop.ts)): telemetri → prioritas → scaling ([lib/ai/scaler.ts](./lib/ai/scaler.ts)) → recovery sweep → dispatch event. Detail: [docs/ai/autonomy.md](./docs/ai/autonomy.md).
 
 ### Menambahkan Agen Baru
 1. Daftarkan tipe agen baru di `agentRoleSchema` enum pada berkas [lib/ai/protocol.ts](./lib/ai/protocol.ts).
@@ -92,80 +29,59 @@ Event Dispatching (Update DB & Redis Streams)
 5. Call `registerAgent()` pada module load untuk mendaftarkan ke Orchestrator registry.
 6. Implementasikan dispatch event melalui `dispatchEvent()` untuk komunikasi antar-agen.
 7. Buat file pengujian di bawah `lib/__tests__/` untuk memverifikasi fungsionalitas logika agen dan event dispatch.
+8. Perbarui [docs/ai/](./docs/ai/) dan tabel di atas.
 
-### Menjalankan Uji Mutu (Lint & Test)
-Pastikan semua kode mematuhi standar kualitas sebelum melakukan commit:
+---
+
+## 2. Verifikasi Sebelum Menyatakan Selesai
+
+Jalankan gate yang sama dengan CI (`build-and-test` di `.github/workflows/release.yml`) sebelum commit atau sebelum menyatakan pekerjaan selesai:
 ```bash
-# Menjalankan Linter
-npm run lint
-
-# Menjalankan Unit Tests (Vitest)
-npm run test
-
-# Menjalankan Build Produksi Next.js
-npm run build
+npm run lint              # ESLint
+npm run typecheck         # tsc --noEmit (aplikasi)
+npm run typecheck:e2e     # tsc untuk test/e2e dan playwright.config.ts
+npm run test              # Unit tests (Vitest)
+npm run docs:env-check    # setiap process.env yang dibaca kode tercantum di .env.example
+npm run build             # Build produksi Next.js
 ```
 
-Pengujian end-to-end (Playwright dengan PGlite in-memory dan provider stub lokal; butuh Node 24 dan `npx playwright install chromium`):
+Jika menyentuh database atau alur pengguna, jalankan juga pengujian integrasi dan end-to-end (Playwright dengan PGlite in-memory dan provider stub lokal; butuh Node 24 dan `npx playwright install chromium`):
 ```bash
+npm run test:integration   # lapisan integrasi DB (Vitest)
 npm run e2e:build          # build e2e (wajib sebelum Playwright; `npm run build` biasa menghapus stamp-nya)
 npm run test:e2e:smoke     # tier @smoke (gate PR)
 npm run test:e2e           # tier penuh (tanpa @staging)
-npm run test:integration   # lapisan integrasi DB (Vitest)
 node scripts/e2e-coverage-check.mjs   # setiap halaman dan rute API punya skenario atau waiver
 ```
 Arsitektur, variabel lingkungan, tier, dan cara menambah skenario: [docs/E2E_TESTING.md](./docs/E2E_TESTING.md).
 
-### Variabel Lingkungan Terkait Agen
-Tambahkan konfigurasi berikut ke `.env` Anda:
-```bash
-# Aktifkan seluruh loop otonom & optimasi AI
-ENABLE_AI_OPTIMIZER=true
-ENABLE_AI_LEARNING=true
-ENABLE_AI_GOVERNANCE=true
-ENABLE_AI_AUTONOMY=true
-ENABLE_AI_FEDERATION=true
+---
 
-# Batas kuota auto-publish per hari per tenant
-AI_SA_MAX_AUTOPUBLISH_PER_DAY=2
-```
+## 3. Variabel Lingkungan
+
+[`.env.example`](./.env.example) adalah satu-satunya referensi variabel lingkungan (termasuk flag `ENABLE_AI_*` dan `AI_SA_MAX_AUTOPUBLISH_PER_DAY`). Jangan menduplikasi daftar variabel di dokumen lain; tautkan ke `.env.example`.
 
 ---
 
-## 5. Status Integrasi Recovery Agent
+## 4. Saat mengubah X, perbarui Y
 
-**Status**: ✅ COMPLETED (2026-08-02)
-
-Recovery Agent kini fully integrated ke dalam MAP protocol dengan:
-- ✅ Registered di `agentRoleSchema` dengan priority 85
-- ✅ Event type `recovery_action` di `mapEventTypeSchema`
-- ✅ `runRecoverySweep()` dispatches recovery events ke orchestrator
-- ✅ Loop telemetry tracks `regressionDetected`, `recoveryAction`, `rollbackCount`
-- ✅ Documentation: `.omo/plans/recovery-agent-integration.md`
-
-Lihat [.omo/plans/recovery-agent-integration.md](./.omo/plans/recovery-agent-integration.md) untuk detail implementasi dan roadmap lanjutan.
+| Jika Anda… | Perbarui |
+|---|---|
+| Menambah atau mengganti nama variabel lingkungan | `.env.example` (dengan komentar; `npm run docs:env-check` akan gagal jika lupa) |
+| Menambah grup rute API baru | Indeks API di `README.md` dan [docs/README.md](./docs/README.md); untuk `/api/v1` juga [docs/API.md](./docs/API.md) dan `lib/openapi.ts` |
+| Menambah migrasi Prisma | Model data di [docs/DATABASE.md](./docs/DATABASE.md) |
+| Menambah penyedia eksternal atau webhook | [docs/INTEGRATIONS.md](./docs/INTEGRATIONS.md) |
+| Mengubah peran atau izin | [docs/WORKSPACE_RBAC.md](./docs/WORKSPACE_RBAC.md) |
+| Mengubah autentikasi, CSRF/CSP, rahasia, atau data pribadi | [SECURITY.md](./SECURITY.md) |
+| Membalik keputusan yang tercatat di ADR | ADR baru di [docs/adr/](./docs/adr/) yang men-*supersede* ADR lama |
+| Mengubah alur rilis, cron, atau langkah migrasi produksi | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) |
+| Menyelesaikan fitur atau fase | [docs/ROADMAP.md](./docs/ROADMAP.md) (CHANGELOG dibuat oleh semantic-release dari pesan commit) |
 
 ---
 
-## 6. Rencana Iterasi Berikutnya (Task Checklist)
+## 5. Status Proyek
 
-Berikut adalah beberapa tugas pengembangan agen yang telah selesai (Phase 1) dan yang akan datang:
-
-**✅ Phase 1 — Selesai (2026-08-11)**
-- [x] Migrasi dari local template-based bandit model ke **contextual bandit model (LinUCB)** penuh di `lib/ai/content-local-optimizer.ts`.
-- [x] Integrasi webhook Discord/Slack pada `ai_auto_actions` agar admin mendapatkan alert real-time (`lib/ai/webhooks.ts`).
-- [x] Menambahkan dukungan enkripsi asimetris RSA-2048/AES-256-GCM untuk payload bus data Federation di `lib/federation/bus.ts`.
-- [x] Migrasi database ke PostgreSQL dengan `prisma migrate dev` dan dokumentasi di `docs/DATABASE.md`.
-- [x] Implementasi CSRF protection (Double Submit Cookie) dan Content-Security-Policy di `middleware.ts` dan `next.config.ts`.
-- [x] Implementasi audit logging komprehensif (`lib/audit/auditLogger.ts`) untuk invoice, auth, dan AI auto-actions, dengan admin UI di `/app/admin/audit-logs`.
-
-**✅ Phase 2 — Selesai (2026-08-12)**
-- [x] Implementasi **recurring invoice templates** — simpan, kelola, dan instansiasi template faktur per-user (`app/api/invoices/templates/`, `app/app/invoices/templates/`).
-- [x] Implementasi **CSV / Excel export** — unduh daftar faktur sebagai `.csv` atau `.xlsx` (`lib/export-utils.ts`, `app/api/invoices/export/`).
-- [x] Implementasi **i18n framework** dengan locale English (`en`) dan Indonesian (`id`), persistensi per-user di database (`lib/i18n/`, `app/api/user/locale/`).
-- [x] Implementasi **Bayesian A/B statistics** — posterior probability, expected loss, dan credible interval untuk eksperimen (`lib/ai/bayesian-ab.ts`).
-- [x] Implementasi **feature flags system** — toggle fitur runtime per-tenant/user dengan admin UI dan helper `getFlag()` (`lib/feature-flags.ts`, `app/app/admin/feature-flags/`).
-- [x] Implementasi **uptime monitoring** — health check cron-based dengan dashboard admin dan webhook alert (`lib/monitoring/uptime.ts`, `app/app/admin/uptime/`).
+[docs/ROADMAP.md](./docs/ROADMAP.md) adalah satu-satunya pelacak status fase dan fitur. Jangan menambah checklist status di berkas ini atau berkas lain. Riwayat perencanaan lama ada di [docs/archive/](./docs/archive/).
 
 ## graphify
 

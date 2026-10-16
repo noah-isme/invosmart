@@ -1,201 +1,272 @@
 # InvoSmart System Architecture
 
-This document provides a comprehensive overview of the system architecture for InvoSmart, a next-generation invoice and receipt management system powered by an autonomous multi-agent AI system.
+InvoSmart is a multi-tenant invoice and receipt platform with online payments, a customer API, and an optional autonomous AI optimization subsystem. It is one Next.js 15 (App Router) application backed by PostgreSQL, deployed on Vercel.
 
-## 1. High-Level Architecture Overview
+Related docs: [SECURITY.md](../SECURITY.md) · [DEPLOYMENT.md](./DEPLOYMENT.md) · [DATABASE.md](./DATABASE.md) · [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md) · [API.md](./API.md) · [INTEGRATIONS.md](./INTEGRATIONS.md) · [AI docs](./ai/) · [ADRs](./adr/)
 
-InvoSmart is built on a modern, scalable stack using Next.js 15 (App Router) with a multi-layered architecture. It integrates a powerful AI agent system, a robust data layer, and comprehensive observability.
+_Last reviewed against the code: 2026-10-16._
 
-```mermaid
-flowchart TB
-    Client[Client Browser / Mobile] -->|HTTPS| CDN[Vercel Edge Network]
-    CDN --> NextJS[Next.js App Router]
-    
-    subgraph "Application Stack"
-        NextJS --> Presentation[Presentation Layer]
-        Presentation --> API[API Layer]
-        API --> Business[Business Logic]
-        API --> Agents[AI Agent Layer]
-        
-        Business --> DataLayer
-        Agents --> DataLayer
-    end
-    
-    subgraph "Data Layer"
-        DataLayer --> Prisma[Prisma ORM]
-        Prisma --> DB[(PostgreSQL)]
-        DataLayer --> Cache[(Upstash Redis)]
-    end
-    
-    subgraph "Observability"
-        NextJS -.-> Sentry[Sentry]
-        NextJS -.-> PostHog[PostHog]
-    end
-```
+## 1. Container view
 
-## 2. Layer-by-Layer Breakdown
-
-### Presentation Layer
-- **Tech Stack**: Next.js 15 App Router, React 18, Tailwind CSS v4, Framer Motion, Recharts, ReactFlow.
-- **Design**: Modern glassmorphism design language with fluid animations.
-- **Responsibility**: Rendering UI, client-side routing, optimistic UI updates, and data visualization.
-
-### API Layer
-- **Tech Stack**: Next.js Route Handlers (`/api/*`), NextAuth.js.
-- **Responsibility**: Exposing RESTful endpoints, authenticating requests, enforcing rate limits, parsing and validating incoming data via Zod, and ensuring HTTPS enforcement.
-
-### Business Logic Layer
-- **Components**: Invoice CRUD, receipt management, PDF generation (via `pdf-lib`), AI invoice composer.
-- **Responsibility**: Core application logic linking the presentation layer to the data and AI layers.
-
-### AI Agent Layer
-- **Components**: 6 Specialized Agents (Optimizer, Learning, Governance, Recovery, Insight, Federation) coordinated by the MAP protocol via an Orchestrator.
-- **Responsibility**: Autonomous system optimization, anomaly detection, predictive scaling, and cross-tenant trust sharing.
-
-### Data Layer
-- **Tech Stack**: Prisma ORM, PostgreSQL (Unified Dev & Production Database), Upstash Redis (see `docs/DATABASE.md` for database migration workflows and setup details).
-- **Responsibility**: Persistent storage, caching, real-time event streaming, and providing in-memory fallbacks when primary data stores are unavailable.
-
-### Observability Layer
-- **Tech Stack**: Sentry (Client & Server), PostHog, web-vitals.
-- **Responsibility**: Distributed tracing, Real User Monitoring (RUM), error tracking, and AI system telemetry.
-
-## 3. Data Flow Diagrams
-
-### Invoice Creation Flow
-```mermaid
-sequenceDiagram
-    participant User
-    participant Client
-    participant API
-    participant Zod
-    participant Prisma
-    participant DB
-    participant PostHog
-    
-    User->>Client: Submit Invoice Form
-    Client->>API: POST /api/invoices
-    API->>Zod: Validate Payload
-    Zod-->>API: Valid
-    API->>Prisma: Create Invoice
-    Prisma->>DB: INSERT
-    DB-->>Prisma: Success
-    Prisma-->>API: Invoice Record
-    API->>API: Generate PDF (pdf-lib)
-    API->>PostHog: Track 'invoice_created'
-    API-->>Client: 201 Created (with PDF URL)
-    Client-->>User: Show Success
-```
-
-### AI Optimization Loop
 ```mermaid
 flowchart LR
-    Telemetry[PostHog / Sentry Metrics] --> Orchestrator
-    Orchestrator --> Optimizer[Optimizer Agent]
-    Optimizer -->|Recommendation| Governance[Governance Agent]
-    Governance -->|Evaluate| Learning[Learning Agent]
-    Learning -->|Measure| Recovery[Recovery Agent]
-    Recovery --> Orchestrator
+    Browser[Browser<br/>workspace members]
+    Recipient[Invoice recipient<br/>public share link]
+    ApiClient[Customer API client<br/>Bearer inv_live_ key]
+    Cron[Vercel Cron<br/>every 5 min]
+    Peers[Federation peers]
+
+    subgraph Vercel["Next.js app (Vercel)"]
+        MW[middleware.ts<br/>session gate + CSRF]
+        Pages[App Router pages<br/>/app, /auth, /devtools, /share, /receipts]
+        Routes[Route handlers<br/>/api/*]
+        V1[Customer API<br/>/api/v1/*]
+        Lib[lib/*<br/>domain logic]
+    end
+
+    PG[(PostgreSQL<br/>Prisma 6)]
+    Redis[(Upstash Redis<br/>optional)]
+
+    Stripe[Stripe Checkout]
+    Midtrans[Midtrans Snap]
+    Resend[Resend email]
+    Google[Google OAuth]
+    LLM[Gemini or OpenAI]
+    Obs[Sentry + PostHog]
+    Chat[Slack / Discord webhooks]
+
+    Browser --> MW --> Pages
+    MW --> Routes
+    Recipient --> Pages
+    ApiClient --> MW --> V1
+    Cron --> Routes
+    Peers --> Routes
+    Pages --> Lib
+    Routes --> Lib
+    V1 --> Lib
+    Lib --> PG
+    Lib -. cache, streams, rate limits, idempotency .-> Redis
+    Lib --> Stripe
+    Lib --> Midtrans
+    Lib --> Resend
+    Lib --> LLM
+    Lib --> Chat
+    Lib -. signed FDP events .-> Peers
+    Stripe -- signed webhook --> Routes
+    Midtrans -- signed notification --> Routes
+    Resend -- signed webhook --> Routes
+    Browser --> Google
+    Pages -. errors, RUM, events .-> Obs
+    Lib -. server events .-> Obs
 ```
 
-### Federation Flow
+| Container | What runs there | Code |
+|---|---|---|
+| Middleware | Requires a NextAuth session for `/app/*`, enforces double-submit CSRF on mutating `/api/*` calls, and exempts signed provider webhooks and `/api/v1` bearer requests | `middleware.ts`, `lib/security/csrf.ts` |
+| Pages | Authenticated app (`app/app/*`), auth pages (`app/auth/*`), platform-admin DevTools (`app/devtools/*`), public invoice share page (`app/share/[id]`), public receipt verification (`app/receipts/[id]/verify`) | `app/` |
+| Route handlers | Browser-session JSON API (72 `route.ts` files) | `app/api/` |
+| Customer API | Versioned API authenticated by workspace API keys | `app/api/v1/`, `lib/api-v1/` |
+| PostgreSQL | System of record for every entity (32 Prisma models) | `prisma/schema.prisma` |
+| Upstash Redis | Optional. Used for the AI event stream, scaler state, theme-suggestion cache, and v1 rate limiting and idempotency. Each use has an in-process fallback (see §6) | `lib/ai/orchestrator.ts`, `lib/ai/scaler.ts`, `lib/cache/`, `lib/api-v1/redis.ts` |
+
+## 2. Domains
+
+### Workspaces and tenancy
+- An `Organization` (workspace) owns business data. Users join through `Membership`, which has one of four roles: `OWNER`, `ADMIN`, `MEMBER` or `VIEWER` (`prisma/schema.prisma:39-44`). New users get a personal workspace (`lib/workspace-provisioning.ts`).
+- **Tenancy resolution** (`resolveWorkspaceContext`, `lib/workspaces.ts:91`): the workspace comes from the `organizationId` query parameter or the `x-organization-id` header. If neither is present, it falls back to the user's `activeOrganizationId`, then to the user's oldest membership. The membership is always checked server-side. Queries are scoped with `workspaceScope()` (`lib/workspaces.ts:199`), and a client-supplied organization id is never merged into a filter.
+- **`WORKSPACE_AUTH_MODE`** (`lib/workspaces.ts:28-37`):
+  - `compat` (default): falls back to legacy user-owned rows and provisions a personal workspace on demand.
+  - `enforce`: fails closed when no membership resolves.
+  - Switch to `enforce` only after `npm run db:backfill-workspaces` (`lib/workspace-backfill.ts`). The rollout order is in [WORKSPACE_RBAC.md](./WORKSPACE_RBAC.md).
+- **Permissions** come from one matrix (`lib/workspaces.ts:53-58`, checked by `hasWorkspacePermission`). Platform administration (DevTools, global flags, uptime) is separate. It is keyed on `User.id` values in `ADMIN_USER_IDS`, not on email addresses (`lib/devtools/access.ts:23`). See [ADR 014](./adr/014-workspace-tenancy-rbac.md).
+
+### Invoices, clients, templates, export
+- The invoice routes (`app/api/invoices/*`) and client routes (`app/api/clients/*`) are workspace-scoped and validated with Zod (`lib/schemas.ts`).
+- PDFs are generated on request by `app/api/invoices/[id]/pdf` using pdf-lib (`lib/pdf-generator.ts`), not when the invoice is created.
+- Recurring templates live in `app/api/invoices/templates/*`. CSV/XLSX export is in `app/api/invoices/export` and `lib/export-utils.ts`.
+- Invoice statuses: `DRAFT`, `SENT`, `PAID`, `UNPAID`, `OVERDUE` (`schema.prisma:250-255`).
+
+### Invoice delivery and reminders
+- **Sending** (`app/api/invoices/[id]/send-email/route.ts`):
+  - Builds an HMAC-signed share URL. The key is `INVOICE_SHARE_SECRET`, falling back to `NEXTAUTH_SECRET` (`lib/invoice-delivery.ts:320`).
+  - Sends through Resend with an idempotency key.
+  - Records attempts in `Invoice.emailLog`, with up to 3 retries (`lib/invoice-delivery.ts:21`).
+- **Delivery status**: Resend webhooks (`app/api/webhooks/resend`, Standard Webhooks signature verified by `lib/email/resend.ts`) update `emailLog`.
+- **Reminders** run as a pipeline of three tables:
+  1. `InvoiceReminderRule`: a per-workspace offset in days from the due date.
+  2. `InvoiceReminderOccurrence`: created by cron `/api/cron/reminders` for invoices that are `SENT`, `UNPAID` or `OVERDUE`. Occurrences are deduplicated by a unique `occurrenceKey` (`lib/team/reminders.ts`).
+  3. `InvoiceReminderDelivery`: one row per channel (EMAIL or SLACK), sent by cron `/api/cron/reminder-delivery`. Deliveries use leases (10 minutes), idempotency keys, and up to 5 attempts with backoff (`lib/team/reminder-delivery.ts:29-31`).
+- Per-workspace Slack webhook URLs are encrypted with `WORKSPACE_NOTIFICATION_ENCRYPTION_KEY` (`lib/team/secrets.ts`).
+
+### Payments
+- **Providers**: Stripe Checkout and Midtrans Snap (`lib/payments/stripe.ts`, `lib/payments/midtrans.ts`).
+- **Starting a checkout**: a workspace member with `write` permission starts it from the invoice detail page (`components/payments/PaymentGatewayModal.tsx`). This creates a `PaymentAttempt` with an idempotency key. The attempt is unique per `(provider, idempotencyKey)` and per `(provider, providerOrderId)`, and it reuses an active attempt for 30 minutes (`lib/payments/lifecycle.ts:39`).
+- **Attempt states**: `PENDING`, `AUTHORIZED`, `SETTLED`, `EXPIRED`, `CANCELLED`, `FAILED`, `REFUNDED`. Allowed transitions are decided in `decidePaymentTransition` (`lib/payments/lifecycle.ts:204`).
+- **Reconciliation**: signed provider events (Stripe `constructEvent`, Midtrans `verifyMidtransSignature`) are stored once in `PaymentEvent`, which is unique on `(provider, providerEventId)`. Settlement then runs `settleInvoiceOnce` (`lib/payments/settlement.ts:85`). It locks the attempt and the invoice, records at most one `Payment` per attempt, and flags duplicate settlements for refund or manual review rather than recording them twice. See [ADR 015](./adr/015-payment-providers-webhook-reconciliation.md).
+- **Amounts**: currency and amount are re-verified against the invoice on every event (`verifyAmountAndCurrency`). Stripe minor units are handled in `lib/payments/money.ts`.
+
+### Customer API v1
+- **Authentication**: bearer API keys `inv_live_<prefix>_<secret>` (`lib/api-keys.ts`). Only a SHA-256 hash of the secret is stored. Each key belongs to one workspace and has scopes `invoices:read|write` and `clients:read|write`. New keys get read-only scopes by default. Keys are managed through `app/api/workspaces/[id]/api-keys/*`, which requires `manage_workspace`.
+- **Write idempotency**: writes accept `Idempotency-Key` (`lib/api-v1/idempotency.ts`).
+- **Rate limits**: per key, 120 requests/min by default (`lib/api-v1/rate-limit.ts:15`).
+- **Contract**: the OpenAPI document is generated from `lib/openapi.ts` and served at `/api/openapi.json`. Details are in [API.md](./API.md).
+
+### Receipts
+- Receipts are created from invoices (`lib/receipts/service.ts`). Each one has a verification token, stamp assets and its own audit trail (`ReceiptAuditLog`).
+- Verification is public at `/receipts/[id]/verify`.
+- Receipt image scanning uses the LLM client (`app/api/receipts/ai-scan`).
+
+### Platform features
+- **i18n**: `en` and `id` locales (`lib/i18n/locales/`). The user's choice is stored in `User.locale` through `/api/user/locale`.
+- **Feature flags**: stored in the database and evaluated by `getFlag()`, with tenant and user targeting (`lib/feature-flags.ts`). Platform admins manage them in `/app/admin/feature-flags`.
+- **Uptime**: cron `/api/cron/uptime` checks `UPTIME_MONITORED_ENDPOINTS` and stores `UptimeCheck` rows. Failures are alerted through `dispatchWebhookAlert` to Slack/Discord (`lib/monitoring/uptime.ts`).
+- **Audit logging**: `logAuditEvent` writes to `AuditLog` for invoice, auth, security and AI auto-action events (`lib/audit/auditLogger.ts`).
+
+### AI features
+- **LLM client**: `lib/ai.ts` uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is set, otherwise OpenAI (`gpt-4o-mini`). The provider is chosen by configuration. There is no runtime failover: a Gemini error is returned to the caller. See [ADR 012](./adr/012-gemini-first-ai-provider.md).
+- **Uses**: invoice composition from natural language (`app/api/invoices/ai`), receipt scanning, invoice insight, theme suggestions, and recommendation explanations.
+- **Autonomous agent subsystem**: six agents (optimizer, learning, governance, insight, recovery, federation) communicate through the MAP protocol and an orchestrator. Each is gated by `ENABLE_AI_*` flags. Content variants are scored with LinUCB ([ADR 013](./adr/013-linucb-content-selection.md)). Details: [docs/ai/](./ai/) and [AGENTS.md](../AGENTS.md).
+  - The autonomy loop (`lib/ai/loop.ts`) runs in-process on `setTimeout`. A platform admin starts it through `/api/devtools/autonomy`, and no cron schedules it. On serverless instances it lasts only as long as the instance does.
+
+## 3. Key flows
+
+### Invoice → send → pay → reconcile
+
 ```mermaid
 sequenceDiagram
-    participant Local Node
-    participant FDP Bus
-    participant Global Network
-    participant Consensus
-    
-    Local Node->>Local Node: Create Local Snapshot
-    Local Node->>FDP Bus: Broadcast Signed Payload (HTTPS)
-    FDP Bus->>Global Network: Aggregate Data
-    Global Network->>Consensus: Evaluate Trust/Anomalies
-    Consensus-->>Local Node: Global Insight / Policy Update
+    actor Member as Workspace member
+    participant App as Next.js route handlers
+    participant DB as PostgreSQL
+    participant Resend
+    actor Recipient
+    participant PSP as Stripe / Midtrans
+
+    Member->>App: POST /api/invoices (CSRF + session, write permission)
+    App->>DB: insert Invoice (organizationId from membership)
+    App-->>Member: 201
+    Member->>App: POST /api/invoices/:id/send-email
+    App->>App: sign share token (INVOICE_SHARE_SECRET)
+    App->>Resend: send email (idempotency key)
+    App->>DB: append Invoice.emailLog
+    Resend-->>App: POST /api/webhooks/resend (Standard Webhooks signature)
+    App->>DB: update delivery status in emailLog
+    Recipient->>App: GET /share/:id?token=…
+    Member->>App: POST /api/payments/{stripe/create-session | midtrans/create}
+    App->>DB: create or reuse PaymentAttempt (idempotency key)
+    App->>PSP: create checkout
+    App-->>Member: checkout URL
+    PSP-->>App: signed webhook / notification
+    App->>DB: insert PaymentEvent (unique provider event id)
+    App->>DB: lock attempt + invoice, settleInvoiceOnce → Payment, Invoice PAID
 ```
 
-## 4. Component Interaction
+The email also contains a payment link: the share URL with `?action=pay` (`send-email/route.ts:131`). The public share page (`app/share/[id]/page.tsx`) does not handle that parameter yet, so in practice checkout is started from the authenticated invoice detail page.
+
+### Reminder pipeline
 
 ```mermaid
-flowchart TD
-    UI[React Components] -->|Fetch / Mutate| Routes[Route Handlers]
-    Routes --> Auth[NextAuth Middleware]
-    Auth --> Service[Business Services]
-    Service --> Validator[Zod Schemas]
-    Validator --> Models[Prisma Models]
-    
-    subgraph "AI Subsystem"
-        Service -.-> Orchestrator[AI Orchestrator]
-        Orchestrator --> EventLog[(AgentEventLog / Redis Streams)]
-        Orchestrator <--> Agents[Agent Swarm]
-        Agents <--> FDP[Federation Bus]
-    end
+flowchart LR
+    Rule[InvoiceReminderRule<br/>offsetDays] -->|/api/cron/reminders| Occ[InvoiceReminderOccurrence<br/>unique occurrenceKey]
+    Occ -->|/api/cron/reminder-delivery| Del[InvoiceReminderDelivery<br/>EMAIL / SLACK]
+    Del -->|lease, retry ≤5| Out[Resend / Slack webhook]
 ```
 
-## 5. Technology Decision Table
+### AI optimization loop
 
-| Category | Technology | Primary Purpose | Justification |
-| :--- | :--- | :--- | :--- |
-| **Framework** | Next.js 15 | App rendering, routing | App Router provides excellent server/client component boundaries. |
-| **Language** | TypeScript 5.9 | Type safety | Strict typing reduces runtime errors, especially with complex AI state. |
-| **Styling** | Tailwind CSS v4 | UI styling | Rapid styling with glassmorphism support. |
-| **Database** | PostgreSQL | Primary Data Store | Relational integrity for financial documents via Prisma. |
-| **Cache & Bus** | Upstash Redis | Cache & Event Streams | Ideal for serverless environments and the AI Orchestrator event bus. |
-| **Auth** | NextAuth.js | Authentication | Seamless Next.js integration. |
-| **Validation** | Zod | Schema definition | End-to-end type safety from API to DB. |
-| **Analytics** | PostHog & Sentry | Observability | PostHog for RUM/events, Sentry for error tracing. |
-| **PDF** | pdf-lib | Document Generation | Reliable client/server-side PDF manipulation. |
-
-## 6. Directory Structure Map
-
-```
-/
-├── app/                  # Next.js App Router (Presentation & API Layer)
-│   ├── (auth)/           # /auth/login, /auth/register
-│   ├── (dashboard)/      # /app/dashboard, /app/settings/*, /app/admin/*
-│   ├── invoices/         # /app/invoices/new, /app/invoices/[id]
-│   ├── receipts/         # /app/receipts, /app/receipts/scan, /receipts/[id]/verify
-│   ├── devtools/         # /devtools/*
-│   └── api/              # Route handlers
-├── components/           # React Components (UI, Forms, Charts)
-├── lib/                  # Core Business Logic
-│   ├── ai/               # AI Agent Architecture
-│   │   ├── orchestrator.ts # Central event bus
-│   │   ├── protocol.ts   # Zod-validated MAP events
-│   │   ├── loop.ts       # Autonomous scaling loop
-│   │   └── scaler.ts     # Adaptive concurrency
-│   ├── federation/       # FDP signed HTTPS bus
-│   └── ...
-├── prisma/               # Prisma schema and migrations
-└── public/               # Static assets
+```mermaid
+flowchart LR
+    Telemetry[PostHog / Sentry metrics] --> Loop[lib/ai/loop.ts]
+    Loop --> Priority[Agent priorities]
+    Loop --> Scaler[lib/ai/scaler.ts<br/>concurrency 1–6, interval 1–15 min]
+    Loop --> Recovery[Recovery sweep / rollback]
+    Loop --> Orchestrator[lib/ai/orchestrator.ts]
+    Orchestrator --> Stream[(Redis stream or in-memory)]
+    Orchestrator --> EventLog[(AgentEventLog)]
 ```
 
-## 7. Security Model
+### Federation
 
-- **Authentication & Authorization**: Protected routes under `/app/*` enforced by NextAuth middleware. Passwords hashed using bcrypt.
-- **Headers & Transport**: 
-  - HTTPS enforcement in production.
-  - Strict security headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and strict `Referrer-Policy`.
-- **API Security**:
-  - Global rate limiting: 10 requests per minute per IP per bucket.
-  - Strict input validation using Zod on all API endpoints.
+```mermaid
+sequenceDiagram
+    participant Local as Local node (lib/federation/bus.ts)
+    participant Peer as Peer node
+    Local->>Local: build anonymized snapshot (sanitizeMetadata)
+    Local->>Peer: signed FDP event over HTTPS (FEDERATION_ENDPOINTS)
+    Peer->>Local: GET /api/federation/status (Bearer FEDERATION_TOKEN_SECRET)
+```
 
-## 8. Caching Strategy
+## 4. Technology decisions
 
-- **Two-Tier System**: Upstash Redis acts as the primary distributed cache, falling back to an in-memory Map when unavailable.
-- **Dynamic Content**: Items like theme suggestions have a targeted 1-hour TTL.
-- **Static Assets**: Edge cached with `Cache-Control: max-age=31536000, immutable`.
+| Category | Technology | Purpose | ADR |
+|---|---|---|---|
+| Framework | Next.js 15 App Router, React 18 | Pages, route handlers, middleware | [001](./adr/001-nextjs-app-router.md) |
+| Language | TypeScript 5.9 | Type safety | |
+| Styling | Tailwind CSS v4, Framer Motion, Recharts, React Flow | UI, charts, agent graph | [008](./adr/008-glassmorphism-design-system.md) |
+| Database | PostgreSQL via Prisma 6 (all environments). PGlite for e2e and integration tests | System of record | [011](./adr/011-postgresql-only.md) (supersedes 002) |
+| Cache and bus | Upstash Redis, optional, with in-process fallbacks | AI stream, caches, v1 rate limits and idempotency | [004](./adr/004-upstash-redis-event-bus.md) |
+| Auth | NextAuth 4 (Credentials + Google), JWT sessions | Browser sessions | |
+| Tenancy | Organization + Membership, 4 roles | Workspace isolation and RBAC | [014](./adr/014-workspace-tenancy-rbac.md) |
+| Payments | Stripe Checkout, Midtrans Snap | Online invoice payment | [015](./adr/015-payment-providers-webhook-reconciliation.md) |
+| Email | Resend | Invoice and reminder delivery | |
+| Validation | Zod | Request validation | |
+| LLM | Gemini (preferred when configured), OpenAI | Composer, scanner, insights | [012](./adr/012-gemini-first-ai-provider.md) (supersedes 005) |
+| Experimentation | LinUCB scoring; Bayesian Beta-Binomial readouts | Content optimization | [013](./adr/013-linucb-content-selection.md) (supersedes 006) |
+| Observability | Sentry, PostHog (client + `posthog-node`) | Errors, RUM, events | [007](./adr/007-sentry-posthog-observability.md) |
+| PDF | pdf-lib | Invoice and receipt PDFs | |
 
-## 9. AI Agent Architecture Details
+## 5. Directory map
 
-- **Orchestrator (`lib/ai/orchestrator.ts`)**: Acts as the central nervous system, managing the Redis Streams and Prisma `AgentEventLog`.
-- **Protocol (`lib/ai/protocol.ts`)**: Standardizes inter-agent communication using Zod validation. Event types include `recommendation`, `evaluation`, `policy_update`, `insight_report`, and `recovery_action`.
-- **Autonomous Loop (`lib/ai/loop.ts`)**: Executes a continuous lifecycle: Telemetry Analysis → Prioritization → Scaling → Recovery → Dispatch.
-- **Federation (`lib/federation/`)**: Enables secure, cross-tenant insights using an FDP signed HTTPS bus.
-- **Scaler (`lib/ai/scaler.ts`)**: Adapts system performance based on pressure, adjusting concurrency between 1 and 6 agents and modifying intervals from 1 minute to 15 minutes.
+```
+app/
+├── api/                 # route handlers: admin, ai, ai-optimizer, auth, clients, cron, dev, devtools,
+│                        #   federation, health, insight, invoices, openapi.json, opt, payments,
+│                        #   receipts, user, v1, webhooks, workspace-invitations, workspaces
+├── app/                 # authenticated app: dashboard, invoices, clients, receipts, insight, ai-invoice,
+│                        #   workspaces, workspace-invitations, settings, profile, admin, help, about
+├── app-settings/        # receipt settings
+├── auth/                # login, register
+├── devtools/            # platform-admin AI dashboards (agents, audit, autonomy, federation, learning, tuning, perf)
+├── receipts/[id]/       # public receipt verification
+└── share/[id]/          # public signed invoice view
+components/              # UI (auth, invoices, layout, payments, telemetry, ui, …)
+context/, hooks/         # React contexts and hooks
+lib/
+├── ai/                  # agents, orchestrator, protocol, loop, scaler, optimizers, bayesian-ab
+├── api-v1/              # customer API auth, rate limit, idempotency, schemas
+├── audit/               # AuditLog writer
+├── cache/               # theme-suggestion cache (Redis + memory)
+├── devtools/            # platform-admin access
+├── email/               # Resend client and webhook verification
+├── federation/          # FDP bus and protocol
+├── i18n/                # en / id
+├── invoices/            # invoice helpers
+├── monitoring/          # uptime checks
+├── payments/            # lifecycle, settlement, Stripe, Midtrans, money
+├── receipts/            # receipt service, guards, PDF
+├── security/            # CSRF, CSP
+├── stats/               # frequentist A/B helpers
+├── team/                # reminders, reminder delivery, Slack, invitations, secrets
+├── workspaces.ts        # tenancy resolution and permission matrix
+└── api-keys.ts, openapi.ts, feature-flags.ts, rate-limit.ts, cron-auth.ts, …
+middleware.ts            # session gate + CSRF
+prisma/                  # schema.prisma, migrations/, seed.ts
+server/auth.ts           # NextAuth options
+test/                    # e2e (Playwright), integration (Vitest + PGlite)
+```
 
-## 10. Deployment Architecture
+## 6. Cross-cutting concerns
 
-- **Platform**: Vercel
-- **CI/CD**: GitHub Actions workflows for automated testing, linting, and deployment.
-- **Development**: Local server running with PostgreSQL database managed via Prisma versioned migrations (`npx prisma migrate dev`).
-- **Production**: Distributed Vercel Edge functions, Upstash Redis, and managed PostgreSQL with automated migrations (`npx prisma migrate deploy`).
+- **Security** (summary; [SECURITY.md](../SECURITY.md) is the canonical source):
+  - Sessions are NextAuth JWTs. Passwords are hashed with bcrypt.
+  - Every mutating browser `/api/*` call is CSRF-checked. Security headers and CSP are set in `next.config.ts` / `lib/security/csp.ts`.
+  - Selected routes call `enforceHttps` (`lib/security.ts`) and a per-instance, in-memory limit of 10 requests per minute per IP per bucket (`lib/rate-limit.ts`). This is not a global rate limit. `/api/v1` has its own per-key limit.
+  - Provider webhooks, cron routes (`CRON_SECRET` bearer, `lib/cron-auth.ts`) and federation peers authenticate with signatures or secrets, not sessions.
+- **Caching and Redis fallbacks**:
+  - Theme suggestions are cached for 1 hour, in Redis or in memory (`lib/cache/theme-suggestions.ts`).
+  - Static assets are served with `Cache-Control: public, max-age=31536000, immutable` (`next.config.ts`).
+  - If Redis is configured but unreachable, `/api/v1` rate limiting falls back to a process-local window, while idempotent writes are refused rather than risk a duplicate (`lib/api-v1/idempotency.ts:134`).
+- **Observability**: Sentry client and server configs, PostHog in the browser plus server events through `lib/server-telemetry.ts`, and web-vitals RUM (`lib/rum.ts`).
+
+## 7. Deployment
+
+The app runs on Vercel, and three Vercel crons each run every 5 minutes (`vercel.json`). CI and release run in `.github/workflows/release.yml`. Database migrations are **not** applied by any pipeline step. [DEPLOYMENT.md](./DEPLOYMENT.md) covers the release order, migrations, rollback and environment configuration.

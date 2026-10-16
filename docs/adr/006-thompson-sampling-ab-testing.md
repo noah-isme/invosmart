@@ -1,7 +1,7 @@
 # 6. Thompson Sampling for A/B Testing
 
 ## Status
-Accepted
+Superseded by [ADR 013](013-linucb-content-selection.md)
 
 ## Context
 The platform aims to continuously optimize various content variants, such as email hooks, captions, call-to-actions (CTAs), and delivery schedules. We need an automated approach to test these variants dynamically without requiring manual intervention to analyze results and declare "winners".
