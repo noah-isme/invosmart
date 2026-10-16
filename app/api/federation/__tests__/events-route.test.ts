@@ -210,6 +210,12 @@ describe("POST /api/federation/events", () => {
     expect(await invalid.json()).toEqual({ error: "Invalid federation event" });
   });
 
+  it("rejects an ed25519 signatureAlgorithm with 400 (schema)", async () => {
+    const event = await rsaEvent();
+    const res = await post({ ...event, signatureAlgorithm: "ed25519" });
+    expect(res.status).toBe(400);
+  });
+
   it("returns 503 when federation is disabled", async () => {
     vi.stubEnv("ENABLE_AI_FEDERATION", "false");
     const res = await post(await rsaEvent());

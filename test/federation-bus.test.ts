@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import { FederationBus, generateFederationKeyPair } from "@/lib/federation/bus";
-import type { FederationEvent } from "@/lib/federation/protocol";
+import {
+  federationEventSchema,
+  signatureAlgorithmSchema,
+  type FederationEvent,
+} from "@/lib/federation/protocol";
 
 // In-memory stand-in for db.federationInboundEvent with the unique
 // signatureHash constraint (P2002 on a second insert).
@@ -363,6 +367,7 @@ describe("FederationBus", () => {
     const ingested = await consumer.ingest(event as FederationEvent);
     expect(ingested).toBe(true);
   });
+
   describe("HMAC key separation (FEDERATION_HMAC_SECRET)", () => {
     const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
 
@@ -411,6 +416,7 @@ describe("FederationBus", () => {
       await expect(consumer.ingest(event as FederationEvent)).rejects.toThrow(/Invalid federation signature/);
     });
   });
+
   describe("freshness and replay guard", () => {
     const payload = { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true };
     const pair = () => ({
@@ -525,6 +531,24 @@ describe("FederationBus", () => {
       await consumer.ingest(event as FederationEvent);
       expect(create).toHaveBeenCalledTimes(1);
       expect(inbound.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("signature algorithms", () => {
+    it("accepts only hmac-sha256 and rsa-sha256; ed25519 is rejected by the schema", async () => {
+      const producer = new FederationBus({ tenantId: "tenant-a", hmacSecret: "shared-hmac", enabled: true });
+      const { event } = await producer.publish({
+        type: "telemetry_sync",
+        payload: { tenantId: "tenant-a", trustScore: 70, priorities: [], sanitized: true },
+      });
+
+      expect(federationEventSchema.safeParse({ ...event, signatureAlgorithm: "rsa-sha256" }).success).toBe(true);
+      expect(federationEventSchema.safeParse({ ...event, signatureAlgorithm: "ed25519" }).success).toBe(false);
+    });
+
+    it("signatureAlgorithmSchema rejects ed25519 (the bus never produced it)", () => {
+      expect(signatureAlgorithmSchema.safeParse("ed25519").success).toBe(false);
+      expect(signatureAlgorithmSchema.removeDefault().options).toEqual(["hmac-sha256", "rsa-sha256"]);
     });
   });
 });

@@ -90,7 +90,7 @@ const payloadMap: Record<FederationEventType, z.ZodTypeAny> = {
 };
 
 export const signatureAlgorithmSchema = z
-  .enum(["hmac-sha256", "rsa-sha256", "ed25519"])
+  .enum(["hmac-sha256", "rsa-sha256"])
   .default("hmac-sha256");
 
 export type SignatureAlgorithm = z.infer<typeof signatureAlgorithmSchema>;
