@@ -324,7 +324,7 @@ Leave it unset to disable.
   | Federation enabled (`ENABLE_AI_FEDERATION` not `false`, bus configured) | `503 {error:"Federation disabled"}` |
   | Rate limit, `federation-events` bucket (10/min per IP per instance; tunable if a busy peer needs more) | `429` with `Retry-After` |
   | `Authorization: Bearer $FEDERATION_TOKEN_SECRET` (constant time) | `401`; `503` in production when the secret is unset |
-  | Body at most 64 KB | `413` |
+  | Body at most 64 KB (counted while reading, so also without `Content-Length`) | `413` |
   | JSON and FDP schema; the `payload` is validated with the schema of the event `type` | `400` (the body is not echoed) |
   | Signature (RSA-SHA256 with the sender's registered key, or HMAC-SHA256 with `FEDERATION_HMAC_SECRET`) | `401 {error:"Invalid federation signature"}` |
   | Event `timestamp` within 5 minutes of local time | `401 {error:"Stale federation event"}` |

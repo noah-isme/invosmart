@@ -25,6 +25,30 @@ const json = (body: Record<string, unknown>, status: number) => NextResponse.jso
 
 const DECRYPT_ERROR = /^(Payload decryption failed|Corrupted encrypted payload|Cannot decrypt event)/;
 
+/**
+ * Reads the body as UTF-8, counting bytes as they arrive. Content-Length can be
+ * missing (chunked transfer) or wrong, so the cap is enforced on the stream
+ * itself: past `limit` bytes the read is cancelled and null is returned.
+ */
+const readBodyWithLimit = async (request: NextRequest, limit: number): Promise<string | null> => {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > limit) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+};
+
 export async function POST(request: NextRequest) {
   if (process.env.ENABLE_AI_FEDERATION === "false" || !federationBus.isEnabled) {
     return json({ error: "Federation disabled" }, 503);
@@ -42,13 +66,13 @@ export async function POST(request: NextRequest) {
     return json({ error: "Request body too large" }, 413);
   }
 
-  let raw: string;
+  let raw: string | null;
   try {
-    raw = await request.text();
+    raw = await readBodyWithLimit(request, MAX_BODY_BYTES);
   } catch {
     return json({ error: "Invalid request body" }, 400);
   }
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+  if (raw === null) {
     return json({ error: "Request body too large" }, 413);
   }
 

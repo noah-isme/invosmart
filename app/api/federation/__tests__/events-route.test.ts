@@ -200,6 +200,34 @@ describe("POST /api/federation/events", () => {
     expect(res.status).toBe(413);
   });
 
+  it("rejects a streamed body over 64 KB without Content-Length with 413, without reading it all", async () => {
+    const chunk = new TextEncoder().encode("x".repeat(16 * 1024));
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        if (pulled > 100) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const request = new NextRequest("http://localhost/api/federation/events", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "10.0.1.1",
+        authorization: `Bearer ${BEARER}`,
+      },
+      body,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    expect(request.headers.get("content-length")).toBeNull();
+
+    const res = await POST(request);
+    expect(res.status).toBe(413);
+    // 64 KB is four 16 KB chunks; the fifth crosses the cap and stops the read.
+    expect(pulled).toBeLessThan(10);
+  });
+
   it("rejects garbage and schema-invalid bodies with 400 without echoing them", async () => {
     const garbage = await post("{not json<script>", { raw: true });
     expect(garbage.status).toBe(400);
